@@ -42,12 +42,12 @@ function stress_update(mat::Truss, ipd::TrussIpData, Δε::Float64)
     return Δσ
 end
 
-function getvals(mat::Truss, ipd::TrussIpData)
+function getvals(ipd::TrussIpData)
     return [ 
       :sa => ipd.σ,
-      :ea => ipd.ε,
-      :Fa => ipd.σ*mat.A,
-      :A  => mat.A ]
+      :ea => ipd.ε]
+      #:Fa => ipd.σ*mat.A,
+      #:A  => mat.A ]
 end
 
 
@@ -121,7 +121,12 @@ function node_and_elem_vals(mat::AbsTruss, elem::Element)
     end
 
     # Elem vals
-    all_ip_vals = [ getvals(mat, ip.data) for ip in elem.ips ]
+    all_ip_vals = [ getvals(ip.data) for ip in elem.ips ]
+    # completing with axial forces
+    for ip_val in all_ip_vals
+        ip_val[:A ] = mat.A
+        ip_val[:Fa] = mat.A*ip_val[:sa]
+    end
     labels      = keys(all_ip_vals[1])
     nips        = length(elem.ips) 
 

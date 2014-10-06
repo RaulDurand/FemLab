@@ -8,7 +8,7 @@ using  .Definitions
 export DTable , push!, getindex, save, loadtable
 
 # Mesh module
-include("mesh/meshgen.jl")
+include("mesh/mesh.jl")
 #using .MeshGen
 export is_solid, is_line, is_joint
 export Block2D, Block3D, BlockTruss, BlockInset, Mesh

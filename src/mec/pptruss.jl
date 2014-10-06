@@ -61,33 +61,23 @@ end
 function stress_update(mat::PPTruss, ipd::PPTrussIpData, Δε::Float64)
     E, H = mat.E, mat.H
     σini = ipd.σ
-    #println()
-    #@show σini
-    #@show Δε
     σtr    = σini + E*Δε
-    #@show σtr
     ftr    = yield_func(mat, ipd, σtr)
-    #@show ftr
     ipd.Δγ = ftr>0.0? ftr/(E+H) : 0.0
-    #@show ipd.Δγ
     Δεp    = ipd.Δγ*sign(σtr)
-    #@show Δεp
     ipd.εpa += ipd.Δγ
     ipd.σ  = σtr - E*Δεp
-    #@show σini
-    #@show ipd.σ
     Δσ     = ipd.σ - σini
-    #@show Δσ
     ipd.ε += Δε
     return Δσ
 end
 
-function getvals(mat::PPTruss, ipd::PPTrussIpData)
+function getvals(ipd::PPTrussIpData)
     return [ 
       :sa => ipd.σ,
-      :ea => ipd.ε,
-      :Fa => ipd.σ*mat.A,
-      :A  => mat.A ]
+      :ea => ipd.ε]
+      #:Fa => ipd.σ*mat.A,
+      #:A  => mat.A ]
 end
 
 

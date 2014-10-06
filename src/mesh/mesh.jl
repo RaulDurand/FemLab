@@ -1,3 +1,6 @@
+
+include("entities.jl")
+
 export Mesh, Block2D, Block3D, BlockTruss, BlockInset
 export generate_mesh, save
 
@@ -314,11 +317,14 @@ end
 
 
 function get_surface(cells::Array{Cell,1})
+    # Needs cells id to be numbered
     surf_dict = Dict{Uint64, Cell}()
 
     # Get only unique faces
     for cell in cells
         for face in get_faces(cell)
+            #conns = [ pt.id for pt in face.points ]
+            #hs = hash(conns)
             hs = hash(face)
             if haskey(surf_dict, hs)
                 delete!(surf_dict, hs)
@@ -358,14 +364,14 @@ function generate_mesh(blocks::Array, verbose::Bool=true)
     end
     mesh.ndim = ndim
     
-    # Facets
-    if verbose; print("  finding faces...\r") end
-    mesh.faces = get_surface(mesh.cells)
-
     # Numberig
     for (i,p) in enumerate(mesh.points) p.id = i end
     for (i,c) in enumerate(mesh.cells ) c.id = i; c.ndim=ndim end
     for (i,f) in enumerate(mesh.faces ) f.id = i; f.ndim=ndim end
+
+    # Facets
+    if verbose; print("  finding faces...\r") end
+    mesh.faces = get_surface(mesh.cells)
 
     if verbose
         npoints = length(mesh.points)

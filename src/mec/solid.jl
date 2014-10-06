@@ -51,8 +51,7 @@ function stress_update(mat::ElasticSolid, ipd::ElasticSolidIpData, deps::Array{F
     dsig
 end
 
-function mount_D(mat::ElasticSolid, ipd::ElasticSolidIpData)
-    E, nu = mat.E, mat.nu
+function mount_De(E::Float64, nu::Float64)
     c = E/((1.0+nu)*(1.0-2.0*nu))
     [ c*(1.-nu)      c*nu        c*nu             0.0             0.0             0.0
           c*nu   c*(1.-nu)       c*nu             0.0             0.0             0.0
@@ -62,7 +61,11 @@ function mount_D(mat::ElasticSolid, ipd::ElasticSolidIpData)
            0.0        0.0         0.0             0.0             0.0   c*(1.0-2.0*nu) ]
 end
 
-function getvals(mat::ElasticSolid, ipd::ElasticSolidIpData)
+function mount_D(mat::ElasticSolid, ipd::ElasticSolidIpData)
+    return mount_De(mat.E, mat.nu)
+end
+
+function getvals(ipd::ElasticSolidIpData)
     σ  = ipd.σ
     ε  = ipd.ε
     ndim = ipd.ndim

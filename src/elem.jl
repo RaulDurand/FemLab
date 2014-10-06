@@ -76,6 +76,11 @@ function getcoords(elem::Element)
     return [ elem.nodes[i].X[j] for i=1:nnodes, j=1:ndim]
 end
 
+function getconns(elem::Element)
+    nnodes = length(elem.nodes)
+    return [ node.id for node in elem.nodes ]
+end
+
 # dispatcher
 config_dofs(elem::Element) = config_dofs(elem.mat, elem)
 
@@ -89,6 +94,7 @@ function set_mat(elem::Element, mm::Material, nips=0)
         R = ipc[i,1:3]
         w = ipc[i,4]
         elem.ips[i] = Ip(R, w)
+        elem.ips[i].id = i
         elem.ips[i].data = mm.new_ipdata(elem.ndim)
     end
     config_dofs(elem)

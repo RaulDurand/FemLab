@@ -13,19 +13,17 @@ typealias Matx Array{Float64, 2}
 vect(n::Int64) = Array(Float64,n)
 matx(n::Int64, m::Int64) = Array(Float64,n,m)
 
-# Macro for printing variables
-macro out(exp)
-    name = string(exp)
-    return quote
-        println( $name, ": ", $exp, "                       " )
-    end
-end
 
 function find_first_var(exp::Expr)
     for s in exp.args
-        return isa(s, Symbol)? s : find_first_var(s)
+        if isa(s, Symbol)
+            return s
+        elseif is(s, Expr)
+            return find_first_var(s)
+        end
     end
 end
+
 
 # Macro for checkin parameters
 macro check(exp, msgs...)
@@ -40,8 +38,6 @@ macro check(exp, msgs...)
             error($(esc(msg)))
         end
     end
-    #return :($exp ? nothing : error($msg))
-    #return :(false ? nothing : error($msg))
 end
 
 
@@ -69,6 +65,11 @@ type DTable
     header::Array{Symbol,1}
     data  ::Array{Array{Float64,1},1}
     dict  ::Dict{Symbol,Int} # Data index
+    function DTable()
+        this = new()
+        this.header = Array(Symbol,0)
+        return this
+    end
     function DTable(header::Array{Symbol}, data::Array{Float64}=Float64[])
         this = new()
         this.header = copy(vec(header))
@@ -92,6 +93,18 @@ function push!(table::DTable, row::Array{Float64})
     end
 end
 
+function push!(table::DTable, dict::Dict{Symbol,Float64})
+    if length(table.header)==0
+        table.header = [ k for k in keys(dict)]
+        table.data   = [ [v] for (k,v) in dict ]
+        table.dict    = [ s=>i for (i,s) in enumerate(table.header) ]
+    else
+        for (k,v) in dict
+            push!(table[k], v)
+        end
+    end
+end
+
 import Base.getindex!
 function getindex(table::DTable, field::Symbol)
     index = table.dict[field]
@@ -105,7 +118,7 @@ function save(table::DTable, filename::String)
 
     # print header
     for i=1:nc
-        @printf(f, "%-23s", table.header[i])
+        @printf(f, "%-18s", table.header[i])
         print(f, i!=nc? "\t" : "\n")
     end
 
@@ -114,7 +127,7 @@ function save(table::DTable, filename::String)
     #nr, nc = size(table.data)
     for i=1:nr
         for j=1:nc
-            @printf(f, "%23.10e", table.data[j][i])
+            @printf(f, "%18.10e", table.data[j][i])
             print(f, j!=nc? "\t" : "\n")
         end
     end

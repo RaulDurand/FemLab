@@ -177,19 +177,19 @@ function update!(::Mechanical, elem::Element, DU::Array{Float64,1}, DF::Array{Fl
 end
 
 
-function getvals(::Mechanical, ips::Array{Ip,1})
-    all_ip_vals = [ get_vals(ip.data) for ip in ips ]
-    labels      = keys(all_ip_vals[1])
-    nips        = length(ips) 
-
-    # matrix with all ip values (nip x nvals)
-    IP = vcat([ [values(all_ip_vals[i])...] for i=1:nips]...)
-    avg_vals = mean(IP,1)
-
-    # filling elem values dict
-    Dict(labels, avg_vals)
-
-end
+#function getvals(::Mechanical, ips::Array{Ip,1})
+#    all_ip_vals = [ get_vals(ip.data) for ip in ips ]
+#    labels      = keys(all_ip_vals[1])
+#    nips        = length(ips) 
+#
+#    # matrix with all ip values (nip x nvals)
+#    IP = vcat([ [values(all_ip_vals[i])...] for i=1:nips]...)
+#    avg_vals = mean(IP,1)
+#
+#    # filling elem values dict
+#    Dict(labels, avg_vals)
+#
+#end
 
 function node_and_elem_vals(mat::Mechanical, elem::Element)
     ndim = elem.ndim
@@ -201,7 +201,7 @@ function node_and_elem_vals(mat::Mechanical, elem::Element)
     end
 
     # Elem vals
-    all_ip_vals = [ getvals(mat, ip.data) for ip in elem.ips ]
+    all_ip_vals = [ getvals(ip.data) for ip in elem.ips ]
     labels      = keys(all_ip_vals[1])
     nips        = length(elem.ips) 
 
@@ -222,10 +222,11 @@ function node_and_elem_vals(mat::Mechanical, elem::Element)
 
 end
 
-
+include("tensors.jl")
 include("solid.jl")
 include("truss.jl")
 include("pptruss.jl")
 include("joint1d.jl")
 include("mcjoint1d.jl")
+include("dp.jl")
 

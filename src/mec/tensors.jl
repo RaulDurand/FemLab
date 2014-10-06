@@ -8,9 +8,10 @@ typealias Tensor4 Array{Float64,2}
 tensor2() = zeros(6)
 tensor4() = zeros(6,6)
 
-const tI = [1., 1., 1., 0., 0., 0.]
+const tI  = [1., 1., 1., 0., 0., 0.]
 
-#trace(T::Tensor2) = sum(T[1:3])
+import Base.trace
+trace(T::Tensor2) = sum(T[1:3])
 J1(T::Tensor2) = sum(T[1:3])
 J2(T::Tensor2) = 0.5*dot(T,T)
 
@@ -22,6 +23,8 @@ const Psd = [
       0.    0.    0. 1. 0. 0.
       0.    0.    0. 0. 1. 0.
       0.    0.    0. 0. 0. 1. ]
+
+const Isym = eye(6)
 
 function dev(T::Tensor2) # deviatoric tensor
     return Psd*T
@@ -54,16 +57,21 @@ end
 
 ⊗ = dyad
 
-function dupcon(T1::Tensor4, T2::Tensor4)
+function inner(T1::Tensor4, T2::Tensor4)
     return sum(T1 .* T2)
 end
 
-function dupcon(T1::Tensor4, T2::Tensor2)
+function inner(T1::Tensor4, T2::Tensor2)
     return T1 * T2
 end
 
-function dupcon(T1::Tensor2, T2::Tensor4)
+function inner(T1::Tensor2, T2::Tensor4)
     return T2*T1
 end
 
-∷ = dupcon
+function inner(T1::Tensor2, T2::Tensor4, T3::Tensor2)
+    return sum(T2*T1 .* T3)
+end
+
+∷ = inner
+

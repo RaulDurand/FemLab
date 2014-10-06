@@ -76,11 +76,15 @@ function solve!(dom::Domain; nincs::Int=1, scheme::String="FE", precision::Float
             if it>1; DU = zeros(ndofs) end
             solve_inc(dom, DU, R, umap, pmap, verbose)   # Changes DU and R
             if verbose; print("    updating... \r") end
-            DFin = update!(dom.elems, dofs, DU) # Internal forces
+            DFin = update!(dom.elems, dofs, DU) # Internal forces (DU+DUaccum?)
+
             R    = R - DFin
             DFa += DFin
         
-            residue = maxabs(DF[umap] - DFa[umap])
+            #residue = maxabs(DF[umap] - DFa[umap])
+            residue = norm(R)
+            tracking(dom) # Tracking nodes, ips, elements, etc.
+
             if verbose; println("    it $it  residue: $residue") end
             if residue<precision; converged = true ; break end
             if residue>100.;      converged = false; break end
@@ -131,6 +135,7 @@ function solve_inc(dom::Domain, DU::Vect, DF::Vect, umap::Array{Int,1}, pmap::Ar
     # Solve linear system
     if verbose; print("    solving...   \r") end
     F2 = K22*U2
+    U1 = zeros(0)
     if nu>0
         RHS = F1 - K12*U2
         U1  = K11\RHS

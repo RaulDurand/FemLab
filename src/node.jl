@@ -1,4 +1,5 @@
 
+export Node
 export set_bc, sort, reset
 
 
@@ -62,6 +63,11 @@ function add_dof(node::Node, sU::Symbol, sF::Symbol)
     end
 end
 
+import Base.getindex
+function getindex(node::Node, s::Symbol)
+    return node.dofdict[s]
+end
+
 function get_vals(node::Node)
     uvals = [ dof.sU => dof.U for dof in node.dofs]
     fvals = [ dof.sF => dof.F for dof in node.dofs]
@@ -100,12 +106,35 @@ function substitute!(expr::Expr, syms::Tuple, vals::Tuple)
     end
 end
 
+
+
+#function getindex(nodes::Array{Node,1}, cond::Expr) 
+    #result = Array(Node, 0)
+    #for node in nodes
+        #mcond = copy(cond)
+        #substitute!(mcond, (:x, :y, :z), (node.X[1], node.X[2], node.X[3]) )
+        #if eval(mcond); push!(result, node) end
+    #end
+    #return result
+#end
+
+
+
 function getindex(nodes::Array{Node,1}, cond::Expr) 
+    funex = :( (x,y,z) -> x*y*z )
+    funex.args[2].args[2] = cond
+    fun = nothing
+    try
+        fun   = eval(funex)
+    catch
+        error("Node getindex: Invalid condition ", cond)
+    end
+
     result = Array(Node, 0)
     for node in nodes
-        mcond = copy(cond)
-        substitute!(mcond, (:x, :y, :z), (node.X[1], node.X[2], node.X[3]) )
-        if eval(mcond); push!(result, node) end
+        if fun(node.X[1], node.X[2], node.X[3])
+            push!(result, node)
+        end
     end
     return result
 end

@@ -1,4 +1,6 @@
 
+include("shape.jl")
+
 #using Shape
 export Point, Cell, hash, get_coords, get_point, filter, get_faces
 
@@ -151,13 +153,6 @@ function build_bins(cells::Array{Cell,1}, bins::Bins)
         if !is_solid(cell.shape); continue end
         bbox = bounding_box(cell)
         max  = maximum(bbox[2,:] - bbox[1,:])
-        #if max>0.9
-            #@out bbox
-            #@out max
-            #@out cell.id
-            #@out get_coords(cell)
-            #exit()
-        #end
         if max>max_l; max_l = max end
     end
 
@@ -170,12 +165,6 @@ function build_bins(cells::Array{Cell,1}, bins::Bins)
     nx = ifloor(Lx/lbin) + 1
     ny = ifloor(Ly/lbin) + 1
     nz = ifloor(Lz/lbin) + 1
-
-    #@out max_L
-    #@out max_l
-    #@out ndiv
-    #@out (nx,ny,nz)
-    #exit()
 
     # Allocate bins
     bins.bins = Array(Array{Cell,1}, nx, ny, nz)

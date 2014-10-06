@@ -3,6 +3,7 @@
 #include("entities.jl")
 #using  .MeshGen
 export Domain
+export track
 
 type Face
     shape::ShapeType
@@ -49,16 +50,29 @@ end
 
 typealias Edge Face
 
+#type TrackStruct{T}
+    #obj::T
+    #data::DTable
+    #function TrackStruct(obj::T, data::Dtable)
+        #this = new(obj, data)
+        #return this
+    #end
+#end
+
 type Domain
     ndim ::Int
     nodes::Array{Node,1}
     elems::Array{Element,1}
     faces::Array{Face,1}
     edges::Array{Edge,1}
+    #trk_nodes::Array{TrackStruct{Node},1}
+    trk_ips  ::Array{(Ip, DTable), 1}
     function Domain(mesh::Mesh)
         this = new()
         load_mesh(this, mesh)
-        this
+        #this.trk_nodes = []
+        this.trk_ips   = []
+        return this
     end
 end
 
@@ -112,22 +126,16 @@ function load_mesh(dom::Domain, mesh::Mesh)
     # Setting embeddeds
     edict = Dict{Uint64, Element}()
     for elem in dom.elems
-        hs = hash(getcoords(elem))
+        #hs = hash(getcoords(elem))
+        hs = hash(getconns(elem))
         edict[hs] = elem
     end
     for elem in dom.elems
-        if elem.shape==LINK2
-            coords = getcoords(elem)
-            hs_hook  = hash(coords[  1:end-2,:])
-            hs_truss = hash(coords[end-1:end,:])
-            elem.extra[:hook] = edict[hs_hook]
-            elem.extra[:bar ] = edict[hs_truss]
-        end
-        if elem.shape==LINK3
-            #@out "HI"
-            coords = getcoords(elem)
-            hs_hook  = hash(coords[  1:end-3,:])
-            hs_truss = hash(coords[end-2:end,:])
+        if elem.shape in (LINK2, LINK3)
+            nbnodes = elem.shape==LINK2? 2 : 3
+            conns = getconns(elem)
+            hs_hook  = hash(conns[1:end-nbnodes])
+            hs_truss = hash(conns[end-nbnodes+1:end])
             elem.extra[:hook] = edict[hs_hook]
             elem.extra[:bar ] = edict[hs_truss]
         end
@@ -198,6 +206,65 @@ function node_and_elem_vals(nodes::Array{Node,1}, elems::Array{Element,1})
 
     return Node_vals, node_keys, Elem_vals, elem_keys
 end
+
+function track(dom::Domain, node::Node)
+    headr = vcat([ [dof.sU, dof.sF] for dof in node.dofs]...)
+    headr = [:id, :time, headr] 
+    table = Dtable(headr)
+    table.extra[:entity] = node
+    push!(dom.track_tables, table)
+    return table
+end
+
+function track(dom::Domain, ip::Ip)
+    new_table = DTable()
+    #@show typeof(dom.trk_ips)
+    #@show typeof(ip)
+    #@show typeof(new_table)
+    push!(dom.trk_ips, (ip, new_table))
+    return new_table
+end
+
+function update(table, dom, node)
+    vals = vcat([ [dof.U, dof.F] for dof in node.dofs]...)
+    vals = [ node.id, dom.time, vals]
+    push!(table, vals)
+end
+
+#function update(table, dom, node, nodal_lbs, noda_vals)
+#end
+
+#function track(dom::Domain, nodes::Array{Node,1})
+#end
+#function track(dom::Domain, node::Element)
+#end
+#function track(dom::Domain, ip::Ip)
+#end
+
+function tracking(dom::Domain)
+    # tracking ips
+    for (ip, table) in dom.trk_ips
+        vals = getvals(ip.data)
+        push!(table, vals)
+    end
+    #for track_st in dom.track_table
+        #obj = table.extra[:obj]
+        #typ = typeof(obj)
+        #if typ==Node
+            #node = obj
+            #dict = [ key => Node_vals[node.id, i] for (i,key) in enumerate(Node_keys)  ] 
+            #dict = Dict{:Symbol,Float64}
+            #dict[:x] = dom.time
+            #vals = vcat([ [dof.U, dof.F] for dof in node.dofs]...)
+            #vals = [ node.id, dom.time, vals]
+            #push!(table, vals)
+        #end
+        #if typ==Ip
+#
+        #end
+    #end
+end
+
 
 import .Definitions.save
 function save(dom::Domain, filename::String)
