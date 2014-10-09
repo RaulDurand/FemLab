@@ -27,7 +27,7 @@ type Joint1D<:AbsJoint1D
 
         if isnan(h) 
             if A>0
-                h = 2.0*(A*pi)^2.0
+                h = 2.0*(A*pi)^0.5
             else
                 h = pi*dm
             end

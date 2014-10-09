@@ -58,8 +58,6 @@ end
 function yield_func(mat::DruckerPrager, ipd::DruckerPragerIpData, σ::Tensor2)
     j1  = J1(σ)
     j2d = J2D(σ)
-    #@show(j1)
-    #@show(j2d)
     α,κ = mat.α, mat.κ
     H   = mat.H
     εpa = ipd.εpa
@@ -75,11 +73,17 @@ function mount_D(mat::DruckerPrager, ipd::DruckerPragerIpData)
         return De
     end
 
-    s  = dev(ipd.σ) 
-    su = s/norm(s)
-    V  = α*tI + su/√2 # df/dσ
-    N  = V
-    Nu = N/norm(N)
+    j2d = J2D(ipd.σ)
+    if j2d != 0.0
+        s  = dev(ipd.σ) 
+        su = s/norm(s)
+        V  = α*tI + su/√2 # df/dσ
+        N  = V
+        Nu = N/norm(N)
+    else # apex
+        Nu = 1./√3.*tI
+        V  = Nu
+    end
 
     return De - inner(De,Nu) ⊗ inner(V,De) / (inner(V,De,Nu) + H)
 
@@ -88,33 +92,39 @@ end
 function stress_update(mat::DruckerPrager, ipd::DruckerPragerIpData, Δε::Array{Float64,1})
     σini   = ipd.σ
     σtr    = ipd.σ + inner(mat.De, Δε)
-    #@show Δε
-    #@show σtr
     ftr    = yield_func(mat, ipd, σtr)
 
-    #if ipd.pl
-        #@show Δε[3]
-        #@show ftr
-    #end
 
     if ftr <= 0.0
+        # elastic
         ipd.Δγ = 0.0
         ipd.σ  = σtr
     else
-        K, G     = mat.E/(3.*(1.-2.*mat.ν)), mat.E/(2.*(1.+mat.ν))
-        α, H     = mat.α, mat.H
-        n        = 1./√(3.*α*α+0.5)
-        ipd.Δγ   = ftr/(9*α*α*n*K + n*G + H)
-        j1       = J1(σtr) - 9*ipd.Δγ*α*n*K
-        m        = 1. - ipd.Δγ*n*G/√J2D(σtr)
-        ipd.σ    = m*dev(σtr) + j1/3.*tI
+        # plastic 
+        K, G  = mat.E/(3.*(1.-2.*mat.ν)), mat.E/(2.*(1.+mat.ν))
+        α, H  = mat.α, mat.H
+        n     = 1./√(3.*α*α+0.5)
+        j1tr  = J1(σtr)
+        j2dtr = J2D(σtr)
+
+        if √j2dtr - ipd.Δγ*n*G > 0.0 # conventional return
+            ipd.Δγ = ftr/(9*α*α*n*K + n*G + H)
+            j1     = j1tr - 9*ipd.Δγ*α*n*K
+            m      = 1. - ipd.Δγ*n*G/√j2dtr
+            ipd.σ  = m*dev(σtr) + j1/3.*tI
+        else # return to apex
+            κ      = mat.κ
+            ipd.Δγ = (α*j1tr-κ-H*ipd.εpa)/(3*√3*α*K + H)
+            j1     = j1tr - 3*√3*ipd.Δγ*K
+            ipd.σ  = j1/3.*tI
+        end
+
         ipd.εpa += ipd.Δγ
+
     end
 
     ipd.ε += Δε
     Δσ     = ipd.σ - σini
-    #@show yield_func(mat, ipd, ipd.σ)
-    #exit()
     return Δσ
 end
 

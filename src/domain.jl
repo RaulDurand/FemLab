@@ -210,7 +210,7 @@ end
 function track(dom::Domain, node::Node)
     headr = vcat([ [dof.sU, dof.sF] for dof in node.dofs]...)
     headr = [:id, :time, headr] 
-    table = Dtable(headr)
+    table = DTable(headr)
     table.extra[:entity] = node
     push!(dom.track_tables, table)
     return table

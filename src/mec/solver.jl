@@ -87,7 +87,7 @@ function solve!(dom::Domain; nincs::Int=1, scheme::String="FE", precision::Float
 
             if verbose; println("    it $it  residue: $residue") end
             if residue<precision; converged = true ; break end
-            if residue>100.;      converged = false; break end
+            #if residue>100.;      converged = false; break end
         end
 
         if !converged

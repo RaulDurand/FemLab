@@ -2,6 +2,7 @@
 include("entities.jl")
 
 export Mesh, Block2D, Block3D, BlockTruss, BlockInset
+export copy, move
 export generate_mesh, save
 
 ### Type Mesh
@@ -45,6 +46,9 @@ type Block2D <: Block
     end
 end
 
+import Base.copy
+copy(bl::Block2D) = Block2D(copy(bl.coords), nx=bl.nx, ny=bl.ny, shape=bl.shape, tag=bl.tag)
+
 type Block3D <: Block
     coords::Array{Float64,2}
     nx::Int64
@@ -60,6 +64,15 @@ type Block3D <: Block
     end
 end
 
+copy(bl::Block3D) = Block2D(copy(bl.coords), nx=bl.nx, ny=bl.ny, nz=bl.nz, shape=bl.shape, tag=bl.tag)
+
+function move(bl::Block;x=0.0, y=0.0, z=0.0)
+    n = size(bl.coords, 1)
+    bl.coords[1:n, 1] += x
+    bl.coords[1:n, 2] += y
+    bl.coords[1:n, 3] += z
+    return bl
+end
 #type BlockInset <: Block
     #coords::Array{Float64,2}
     #curvetype::Int64
@@ -534,7 +547,8 @@ type BlockInset <: Block
     end
 end
 
-#import Definitions.@out
+copy(bl::BlockInset) = BlockInset(copy(bl.coords), curvetype=bl.curvetype, closed=bl.closed, shape=bl.shape, tag=bl.tag)
+
 
 function cubicBezier(s::Float64, PorQ::Array{Float64,2}, isQ=false)
     # check
