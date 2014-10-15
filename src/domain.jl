@@ -17,19 +17,44 @@ type Face
     end
 end
 
+#function getindex(faces::Array{Face,1}, cond::Expr)
+    #result = Array(Face,0)
+    #for face in faces
+        #mcond  = copy(cond)
+        #coords = getcoords(face.nodes)
+        #x = all(coords[:,1].==coords[1,1]) ? coords[1,1] : NaN
+        #y = all(coords[:,2].==coords[1,2]) ? coords[1,2] : NaN
+        #z = all(coords[:,3].==coords[1,3]) ? coords[1,3] : NaN
+        #substitute!(mcond, (:x, :y, :z), (x, y, z))
+        #if eval(mcond); push!(result, face) end
+    #end
+    #return result
+#end
+
 function getindex(faces::Array{Face,1}, cond::Expr)
+    funex = :( (x,y,z) -> x*y*z )
+    funex.args[2].args[2] = cond
+    fun = nothing
+    try
+        fun   = eval(funex)
+    catch
+        error("Node getindex: Invalid condition ", cond)
+    end
+
     result = Array(Face,0)
     for face in faces
-        mcond  = copy(cond)
         coords = getcoords(face.nodes)
         x = all(coords[:,1].==coords[1,1]) ? coords[1,1] : NaN
         y = all(coords[:,2].==coords[1,2]) ? coords[1,2] : NaN
         z = all(coords[:,3].==coords[1,3]) ? coords[1,3] : NaN
-        substitute!(mcond, (:x, :y, :z), (x, y, z))
-        if eval(mcond); push!(result, face) end
+        if fun(x, y, z)
+            push!(result, face) 
+        end
     end
     return result
 end
+
+getindex(faces::Array{Face,1}, cond::String) = getindex(faces, parse(cond))
 
 function set_bc(face::Face; args...)
     oelem = face.oelem # owner element
@@ -65,12 +90,12 @@ type Domain
     elems::Array{Element,1}
     faces::Array{Face,1}
     edges::Array{Edge,1}
-    #trk_nodes::Array{TrackStruct{Node},1}
+    trk_nodes::Array{(Node, DTable), 1}
     trk_ips  ::Array{(Ip, DTable), 1}
     function Domain(mesh::Mesh)
         this = new()
         load_mesh(this, mesh)
-        #this.trk_nodes = []
+        this.trk_nodes = []
         this.trk_ips   = []
         return this
     end
@@ -207,39 +232,33 @@ function node_and_elem_vals(nodes::Array{Node,1}, elems::Array{Element,1})
     return Node_vals, node_keys, Elem_vals, elem_keys
 end
 
+#function track(dom::Domain, node::Node)
+    #headr = vcat([ [dof.sU, dof.sF] for dof in node.dofs]...)
+    #headr = [:id, :time, headr] 
+    #table = DTable(headr)
+    #table.extra[:entity] = node
+    #push!(dom.track_tables, table)
+    #return table
+#end
+
 function track(dom::Domain, node::Node)
-    headr = vcat([ [dof.sU, dof.sF] for dof in node.dofs]...)
-    headr = [:id, :time, headr] 
-    table = DTable(headr)
-    table.extra[:entity] = node
-    push!(dom.track_tables, table)
-    return table
+    new_table = DTable()
+    push!(dom.trk_nodes, (node, new_table))
+    return new_table
 end
 
 function track(dom::Domain, ip::Ip)
     new_table = DTable()
-    #@show typeof(dom.trk_ips)
-    #@show typeof(ip)
-    #@show typeof(new_table)
     push!(dom.trk_ips, (ip, new_table))
     return new_table
 end
 
-function update(table, dom, node)
-    vals = vcat([ [dof.U, dof.F] for dof in node.dofs]...)
-    vals = [ node.id, dom.time, vals]
-    push!(table, vals)
+function track(dom::Domain, elem::Element)
+    new_table = DTable()
+    push!(dom.trk_ips, (elem.ips[1], new_table))
+    return new_table
 end
 
-#function update(table, dom, node, nodal_lbs, noda_vals)
-#end
-
-#function track(dom::Domain, nodes::Array{Node,1})
-#end
-#function track(dom::Domain, node::Element)
-#end
-#function track(dom::Domain, ip::Ip)
-#end
 
 function tracking(dom::Domain)
     # tracking ips
@@ -247,22 +266,13 @@ function tracking(dom::Domain)
         vals = getvals(ip.data)
         push!(table, vals)
     end
-    #for track_st in dom.track_table
-        #obj = table.extra[:obj]
-        #typ = typeof(obj)
-        #if typ==Node
-            #node = obj
-            #dict = [ key => Node_vals[node.id, i] for (i,key) in enumerate(Node_keys)  ] 
-            #dict = Dict{:Symbol,Float64}
-            #dict[:x] = dom.time
-            #vals = vcat([ [dof.U, dof.F] for dof in node.dofs]...)
-            #vals = [ node.id, dom.time, vals]
-            #push!(table, vals)
-        #end
-        #if typ==Ip
-#
-        #end
-    #end
+
+    # tracking nodes
+    for (node, table) in dom.trk_nodes
+        vals = getvals(node)
+        push!(table, vals)
+    end
+
 end
 
 
@@ -380,4 +390,53 @@ function save(dom::Domain, filename::String)
     #if not dom.track_per_inc
         #dom.write_history(node_vals, node_labels)
 
+end
+
+
+function save(nodes::Array{Node,1}, filename::String; dir::Symbol=:nodir, rev::Bool=false)
+    # sort nodes
+    if dir in (:x, :y, :z)
+        nodes = sort(nodes, dir=dir, rev=rev)
+    end
+
+    # filling table
+    table = DTable()
+    dist  = 0.0
+    X0    = nodes[1].X
+    for node in nodes
+        dist += norm(node.X - X0)
+        X0    = node.X
+        vals  = getvals(node)
+        vals[:dist] = dist
+        vals[:x]    = node.X[1]
+        vals[:y]    = node.X[2]
+        vals[:z]    = node.X[3]
+        push!(table, vals)
+    end
+
+    save(table, filename)
+end
+
+function save(ips::Array{Ip,1}, filename::String; offset::Float64=0.0, dir::Symbol=:nodir, rev::Bool=false)
+    # sort ips
+    if dir in (:x, :y, :z)
+        ips = sort(ips, dir=dir, rev=rev)
+    end
+
+    # filling table
+    table = DTable()
+    dist  = offset
+    X0    = ips[1].X
+    for node in ips
+        dist += norm(node.X - X0)
+        X0    = node.X
+        vals  = getvals(ip.data)
+        vals[:dist] = dist
+        vals[:x]    = ip.X[1]
+        vals[:y]    = ip.X[2]
+        vals[:z]    = ip.X[3]
+        push!(table, vals)
+    end
+
+    save(table, filename)
 end

@@ -2,7 +2,7 @@
 include("shape.jl")
 
 #using Shape
-export Point, Cell, hash, get_coords, get_point, filter, get_faces
+export Point, Cell, hash, get_coords, get_point, get_faces
 
 ### Type Point definition
 
@@ -38,17 +38,6 @@ function get_point(points::Dict{Uint64,Point}, C::Array{Float64,1})
     get(points, hs, nothing)
 end
 
-function filter(points::Array{Point,1}; x=NaN, y=NaN, z=NaN)
-    result = Array(Point, 0)
-
-    for p in points
-        if (x==p.x || isnan(x)) && (y==p.y || isnan(y)) && (z==p.z || isnan(z)) 
-            push!(result, p)
-        end
-    end
-    return result
-
-end
 
 
 ### Type Cell definition

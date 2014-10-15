@@ -29,7 +29,7 @@ type DruckerPrager<:Mechanical
     new_ipdata::DataType
 
     function DruckerPrager(;E=NaN, nu=0.0, alpha=0.0, kappa=0.0, H=0.0)
-        @check E>=0.0
+        @check E>0.0
         @check 0.0<=nu<0.5
         @check alpha>=0.0
         @check kappa>=0.0

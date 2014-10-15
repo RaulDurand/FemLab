@@ -1,3 +1,4 @@
+import Base.reset
 export Element
 export set_mat, get_nodes, set_state, reset
 
@@ -43,7 +44,6 @@ type Element
     end
 end
 
-import Base.reset
 function reset(elems::Array{Element,1})
     # Resets data at integration points
     ndim = elems[1].ndim

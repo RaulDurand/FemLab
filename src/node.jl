@@ -1,6 +1,11 @@
+import Base.reset
+import Base.getindex
+import Base.max
+import Base.min
+import Base.sort
 
 export Node
-export set_bc, sort, reset
+export set_bc, max, min, sort, reset
 
 
 ### Dof type
@@ -30,20 +35,17 @@ type Node
     dofs::Array{Dof,1}
     dofdict::Dict{Symbol,Dof}
     n_shares::Int
-    data_table::Array
     function Node(X::Array{Float64,1}; tag="", id=-1)
         this = new(X, tag, id)
         this.dofs = []
         this.dofdict = Dict()
-        this.data_table = []
-        this
+        return this
     end
     function Node(point::Point; tag="", id=-1)
         Node([point.x, point.y, point.z], tag=tag, id=id)
     end
 end
 
-import Base.reset
 function reset(nodes::Array{Node,1})
     for node in nodes
         for dof in node.dofs
@@ -63,12 +65,11 @@ function add_dof(node::Node, sU::Symbol, sF::Symbol)
     end
 end
 
-import Base.getindex
 function getindex(node::Node, s::Symbol)
     return node.dofdict[s]
 end
 
-function get_vals(node::Node)
+function getvals(node::Node)
     uvals = [ dof.sU => dof.U for dof in node.dofs]
     fvals = [ dof.sF => dof.F for dof in node.dofs]
     merge(uvals, fvals)
@@ -97,16 +98,14 @@ function clear_bc(node::Node)
 end
 
 ### Node collection
-function substitute!(expr::Expr, syms::Tuple, vals::Tuple)
-    for (i,s) in enumerate(expr.args)
-        if typeof(s)==Expr; substitute!(s, syms, vals); continue end
-        for (sym,val) in zip(syms,vals)
-            if s==sym; expr.args[i] = val end
-        end
-    end
-end
-
-
+#function substitute!(expr::Expr, syms::Tuple, vals::Tuple)
+    #for (i,s) in enumerate(expr.args)
+        #if typeof(s)==Expr; substitute!(s, syms, vals); continue end
+        #for (sym,val) in zip(syms,vals)
+            #if s==sym; expr.args[i] = val end
+        #end
+    #end
+#end
 
 #function getindex(nodes::Array{Node,1}, cond::Expr) 
     #result = Array(Node, 0)
@@ -117,8 +116,6 @@ end
     #end
     #return result
 #end
-
-
 
 function getindex(nodes::Array{Node,1}, cond::Expr) 
     funex = :( (x,y,z) -> x*y*z )
@@ -139,6 +136,9 @@ function getindex(nodes::Array{Node,1}, cond::Expr)
     return result
 end
 
+getindex(nodes::Array{Node,1}, cond::String) = getindex(nodes, parse(cond))
+
+
 function getcoords(nodes::Array{Node,1}, ndim=3)
     nnodes = length(nodes)
     [ nodes[i].X[j] for i=1:nnodes, j=1:ndim]
@@ -154,22 +154,19 @@ function set_bc(nodes::Array{Node,1}; args...)
     end
 end
 
-import Base.max
-function max(nodes::Array{Node,1}, d::Symbol) 
-    idx = findfisrt((:x, :y, :z), d)
+function max(nodes::Array{Node,1}, dir::Symbol) 
+    idx = findfisrt((:x, :y, :z), dir)
     max([node.x[idx] for node in nodes]...)
 end
 
-import Base.min
-function min(nodes::Array{Node,1}, d::Symbol) 
-    idx = findfisrt((:x, :y, :z), d)
+function min(nodes::Array{Node,1}, dir::Symbol) 
+    idx = findfisrt((:x, :y, :z), dir)
     min([node.x[idx] for node in nodes]...)
 end
 
-import Base.sort
-function sort(nodes::Array{Node,1}, d::Symbol) 
-    idx = findfirst((:x, :y, :z), d)
-    idxs = sortperm([node.X[idx] for node in nodes])
+function sort(nodes::Array{Node,1}, dir::Symbol=:x, rev::Bool=false) 
+    idx  = findfirst((:x, :y, :z), dir)
+    idxs = sortperm([node.X[idx] for node in nodes], rev=rev)
     return nodes[idxs]
 end
 
