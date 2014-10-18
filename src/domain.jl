@@ -279,7 +279,6 @@ end
 import .Definitions.save
 function save(dom::Domain, filename::String)
     # Saves the dom information in vtk format
-
     nnodes = length(dom.nodes)
     nelems  = length(dom.elems)
 
@@ -288,11 +287,6 @@ function save(dom::Domain, filename::String)
     for elem in dom.elems
         nconns += 1 + length(elem.nodes)
     end
-
-    # Get node and elem values
-    node_vals, node_labels, elem_vals, elem_labels = node_and_elem_vals(dom.nodes, dom.elems)
-    nncomps = length(node_labels)
-    necomps = length(elem_labels)
 
     # Open filename
     f = open(filename, "w")
@@ -328,6 +322,18 @@ function save(dom::Domain, filename::String)
     end
     println(f)
 
+    # check if all elements have material defined
+    has_data = all([ isdefined(elem, :mat) for elem in dom.elems])
+
+    if has_data
+        # Get node and elem values
+        node_vals, node_labels, elem_vals, elem_labels = node_and_elem_vals(dom.nodes, dom.elems)
+        nncomps = length(node_labels)
+        necomps = length(elem_labels)
+    else
+        close(f)
+        return
+    end
 
     # Write point data
     println(f, "POINT_DATA ", nnodes)
@@ -376,19 +382,6 @@ function save(dom::Domain, filename::String)
 
     close(f)
 
-    # Write cell tag
-    #println("SCALARS tag int 1")
-    #println("LOOKUP_TABLE default")
-    #for j=1:naelems
-        #try
-            #tag = int(dom.aelems[j].tag)
-        #except ValueError
-            #tag = 0
-        #println("%d"%(tag))
-    #println()
-
-    #if not dom.track_per_inc
-        #dom.write_history(node_vals, node_labels)
 
 end
 
