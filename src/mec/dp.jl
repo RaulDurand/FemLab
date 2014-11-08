@@ -7,14 +7,12 @@ type DruckerPragerIpData<:IpData
     ε::Tensor2
     εpa::Float64
     Δγ::Float64
-    pl::Bool
     function DruckerPragerIpData(ndim=3) 
         this = new(ndim)
         this.σ = zeros(6)
         this.ε = zeros(6)
         this.εpa = 0.0
         this.Δγ  = 0.0
-        this.pl  = false
         this
     end
 end
@@ -32,7 +30,7 @@ type DruckerPrager<:Mechanical
         @check E>0.0
         @check 0.0<=nu<0.5
         @check alpha>=0.0
-        @check kappa>=0.0
+        @check kappa>0.0
         @check H>=0.0
 
         this     = new(E, nu, alpha, kappa, H)

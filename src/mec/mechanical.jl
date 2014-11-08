@@ -165,10 +165,10 @@ function update!(::Mechanical, elem::Element, DU::Array{Float64,1}, DF::Array{Fl
     C = getcoords(elem)
     for ip in elem.ips
         detJ = mount_B(mat, elem, ip.R, C, B)
-        deps = B*dU
-        dsig = stress_update(mat, ip.data, deps)
+        Δε   = B*dU
+        Δσ   = stress_update(mat, ip.data, Δε)
         coef = detJ*ip.w
-        dF += B'*dsig*coef
+        dF += B'*Δσ*coef
     end
 
     # Update global vector
@@ -229,4 +229,5 @@ include("pptruss.jl")
 include("joint1d.jl")
 include("mcjoint1d.jl")
 include("dp.jl")
+include("scap.jl")
 

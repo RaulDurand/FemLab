@@ -62,6 +62,7 @@ function solve!(dom::Domain; nincs::Int=1, scheme::String="FE", precision::Float
     #println(lam)
     DU, DF  = lam*U, lam*F
     residue = 0.0
+    tracking(dom) # Tracking nodes, ips, elements, etc.
 
     for inc=1:nincs
         if verbose; println("  increment $inc:") end
@@ -81,13 +82,13 @@ function solve!(dom::Domain; nincs::Int=1, scheme::String="FE", precision::Float
             R    = R - DFin
             DFa += DFin
         
-            #residue = maxabs(DF[umap] - DFa[umap])
-            residue = norm(R)
+            #residue = norm(R)
+            residue =maxabs(R)
             tracking(dom) # Tracking nodes, ips, elements, etc.
 
             if verbose; println("    it $it  residue: $residue") end
             if residue<precision; converged = true ; break end
-            #if residue>100.;      converged = false; break end
+            if isnan(residue);    converged = false; break end
         end
 
         if !converged
