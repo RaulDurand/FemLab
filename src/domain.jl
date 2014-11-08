@@ -277,7 +277,7 @@ end
 
 
 import .Definitions.save
-function save(dom::Domain, filename::String)
+function save(dom::Domain, filename::String, verbose=true)
     # Saves the dom information in vtk format
     nnodes = length(dom.nodes)
     nelems  = length(dom.elems)
@@ -382,11 +382,14 @@ function save(dom::Domain, filename::String)
 
     close(f)
 
+    if verbose
+        println("  file $filename written")
+    end
 
 end
 
 
-function save(nodes::Array{Node,1}, filename::String; dir::Symbol=:nodir, rev::Bool=false)
+function save(nodes::Array{Node,1}, filename::String; dir::Symbol=:nodir, rev::Bool=false, verbose=true)
     # sort nodes
     if dir in (:x, :y, :z)
         nodes = sort(nodes, dir=dir, rev=rev)
@@ -407,10 +410,10 @@ function save(nodes::Array{Node,1}, filename::String; dir::Symbol=:nodir, rev::B
         push!(table, vals)
     end
 
-    save(table, filename)
+    save(table, filename, verbose)
 end
 
-function save(ips::Array{Ip,1}, filename::String; offset::Float64=0.0, dir::Symbol=:nodir, rev::Bool=false)
+function save(ips::Array{Ip,1}, filename::String; offset::Float64=0.0, dir::Symbol=:nodir, rev::Bool=false, verbose=true)
     # sort ips
     if dir in (:x, :y, :z)
         ips = sort(ips, dir=dir, rev=rev)
@@ -431,5 +434,5 @@ function save(ips::Array{Ip,1}, filename::String; offset::Float64=0.0, dir::Symb
         push!(table, vals)
     end
 
-    save(table, filename)
+    save(table, filename, verbose)
 end

@@ -111,7 +111,7 @@ function getindex(table::DTable, field::Symbol)
     return table.data[index]
 end
 
-function save(table::DTable, filename::String)
+function save(table::DTable, filename::String, verbose=false)
     f = open(filename, "w")
     nc = length(table.header)
     nr = length(table.data[1])
@@ -132,6 +132,10 @@ function save(table::DTable, filename::String)
         end
     end
     close(f)
+
+    if verbose
+        println("  file $filename written")
+    end
 end
 
 

@@ -164,8 +164,8 @@ function split_block(bl::Block2D, msh::Mesh)
             for i = 1:2*nx+1
                 if shape==QUAD8 && iseven(i) && iseven(j) continue end
 
-                r = (2.0/nx)*(i-1) - 1.0
-                s = (2.0/ny)*(j-1) - 1.0
+                r = (1.0/nx)*(i-1) - 1.0
+                s = (1.0/ny)*(j-1) - 1.0
                 N = shape_func(shape, [r, s])
                 C = round(N'*bl.coords, 8)
                 C = reshape(C, 3)
@@ -269,16 +269,14 @@ function split_block(bl::Block3D, msh::Mesh)
                     if iseven(j) && iseven(k) continue end
                     if iseven(k) && iseven(i) continue end
 
-                    r = (2.0/nx)*(i-1) - 1.0
-                    s = (2.0/ny)*(j-1) - 1.0
-                    t = (2.0/nz)*(k-1) - 1.0
+                    r = (1.0/nx)*(i-1) - 1.0
+                    s = (1.0/ny)*(j-1) - 1.0
+                    t = (1.0/nz)*(k-1) - 1.0
                     if size(bl.coords,1)==8
                         N = shape_func(HEX8, [r, s, t])
                     else
                         N = shape_func(HEX20, [r, s, t])
                     end
-                    #@show size(N')
-                    #@show size(bl.coords)
                     C = round(N'*bl.coords, 8)
                     C = reshape(C, 3)
                     p::Any = nothing

@@ -1,13 +1,14 @@
 using FemLab
 
-bl  = Block3D( [0 0 0; 3. 0.25 0.42], shape=HEX8, nx=16, ny=4, nz=8)
+bl  = Block3D( [0 0 0; 3. 0.25 0.42], shape=HEX20, nx=12, ny=3, nz=6)
 bl1 = BlockInset( [0.05 0.03 0.02; 2.95 0.03 0.02], curvetype="polyline")
 bl2 = move(copy(bl1), y=0.08)
 bl3 = move(copy(bl1), y=0.14)
 bl4 = move(copy(bl1), y=0.19)
 
+#mesh = generate_mesh(bl)
 mesh = generate_mesh(bl, bl1, bl2, bl3, bl4)
-#save(mesh, "mymesh.vtk")
+save(mesh, "mymesh.vtk")
 #exit()
 
 dom = Domain(mesh)
@@ -23,7 +24,7 @@ t_elem9 = track(dom, dom.elems[9])
 #w=-650 # load
 w=-400 # load
 for i=1:2
-    set_bc(dom.nodes[:(x==0 && z==0)] , ux=0, uy=0, uz=0)
+    set_bc(dom.nodes[:(x==0 && z==0)], ux=0, uy=0, uz=0)
     set_bc(dom.nodes[:(x==3 && z==0)], uy=0, uz=0)
     set_bc(dom.faces[:(z==0.42)], tz=0.5*w)
 

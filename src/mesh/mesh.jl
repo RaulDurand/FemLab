@@ -51,6 +51,68 @@ function get_surface(cells::Array{Cell,1})
     return [face for (key, face) in surf_dict]
 end
 
+function get_surface_alt(cells::Array{Cell,1})
+    # Actually slower....
+    # Get all points
+    pointsd = Dict{Uint64, Point}()
+    for cell in cells
+        for point in cell.points
+            pointsd[hash(point)] = point
+        end
+    end
+    points = values(pointsd)
+
+    # Get incidence matrix (shares) (fast)
+    np = length(points)
+    N = [ Cell[] for i=1:np]
+    @time for cell in cells
+        for pt in cell.points
+            push!(N[pt.id], cell)
+        end
+    end
+
+    @show 1
+
+    # Get matrix of cells faces
+    @time F = [ get_faces(cell) for cell in cells]
+    nc = length(cells)
+    #CF = Array(Array{Array{Int64,1},1}, nc)
+    CF = Array(Array{Uint64,1}, nc)
+    @time for cell in cells # fast
+        #CF[cell.id] = [ sort([pt.id for pt in face.points]) for face in F[cell.id]]
+        CF[cell.id] = [ hash(face) for face in F[cell.id]]
+    end
+    @show 2
+
+    # Get cells boundary flag matrix
+    CB = [ trues(length(CF[cell.id])) for cell in cells]
+    @time for cell in cells
+        for (i,fcon) in enumerate(CF[cell.id])
+            for pid in fcon
+                for cl in N[pid]
+                    if cl.id == cell.id; continue end
+                    if fcon in CF[cl.id]
+                        CB[cell.id][i] = false
+                    end
+                end
+            end
+        end
+    end
+    @show 3
+
+    # Get list of boundary faces (almost fast)
+    facets = Cell[]
+    @time for cell in cells
+        for (i,face) in enumerate(F[cell.id])
+            if CB[cell.id][i]
+                push!(facets, face)
+            end
+        end
+    end
+    @show 4
+    return facets
+end
+
 function generate_mesh(blocks::Block...; verbose::Bool=true)
     generate_mesh([blocks...], verbose)
 end
@@ -109,7 +171,7 @@ end
 
 
 import .Definitions.save
-function Definitions.save(mesh::Mesh, filename::String)
+function Definitions.save(mesh::Mesh, filename::String, verbose=true)
     # Saves the mesh information in vtk format
 
     npoints = length(mesh.points)
@@ -173,6 +235,10 @@ function Definitions.save(mesh::Mesh, filename::String)
             println(f, int(cell.crossed))
         end
         println(f, )
+    end
+
+    if verbose
+        println("  file $filename written")
     end
 
 end

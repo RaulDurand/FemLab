@@ -185,6 +185,62 @@ function deriv_func(::Typed{QUAD4}, R::Array{Float64,1})
     return D
 end
 
+function shape_func(::Typed{QUAD8}, R::Array{Float64,1})
+    #     4           7            3
+    #       @---------@----------@
+    #       |               (1,1)|
+    #       |       s ^          |
+    #       |         |          |
+    #       |         |          |
+    #     8 @         +----> r   @ 6
+    #       |       (0,0)        |
+    #       |                    |
+    #       |                    |
+    #       |(-1,-1)             |
+    #       @---------@----------@
+    #     1           5            2
+    #
+    r, s = R[1:2]
+    N = Array(Float64,8)
+    rp1=1.0+r; rm1=1.0-r;
+    sp1=1.0+s; sm1=1.0-s;
+    N[1] = 0.25*rm1*sm1*(rm1+sm1-3.0)
+    N[2] = 0.25*rp1*sm1*(rp1+sm1-3.0)
+    N[3] = 0.25*rp1*sp1*(rp1+sp1-3.0)
+    N[4] = 0.25*rm1*sp1*(rm1+sp1-3.0)
+    N[5] = 0.50*sm1*(1.0-r*r)
+    N[6] = 0.50*rp1*(1.0-s*s)
+    N[7] = 0.50*sp1*(1.0-r*r)
+    N[8] = 0.50*rm1*(1.0-s*s)
+    return N
+end
+
+function deriv_func(::Typed{QUAD8}, R::Array{Float64,1})
+    r, s = R[1:2]
+    D = Array(Float64, 2, 8)
+    rp1=1.0+r; rm1=1.0-r
+    sp1=1.0+s; sm1=1.0-s
+
+    D[1,1] = - 0.25 * sm1 * (rm1 + rm1 + sm1 - 3.0)
+    D[1,2] =   0.25 * sm1 * (rp1 + rp1 + sm1 - 3.0)
+    D[1,3] =   0.25 * sp1 * (rp1 + rp1 + sp1 - 3.0)
+    D[1,4] = - 0.25 * sp1 * (rm1 + rm1 + sp1 - 3.0)
+    D[1,5] = - r * sm1
+    D[1,6] =   0.50 * (1.0 - s * s)
+    D[1,7] = - r * sp1
+    D[1,8] = - 0.5 * (1.0 - s * s)
+
+    D[2,1] = - 0.25 * rm1 * (sm1 + rm1 + sm1 - 3.0)
+    D[2,2] = - 0.25 * rp1 * (sm1 + rp1 + sm1 - 3.0)
+    D[2,3] =   0.25 * rp1 * (sp1 + rp1 + sp1 - 3.0)
+    D[2,4] =   0.25 * rm1 * (sp1 + rm1 + sp1 - 3.0)
+    D[2,5] = - 0.50 * (1.0 - r * r)
+    D[2,6] = - s * rp1
+    D[2,7] =   0.50 * (1.0 - r * r)
+    D[2,8] = - s * rm1
+    return D
+end
+
 function shape_func(::Typed{HEX8}, R::Array{Float64,1})
     # Local IDs
     #                  Nodes                                   Faces
