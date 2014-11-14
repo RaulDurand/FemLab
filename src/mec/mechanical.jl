@@ -25,14 +25,14 @@ function set_facet_bc(mat::Mechanical, oelem::Element, face::Face, key::Symbol, 
     ndim   = oelem.ndim
 
     if key in (:fx, :fy, :fz)
-        error("Boundary condition $key is not allowed in a face; consider tx, ty, tz or tn")
+        error("Boundary condition $key is not allowed in a facet; consider tx, ty, tz or tn")
     end
 
     if !(key in (:ux, :uy, :uz, :tx, :ty, :tz, :tn))
-        error("Boundary condition $key is not applicable in a face of an element with material $(typeof(mat))")
+        error("Boundary condition $key is not applicable in a facet of an element with material $(typeof(mat))")
     end
 
-    if key in (:tz, :uz) && ndim==2
+    if (key in (:tz, :uz) && ndim==2)
         error("Boundary condition $key is not applicable in a 2D analysis")
     end
 
@@ -82,7 +82,6 @@ function set_facet_bc(mat::Mechanical, oelem::Element, face::Face, key::Symbol, 
 
         F += N*V'*(nJ*w)
     end
-    #@show F
 
     # Setting bc into nodes
     for (i,node) in enumerate(fnodes)

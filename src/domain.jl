@@ -1,7 +1,3 @@
-
-#using  Entities
-#include("entities.jl")
-#using  .MeshGen
 export Domain
 export track
 
@@ -10,35 +6,27 @@ type Face
     nodes::Array{Node,1}
     ndim ::Integer
     oelem::Union(Element,Nothing)
+    isedge::Bool
     function Face(shape, nodes, ndim)
         this = new(shape, nodes, ndim)
-        this.oelem = nothing
+        this.oelem  = nothing
+        this.isedge = false
         return this
     end
 end
 
-#function getindex(faces::Array{Face,1}, cond::Expr)
-    #result = Array(Face,0)
-    #for face in faces
-        #mcond  = copy(cond)
-        #coords = getcoords(face.nodes)
-        #x = all(coords[:,1].==coords[1,1]) ? coords[1,1] : NaN
-        #y = all(coords[:,2].==coords[1,2]) ? coords[1,2] : NaN
-        #z = all(coords[:,3].==coords[1,3]) ? coords[1,3] : NaN
-        #substitute!(mcond, (:x, :y, :z), (x, y, z))
-        #if eval(mcond); push!(result, face) end
-    #end
-    #return result
-#end
+typealias Edge Face
+
 
 function getindex(faces::Array{Face,1}, cond::Expr)
+    condm = subs_equal_by_approx(cond)
     funex = :( (x,y,z) -> x*y*z )
-    funex.args[2].args[2] = cond
+    funex.args[2].args[2] = condm
     fun = nothing
     try
         fun   = eval(funex)
     catch
-        error("Node getindex: Invalid condition ", cond)
+        error("Faces getindex: Invalid condition ", cond)
     end
 
     result = Array(Face,0)
@@ -73,16 +61,6 @@ function set_bc(faces::Array{Face,1}; args...)
 end
 
 
-typealias Edge Face
-
-#type TrackStruct{T}
-    #obj::T
-    #data::DTable
-    #function TrackStruct(obj::T, data::Dtable)
-        #this = new(obj, data)
-        #return this
-    #end
-#end
 
 type Domain
     ndim ::Int
@@ -101,23 +79,6 @@ type Domain
     end
 end
 
-function get_faces(elem::Element)
-    faces  = Array(Face,0)
-    if !haskey(FACETS_IDXS, elem.shape)
-        return faces
-    end
-
-    f_idxs = FACETS_IDXS[elem.shape]
-
-    for f_idx in f_idxs
-        points = [ elem.points[i] for i in f_idx]
-        face   = Cell(FACETS_SHAPE[elem.shape], points)
-        push!(faces, face)
-    end
-
-    return faces
-end
-
 
 function load_mesh(dom::Domain, mesh::Mesh)
     ndim = dom.ndim = mesh.ndim
@@ -133,20 +94,24 @@ function load_mesh(dom::Domain, mesh::Mesh)
         elem.id = i
         push!(dom.elems, elem)
     end
-    #@show length(dom.elems)
 
     # Setting faces
     dom.faces = Array(Face,0)
     for cell in mesh.faces
         conn = [ p.id for p in cell.points ]
         face = Face(cell.shape, dom.nodes[conn], ndim)
-        #@show cell.id
         face.oelem = dom.elems[cell.ocell.id]
         push!(dom.faces, face)
     end
 
     # Setting edges
-    dom.edges = [] #TODO
+    dom.edges = Array(Edge,0)
+    for cell in mesh.edges
+        conn = [ p.id for p in cell.points ]
+        edge = Face(cell.shape, dom.nodes[conn], ndim)
+        edge.oelem = dom.elems[cell.ocell.id]
+        push!(dom.edges, edge)
+    end
 
     # Setting embeddeds
     edict = Dict{Uint64, Element}()

@@ -29,11 +29,11 @@ type PPTruss<:AbsTruss
         @check E>0
         @check A>0
         @check sig_y>0
-        if H==0.0
-            H = E*1.0e-15
+        #if H==0.0
+            #H = E*1.0e-15
             #H = 0.01
-        end
-        this = new(E,A,sig_y,H)
+        #end
+        this = new(E, A, sig_y, H)
         this.new_ipdata = PPTrussIpData
         this
     end

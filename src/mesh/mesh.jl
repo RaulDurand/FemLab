@@ -10,6 +10,7 @@ type Mesh
     points ::Array{Point,1}
     cells  ::Array{Cell,1}
     faces  ::Array{Cell,1}
+    edges  ::Array{Cell,1}
     bpoints::Dict{Uint64,Point}
     ndim   ::Int
     bins   ::Bins
@@ -31,10 +32,9 @@ include("block.jl")
 
 
 function get_surface(cells::Array{Cell,1})
-    # Needs cells id to be numbered
     surf_dict = Dict{Uint64, Cell}()
 
-    # Get only unique faces
+    # Get only unique faces. If dup, original and dup are deleted
     for cell in cells
         for face in get_faces(cell)
             #conns = [ pt.id for pt in face.points ]
@@ -48,7 +48,21 @@ function get_surface(cells::Array{Cell,1})
         end
     end
 
-    return [face for (key, face) in surf_dict]
+    return [ face for face in values(surf_dict) ]
+end
+
+function get_edges(surf_cells::Array{Cell,1})
+    edges_dict = Dict{Uint64, Cell}()
+
+    # Get only unique edges
+    for cell in surf_cells
+        for edge in get_faces(cell)
+            edge.ocell = cell.ocell
+            edges_dict[hash(edge)] = edge
+        end
+    end
+
+    return [ edge for edge in values(edges_dict) ] 
 end
 
 function get_surface_alt(cells::Array{Cell,1})
@@ -113,11 +127,11 @@ function get_surface_alt(cells::Array{Cell,1})
     return facets
 end
 
-function generate_mesh(blocks::Block...; verbose::Bool=true)
-    generate_mesh([blocks...], verbose)
+function generate_mesh(blocks::Block...; verbose::Bool=true, genfacets=true, genedges=false)
+    generate_mesh([blocks...], verbose, genfacets, genedges)
 end
 
-function generate_mesh(blocks::Array, verbose::Bool=true)
+function generate_mesh(blocks::Array, verbose::Bool=true, genfacets=true, genedges=false)
     nblocks = length(blocks)
     if verbose
         println("Mesh generation:")
@@ -132,7 +146,6 @@ function generate_mesh(blocks::Array, verbose::Bool=true)
         if verbose; print("  spliting block ",i,"...\r") end
     end
 
-
     # Get ndim
     ndim = 2
     for point in mesh.points
@@ -143,20 +156,33 @@ function generate_mesh(blocks::Array, verbose::Bool=true)
     # Numberig
     for (i,p) in enumerate(mesh.points) p.id = i end
     for (i,c) in enumerate(mesh.cells ) c.id = i; c.ndim=ndim end
-    for (i,f) in enumerate(mesh.faces ) f.id = i; f.ndim=ndim end
 
     # Facets
-    if verbose; print("  finding faces...\r") end
-    mesh.faces = get_surface(mesh.cells)
+    if genfacets
+        if verbose; print("  finding faces...\r") end
+        mesh.faces = get_surface(mesh.cells)
+    end
+
+    # Edges
+    if genedges && ndim==3
+        if verbose; print("  finding edges...\r") end
+        mesh.edges = get_edges(mesh.faces)
+    end
 
     if verbose
         npoints = length(mesh.points)
         ncells  = length(mesh.cells)
         nfaces  = length(mesh.faces)
+        nedges  = length(mesh.edges)
         println("  $ndim","d found             ")
         @printf "  %5d points obtained\n" npoints
         @printf "  %5d cells obtained\n" ncells
-        @printf "  %5d faces obtained\n" nfaces
+        if genfacets
+            @printf "  %5d faces obtained\n" nfaces
+        end
+        if genedges
+            @printf "  %5d surface edges obtained\n" nedges
+        end
         icount = 0
         for block in blocks
             if typeof(block) == BlockInset; icount += block.icount end
