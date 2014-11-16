@@ -18,7 +18,7 @@ function parseline(line)
 end
 
 mesh = Mesh()
-file = open("t_william.dat","r") 
+file = open("william.datt","r") 
 getline(file)
 getline(file)
 getline(file)
@@ -45,6 +45,6 @@ for i=1:nelems
     push!(mesh.cells, cell)
 end
 
-close(f)
+close(file)
 
 save(mesh, "wmesh.vtk")
