@@ -147,4 +147,24 @@ function loadtable(filename::String)
     return table
 end
 
+
+function subs_equal_by_approx(expr::Expr)
+    mexpr = copy(expr) # expression to be modified
+    for (i,arg) in enumerate(mexpr.args)
+        if typeof(arg)!=Expr; continue end
+        if arg.head == :comparison
+            if arg.args[2] == :(==)
+                a = arg.args[1]
+                b = arg.args[3]
+                mexpr.args[i] = :(isapprox($a,$b,rtol=1.e-8))
+                continue
+            end
+        else
+            subs_equal_by_approx(arg)
+        end
+    end
+    return mexpr
+end
+
+
 end#module

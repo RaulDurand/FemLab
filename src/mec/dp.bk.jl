@@ -22,18 +22,19 @@ type DruckerPrager<:Mechanical
     ν::Float64
     α::Float64
     κ::Float64
+    T::Float64
     H::Float64
     De::Tensor4
     new_ipdata::DataType
 
-    function DruckerPrager(;E=NaN, nu=0.0, alpha=0.0, kappa=0.0, H=0.0)
+    function DruckerPrager(;E=NaN, nu=0.0, alpha=0.0, kappa=0.0, T=-0., H=0.0)
         @check E>0.0
         @check 0.0<=nu<0.5
         @check alpha>=0.0
         @check kappa>0.0
         @check H>=0.0
 
-        this     = new(E, nu, alpha, kappa, H)
+        this     = new(E, nu, alpha, kappa, T, H)
         this.De  = mount_De(E,nu) # elastic tensor
         this.new_ipdata = DruckerPragerIpData
         return this 
@@ -72,13 +73,20 @@ function mount_D(mat::DruckerPrager, ipd::DruckerPragerIpData)
     end
 
     j2d = J2D(ipd.σ)
-    if j2d != 0.0
-        s  = dev(ipd.σ) 
-        su = s/norm(s)
-        V  = α*tI + su/√2 # df/dσ
-        N  = V
-        Nu = N/norm(N)
-    else # apex
+    j1 = J1(ipd.σ)
+
+    if j1<mat.T
+        if j2d != 0.0
+            s  = dev(ipd.σ) 
+            su = s/norm(s)
+            V  = α*tI + su/√2 # df/dσ
+            N  = V
+            Nu = N/norm(N)
+        else # apex
+            Nu = 1./√3.*tI
+            V  = Nu
+        end
+    else
         Nu = 1./√3.*tI
         V  = Nu
     end
@@ -91,9 +99,13 @@ function stress_update(mat::DruckerPrager, ipd::DruckerPragerIpData, Δε::Array
     σini   = ipd.σ
     σtr    = ipd.σ + inner(mat.De, Δε)
     ftr    = yield_func(mat, ipd, σtr)
+    j1tr  = J1(σtr)
+    #f      = yield_func(mat, ipd, σini)
+    #if f>1.e-5
+        #@show f
+    #end
 
-
-    if ftr <= 0.0
+    if ftr <= 0.0 || j1tr < mat.T
         # elastic
         ipd.Δγ = 0.0
         ipd.σ  = σtr
@@ -108,14 +120,36 @@ function stress_update(mat::DruckerPrager, ipd::DruckerPragerIpData, Δε::Array
         if √j2dtr - ipd.Δγ*n*G > 0.0 # conventional return
             ipd.Δγ = ftr/(9*α*α*n*K + n*G + H)
             j1     = j1tr - 9*ipd.Δγ*α*n*K
-            m      = 1. - ipd.Δγ*n*G/√j2dtr
-            ipd.σ  = m*dev(σtr) + j1/3.*tI
+            #if j1<mat.T
+                m      = 1. - ipd.Δγ*n*G/√j2dtr
+                ipd.σ  = m*dev(σtr) + j1/3.*tI
+            #else
+                #j1tr = j1
+                #σtr    = ipd.σ
+                #ipd.Δγ = (j1tr-mat.T)/(3*√3*K)
+                #j1     = j1tr - 3*√3*ipd.Δγ*K
+                #ipd.σ  = dev(σtr) + j1/3.*tI
+                #f      = yield_func(mat, ipd, ipd.σ)
+                #if f>1.e-5
+                    #@show f
+                #end
+            #end
+
         else # return to apex
             κ      = mat.κ
             ipd.Δγ = (α*j1tr-κ-H*ipd.εpa)/(3*√3*α*K + H)
             j1     = j1tr - 3*√3*ipd.Δγ*K
             ipd.σ  = j1/3.*tI
         end
+
+        if ipd.σ[1]>mat.T
+            ipd.σ[1]=mat.T
+        end
+        #if j1>mat.T
+            #j1 = mat.T
+            #ipd.σ  = dev(ipd.σ) + j1/3.*tI
+            #@show ipd.σ[1:3]
+        #end
 
         ipd.εpa += ipd.Δγ
 

@@ -21,6 +21,7 @@ type Mesh
         this.bpoints = Dict{Uint64, Point}()
         this.cells  = []
         this.faces  = []
+        this.edges  = []
         this.ndim   = 0
         this.bins   = Bins()
         return this

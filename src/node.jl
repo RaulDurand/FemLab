@@ -97,44 +97,8 @@ function clear_bc(node::Node)
     end
 end
 
+
 ### Node collection
-
-#function substitute!(expr::Expr, syms::Tuple, vals::Tuple)
-    #for (i,s) in enumerate(expr.args)
-        #if typeof(s)==Expr; substitute!(s, syms, vals); continue end
-        #for (sym,val) in zip(syms,vals)
-            #if s==sym; expr.args[i] = val end
-        #end
-    #end
-#end
-
-function subs_equal_by_approx(expr::Expr)
-    mexpr = copy(expr) # expression to be modified
-    for (i,arg) in enumerate(mexpr.args)
-        if typeof(arg)==Symbol; continue end
-        if arg.head == :comparison
-            if arg.args[2] == :(==)
-                a = arg.args[1]
-                b = arg.args[3]
-                mexpr.args[i] = :(isapprox($a,$b,rtol=1.e-8))
-                continue
-            end
-        else
-            subs_equal_by_approx(arg)
-        end
-    end
-    return mexpr
-end
-
-#function getindex(nodes::Array{Node,1}, cond::Expr) 
-    #result = Array(Node, 0)
-    #for node in nodes
-        #mcond = copy(cond)
-        #substitute!(mcond, (:x, :y, :z), (node.X[1], node.X[2], node.X[3]) )
-        #if eval(mcond); push!(result, node) end
-    #end
-    #return result
-#end
 
 
 function getindex(nodes::Array{Node,1}, cond::Expr) 

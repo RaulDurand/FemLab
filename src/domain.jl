@@ -133,6 +133,29 @@ function load_mesh(dom::Domain, mesh::Mesh)
     
 end
 
+#macro 
+
+
+function calc_nodal_vals(dom::Domain)
+    # Get incidence matrix (shares) (fast)
+    np = length(points)
+    Shares = [ Element[] for i=1:np]
+    for elem in dom.elems
+        for node in elem.nodes
+            push!(Shares[node.id], elem)
+        end
+    end
+
+    # Interpolating solid elements
+    #for node in dom.nodes
+        #patch = @list(elem, elem in node.shares, if issolid(elem) end)
+        #patch = node.shares[ map(is_solid, node.shares) ]
+    #end
+
+
+
+end
+
 function node_and_elem_vals(nodes::Array{Node,1}, elems::Array{Element,1})
 
     # Calculate max number of node and elem labes
