@@ -1,3 +1,23 @@
+##############################################################################
+#    FemLab - Finite Element Library                                         #
+#    Copyright (C) 2014 Raul Durand <raul.durand at gmail.com>               #
+#                                                                            #
+#    This file is part of FemLab.                                            #
+#                                                                            #
+#    FemLab is free software: you can redistribute it and/or modify          #
+#    it under the terms of the GNU General Public License as published by    #
+#    the Free Software Foundation, either version 3 of the License, or       #
+#    any later version.                                                      #
+#                                                                            #
+#    FemLab is distributed in the hope that it will be useful,               #
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of          #
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           #
+#    GNU General Public License for more details.                            #
+#                                                                            #
+#    You should have received a copy of the GNU General Public License       #
+#    along with FemLab.  If not, see <http://www.gnu.org/licenses/>.         #
+##############################################################################
+
 
 include("quadrature.jl")
 
@@ -147,12 +167,8 @@ function deriv_func(::Typed{LIN3}, R::Array{Float64,1})
     return D
 end
 
-#shape_func(::Typed{LINK2}, R::Array{Float64,1}) = shape_func(LIN2, R)
-#shape_func(::Typed{LINK3}, R::Array{Float64,1}) = shape_func(LIN3, R)
-
-
 function shape_func(::Typed{QUAD4}, R::Array{Float64,1})
-    #     3                        2
+    #     4                        3
     #       @--------------------@
     #       |               (1,1)|
     #       |       s ^          |
@@ -164,7 +180,7 @@ function shape_func(::Typed{QUAD4}, R::Array{Float64,1})
     #       |                    |
     #       |(-1,-1)             |
     #       @--------------------@
-    #     0                        1
+    #     1                        2
     #
     r, s = R[1:2]
     N = Array(Float64,4)
@@ -298,22 +314,22 @@ function shape_func(::Typed{HEX20}, R::Array{Float64,1})
     # Local IDs
     #                   Vertices                               Faces
     #     t
-    #     |           4        15        7
+    #     |           5        16        8
     #    ,+--s         @-------@--------@                   +----------------+
     #  r'            ,'|              ,'|                 ,'|              ,'|
-    #           12 @'  |         14 ,'  |               ,'  |  ___       ,'  |
-    #            ,'    |16        ,@    |19           ,'    |,'5,'  [0],'    |
-    #      5   ,'      @      6 ,'      @           ,'      |~~~     ,'      |
+    #           13 @'  |         15 ,'  |               ,'  |  ___       ,'  |
+    #            ,'    |17        ,@    |20           ,'    |,'6,'  [1],'    |
+    #      6   ,'      @      7 ,'      @           ,'      |~~~     ,'      |
     #        @'=======@=======@'        |         +'===============+'  ,'|   |
-    #        |      13 |      |         |         |   ,'|   |      |   |3|   |
-    #        |         |      |  11     |         |   |2|   |      |   |,'   |
-    #     17 |       0 @- - - | @- - - -@         |   |,'   +- - - | +- - - -+
-    #        @       ,'       @       ,' 3        |       ,'       |       ,'
-    #        |   8 @'      18 |     ,'            |     ,' [1]  ___|     ,'
-    #        |   ,'           |   ,@ 10           |   ,'      ,'4,'|   ,'
+    #        |      14 |      |         |         |   ,'|   |      |   |4|   |
+    #        |         |      |  12     |         |   |3|   |      |   |,'   |
+    #     18 |       1 @- - - | @- - - -@         |   |,'   +- - - | +- - - -+
+    #        @       ,'       @       ,' 4        |       ,'       |       ,'
+    #        |   9 @'      19 |     ,'            |     ,' [2]  ___|     ,'
+    #        |   ,'           |   ,@ 11           |   ,'      ,'5,'|   ,'
     #        | ,'             | ,'                | ,'        ~~~  | ,'
     #        @-------@--------@'                  +----------------+'
-    #      1         9         2
+    #      2        10         3
 
     r, s, t = R
 
