@@ -22,15 +22,15 @@ export DruckerPrager
 export set_state
 
 type DruckerPragerIpData<:IpData
-    ndim::Int
+    ndim::Int64
     σ::Tensor2
     ε::Tensor2
     εpa::Float64
     Δγ::Float64
     function DruckerPragerIpData(ndim=3) 
         this = new(ndim)
-        this.σ = zeros(6)
-        this.ε = zeros(6)
+        this.σ   = zeros(6)
+        this.ε   = zeros(6)
         this.εpa = 0.0
         this.Δγ  = 0.0
         this
@@ -45,6 +45,10 @@ type DruckerPrager<:Mechanical
     H::Float64
     De::Tensor4
     new_ipdata::DataType
+
+    function DruckerPrager(prms::Dict{Symbol,Float64})
+        return DruckerPrager(;prms...)
+    end
 
     function DruckerPrager(;E=NaN, nu=0.0, alpha=0.0, kappa=0.0, H=0.0)
         @check E>0.0
@@ -145,11 +149,15 @@ function stress_update(mat::DruckerPrager, ipd::DruckerPragerIpData, Δε::Array
     return Δσ
 end
 
-function getvals(ipd::DruckerPragerIpData)
+function getvals(mat::DruckerPrager, ipd::DruckerPragerIpData)
     σ  = ipd.σ
     ε  = ipd.ε
     ndim = ipd.ndim
+    j1   = trace(σ)
     sr2  = √2.
+    srj2d = √J2D(σ)
+    pl_r  = srj2d/(mat.κ- mat.α*j1)
+    #pl_r  = srj2d/j1
 
     if ndim==2;
         return [
@@ -179,9 +187,10 @@ function getvals(ipd::DruckerPragerIpData)
           :ev  => trace(ε),
           :epa => trace(ipd.εpa),
           :dg  => ipd.Δγ,
-          :j1  => trace(σ),
-          :srj2d => √J2D(σ),
-          :p   => trace(σ)/3. ]
+          :j1  => j1,
+          :srj2d => srj2d,
+          :p   => trace(σ)/3.0,
+          :pl_r=> pl_r
+          ]
       end
 end
-

@@ -38,6 +38,10 @@ type ElasticSolid<:Mechanical
     nu::Float64
     new_ipdata::DataType
 
+    function ElasticSolid(prms::Dict{Symbol,Float64})
+        return  ElasticSolid(;prms...)
+    end
+
     function ElasticSolid(;E=1.0, nu=0.0)
         if E<=0.0      ; error("Invalid value for E: $E") end
         if !(0<=nu<0.5); error("Invalid value for nu: $nu") end
@@ -85,7 +89,7 @@ function mount_D(mat::ElasticSolid, ipd::ElasticSolidIpData)
     return mount_De(mat.E, mat.nu)
 end
 
-function getvals(ipd::ElasticSolidIpData)
+function getvals(mat::ElasticSolid, ipd::ElasticSolidIpData)
     σ  = ipd.σ
     ε  = ipd.ε
     ndim = ipd.ndim
@@ -119,4 +123,3 @@ function getvals(ipd::ElasticSolidIpData)
           :s_m => sum(σ[1:3])/3.0 ]
       end
 end
-

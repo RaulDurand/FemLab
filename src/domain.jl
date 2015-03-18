@@ -18,6 +18,7 @@
 #    along with FemLab.  If not, see <http://www.gnu.org/licenses/>.         #
 ##############################################################################
 
+import .Definitions.save
 export Domain
 export track
 
@@ -88,13 +89,18 @@ type Domain
     elems::Array{Element,1}
     faces::Array{Face,1}
     edges::Array{Edge,1}
-    trk_nodes::Array{(Node, DTable), 1}
-    trk_ips  ::Array{(Ip, DTable), 1}
+
+    trk_nodes     ::Array{(Node, DTable), 1}
+    trk_ips       ::Array{(Ip  , DTable), 1}
+    trk_list_nodes::Array{(Array{Node,1}, DBook), 1}
+    trk_list_ips  ::Array{(Array{Ip  ,1}, DBook), 1}
     function Domain(mesh::Mesh)
         this = new()
         load_mesh(this, mesh)
         this.trk_nodes = []
         this.trk_ips   = []
+        this.trk_list_nodes = []
+        this.trk_list_ips   = []
         return this
     end
 end
@@ -171,9 +177,14 @@ function calc_nodal_vals(dom::Domain)
         #patch = @list(elem, elem in node.shares, if issolid(elem) end)
         #patch = node.shares[ map(is_solid, node.shares) ]
     #end
+end
 
-
-
+function make_backup(elems::Array{Element,1})
+    for elem in elems
+        for ip in elem.ips
+            ip.data0 = deepcopy(ip.data)
+        end
+    end
 end
 
 function node_and_elem_vals(nodes::Array{Node,1}, elems::Array{Element,1})
@@ -240,14 +251,86 @@ function node_and_elem_vals(nodes::Array{Node,1}, elems::Array{Element,1})
     return Node_vals, node_keys, Elem_vals, elem_keys
 end
 
-#function track(dom::Domain, node::Node)
-    #headr = vcat([ [dof.sU, dof.sF] for dof in node.dofs]...)
-    #headr = [:id, :time, headr] 
-    #table = DTable(headr)
-    #table.extra[:entity] = node
-    #push!(dom.track_tables, table)
-    #return table
-#end
+
+function node_and_elem_vals2(nodes::Array{Node,1}, elems::Array{Element,1})
+
+    # Calculate max number of node and elem labes
+    matset  = Set{Material}()
+    nlabels = Set{Symbol}()
+    elabels = Set{Symbol}()
+    for elem in elems
+        if !(elem.mat in matset)
+            # getting values from current element
+            node_vals, elem_vals = node_and_elem_vals(elem.mat, elem)
+            union!(nlabels, keys(node_vals))
+            union!(elabels, keys(elem_vals))
+            push!(matset, elem.mat)
+        end
+    end
+
+    nlabels_idx = [ key=>i for (i,key) in enumerate(nlabels) ]
+    elabels_idx = [ key=>i for (i,key) in enumerate(elabels) ]
+    nncomps     = length(nlabels)
+    necomps     = length(elabels)
+
+    nnodes     = length(nodes)
+    nelems     = length(elems)
+    Node_vals  = zeros(Float32, nnodes, nncomps) # float32 is important for paraview
+    Node_reps  = zeros(Int64  , nnodes, nncomps)
+
+    # In elements
+    for elem in elems
+        # getting values from current element
+        node_vals, elem_vals = node_and_elem_vals(elem.mat, elem)
+
+        # filling nodal values and node repetitions
+        for (key, values) in node_vals
+            idx = nlabels_idx[key]
+            for (i, node) in enumerate(elem.nodes)
+                Node_reps[node.id, idx] += 1
+                Node_vals[node.id, idx] += values[i]
+            end
+        end
+
+        # filling element values
+        #for (key,value) in elem_vals
+            #idx = elabels_idx[key]
+            #Elem_vals[elem.id, idx] = value
+        #end
+    end
+
+    # averaging nodal values
+    for i = 1:nnodes
+        for j=1:length(nlabels_idx)
+            if Node_reps[i,j]>0
+                Node_vals[i,j] /= Node_reps[i,j]
+            end
+        end
+    end
+
+    # Get element vals
+    Elem_vals  = DTable()
+
+    # Filling nodal labels list
+    node_keys = [ nlabels... ]
+    elem_keys = [ elabels... ]
+
+    return Node_vals, node_keys, Elem_vals, elem_keys
+end
+
+function get_node(dom::Domain, X::Array{Float64,1})
+    x, y, z = [ X, 0.0 ]
+    tol     = 1.0e-8
+    for node in dom.nodes
+        if isapprox(node.x, x, rtol=tol)
+            if isapprox(node.y, y, rtol=tol)
+                if isapprox(node.z, z, rtol=tol)
+                    return node
+                end
+            end
+        end
+    end
+end
 
 function track(dom::Domain, node::Node)
     new_table = DTable()
@@ -267,25 +350,56 @@ function track(dom::Domain, elem::Element)
     return new_table
 end
 
+function track(dom::Domain, node_list::Array{Node,1})
+    new_book = DBook()
+    push!(dom.trk_list_nodes, (node_list, new_book))
+    return new_book
+end
+
+function track(dom::Domain, ip_list::Array{Ip,1})
+    new_book = DBook()
+    push!(dom.trk_list_ips, (ip_list, new_book))
+    return new_book
+end
 
 function tracking(dom::Domain)
-    # tracking ips
-    for (ip, table) in dom.trk_ips
-        vals = getvals(ip.data)
-        push!(table, vals)
-    end
-
     # tracking nodes
     for (node, table) in dom.trk_nodes
         vals = getvals(node)
         push!(table, vals)
     end
 
+    # tracking ips
+    for (ip, table) in dom.trk_ips
+        vals = getvals(ip.owner.mat, ip.data)
+        push!(table, vals)
+    end
+
+    # tracking list of nodes
+    for (nodes, book) in dom.trk_list_nodes
+        table = DTable()
+        for node in nodes
+            vals = getvals(node)
+            push!(table, vals)
+        end
+        push!(book, table)
+    end
+
+    # tracking list of ips
+    for (ips, book) in dom.trk_list_ips
+        table = DTable()
+
+        for ip in ips
+            vals = getvals(ip)
+            push!(table, vals)
+        end
+        push!(book, table)
+    end
 end
 
 
-import .Definitions.save
-function save(dom::Domain, filename::String, verbose=true)
+
+function save(dom::Domain, filename::String; verbose=true)
     # Saves the dom information in vtk format
     nnodes = length(dom.nodes)
     nelems  = length(dom.elems)
@@ -391,7 +505,181 @@ function save(dom::Domain, filename::String, verbose=true)
     close(f)
 
     if verbose
-        println("  file $filename written")
+        println("  file $filename written (Domain)")
+    end
+
+end
+
+function save2(dom::Domain, filename::String; verbose=true)
+    # Saves the dom information in vtk format
+    nnodes = length(dom.nodes)
+    nelems = length(dom.elems)
+    npoints = nnodes
+
+    # check if all elements have material defined
+    has_data = all([ isdefined(elem, :mat) for elem in dom.elems])
+
+    ips = Ip[]
+    if has_data
+        # Get all ips
+        for elem in dom.elems
+            for ip in elem.ips
+                push!(ips, ip)
+            end
+        end
+    end
+    nips = length(ips)
+
+    # Number of total connectivities
+    nconns = 0
+    for elem in dom.elems
+        nconns += 1 + length(elem.nodes)
+    end
+
+    # Add integration points
+    nconns  += nips*2
+    npoints += nips
+    ncells   = nelems + nips
+
+    # Open filename
+    f = open(filename, "w")
+
+    println(f, "# vtk DataFile Version 3.0")
+    println(f, "FemLab output ")
+    println(f, "ASCII")
+    println(f, "DATASET UNSTRUCTURED_GRID")
+    println(f, "")
+    println(f, "POINTS ", npoints, " float64")
+
+    # Write nodes
+    for node in dom.nodes
+        @printf f "%23.15e %23.15e %23.15e \n" node.X[1] node.X[2] node.X[3]
+    end
+    # Write ip points
+    for ip in ips
+        @printf f "%23.15e %23.15e %23.15e \n" ip.X[1] ip.X[2] ip.X[3]
+    end
+    println(f)
+
+    # Write connectivities
+    println(f, "CELLS ", ncells, " ", nconns)
+    for elem in dom.elems
+        print(f, length(elem.nodes), " ")
+        for node in elem.nodes
+            print(f, node.id-1, " ")
+        end
+        println(f)
+    end
+    # Write ip connectivities (vertex)
+    for (i,ip) in enumerate(ips)
+        println(f, "1 $(i-1)", )
+    end
+    println(f)
+
+    # Write cell types
+    println(f, "CELL_TYPES ", nelems)
+    for elem in dom.elems
+        println(f, get_vtk_type(elem.shape))
+    end
+    # Ips cell types
+    vtk_vertex = 1
+    for ip in ips
+        print(f, vtk_vertex, " ")
+    end
+    println(f)
+
+
+    if has_data
+        # Get node and elem values
+        node_vals, node_labels, elem_vals, elem_labels = node_and_elem_vals(dom.nodes, dom.elems)
+        nncomps = length(node_labels)
+        necomps = length(elem_labels)
+    else
+        close(f)
+        return
+    end
+
+    point_data = DTable()
+    cell_data  = DTable()
+
+    # Write point data
+    println(f, "POINT_DATA ", nnodes)
+
+    # Write vectors
+    if :ux in keys(dom.nodes[1].dofdict)
+        println(f, "VECTORS ", "|u| float64")
+        for node in dom.nodes
+            @printf f "%23.10e"   node.dofdict[:ux].U
+            @printf f "%23.10e"   node.dofdict[:uy].U
+            @printf f "%23.10e\n" dom.ndim==3?node.dofdict[:uz].U:0.0
+        end
+        for ip in ips
+            print(f, "0.0 0.0 0.0\n")
+        end
+    end
+    println(f, )
+
+    # Write nodal scalar data
+    for i=1:nncomps
+        println(f, "SCALARS ", node_labels[i], " float64 1")
+        println(f, "LOOKUP_TABLE default")
+        for j in 1:nnodes
+            @printf f "%23.10e"  node_vals[j,i]
+        end
+        for ip in ips
+            print(f, "0.0 ")
+        end
+        println(f, )
+    end
+
+    # Get values at ips
+    table = DTable()
+    for ip in ips
+        push!(table, getvals(ip))
+    end
+
+    # Write ip scalar data TODO
+    for field in table.header
+        println(f, "SCALARS ", field, " float64 1")
+        println(f, "LOOKUP_TABLE default")
+        for elem in dom.elems
+            print(f, "0.0 ")
+        end
+        field_data = table.dict[field]
+        for i in 1:nips
+            @printf f "%23.10e" field_data[i]
+        end
+        println(f, )
+    end
+
+
+    # Write element data
+    println(f, "CELL_DATA ", ncells)
+    for i=1:necomps
+        println(f, "SCALARS ", elem_labels[i], " float64 1")
+        println(f, "LOOKUP_TABLE default")
+        for j in 1:nelems  #naelems
+            e_idx = dom.elems[j].id  #aelems
+            @printf f "%23.10e"  elem_vals[e_idx,i]
+        end
+        for ip in ips
+            print(f, "0.0 ")
+        end
+        println(f, )
+    end
+
+    # Write elem type
+    println(f, "SCALARS cell_type int 1")
+    println(f, "LOOKUP_TABLE default")
+    for elem in dom.elems
+        println(f, elem.shape, " ")
+    end
+    println(f, )
+
+    close(f)
+
+    if verbose
+        println("  file $filename written (Domain)")
     end
 
 end
@@ -427,20 +715,103 @@ function save(ips::Array{Ip,1}, filename::String; offset::Float64=0.0, dir::Symb
         ips = sort(ips, dir=dir, rev=rev)
     end
 
-    # filling table
-    table = DTable()
-    dist  = offset
-    X0    = ips[1].X
-    for node in ips
-        dist += norm(node.X - X0)
-        X0    = node.X
-        vals  = getvals(ip.data)
-        vals[:dist] = dist
-        vals[:x]    = ip.X[1]
-        vals[:y]    = ip.X[2]
-        vals[:z]    = ip.X[3]
-        push!(table, vals)
+    basename, ext = splitext(filename)
+    format = (ext == "")? "dat" : ext[2:end]
+
+    if format=="dat"
+
+        # filling table
+        table = DTable()
+        dist  = offset
+        X0    = ips[1].X
+        for node in ips
+            dist += norm(node.X - X0)
+            X0    = node.X
+            vals  = getvals(ip.data)
+            vals[:dist] = dist
+            vals[:x]    = ip.X[1]
+            vals[:y]    = ip.X[2]
+            vals[:z]    = ip.X[3]
+            push!(table, vals)
+        end
+
+        save(table, filename, verbose)
+        return
     end
 
-    save(table, filename, verbose)
+    if format=="vtk"
+        # Saves the integration points in vtk format
+
+        # Find nips
+        nips = length(ips)
+
+        # Open filename
+        f = open(filename, "w")
+
+        println(f, "# vtk DataFile Version 3.0")
+        println(f, "pyfem output ")
+        println(f, "ASCII")
+        println(f, "DATASET UNSTRUCTURED_GRID")
+        println(f, "")
+        println(f, "POINTS ", nips, " float64")
+
+        # Write ip points
+        for ip in ips
+            @printf f "%23.15e %23.15e %23.15e \n" ip.X[1] ip.X[2] ip.X[3]
+        end
+        println(f)
+
+        # Write connectivities
+        println(f, "CELLS $nips  $(nips*2)")
+        for (i,ip) in enumerate(ips)
+            println(f, "1 $(i-1)", )
+        end
+        println(f)
+
+        # Write cell types
+        println(f, "CELL_TYPES ", nips)
+        vtk_vertex = 1
+        for ip in ips
+            print(f, vtk_vertex, " ")
+        end
+        println(f)
+
+        # Get values at ips
+        table = DTable()
+        for ip in ips
+            push!(table, getvals(ip))
+        end
+
+        # Write point data
+        println(f, "POINT_DATA ", nips)
+
+        # Write ip scalar data
+        for field in table.header
+            println(f, "SCALARS ", field, " float64 1")
+            println(f, "LOOKUP_TABLE default")
+            field_data = table.dict[field]
+            for i in 1:nips
+                @printf f "%23.10e" field_data[i]
+            end
+            println(f, )
+        end
+
+        # Write cell data
+        println(f, "CELL_DATA ", nips)
+
+        # Write owner elem type
+        println(f, "SCALARS cell_shape_tag int 1")
+        println(f, "LOOKUP_TABLE default")
+        for ip in ips
+            print(f, get_shape_tag(ip.owner.shape), " ")
+        end
+        println(f, )
+
+        close(f)
+
+        if verbose
+            println("  file $filename written (Domain)")
+        end
+        
+    end
 end

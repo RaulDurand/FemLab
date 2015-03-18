@@ -1,3 +1,5 @@
+
+println(LOAD_PATH)
 using FemLab
 
 # mesh 

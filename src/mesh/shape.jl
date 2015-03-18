@@ -21,7 +21,7 @@
 
 include("quadrature.jl")
 
-export get_vtk_type, get_shape_from_vtk
+export get_shape_tag, get_vtk_type, get_shape_from_vtk
 export LIN2, LIN3, TRI3, TRI6, QUAD4, QUAD8, TET4, TET10, HEX8, HEX20 
 export LINK1, LINK2, LINK3, LIN4, TRI9, TRI10, QUAD9, QUAD12, QUAD16
 export ShapeType
@@ -55,6 +55,17 @@ const LINK3  = 53
 
 typealias ShapeType Integer
 
+SHAPE_TAG = [ LIN2  => 102, LIN3   => 103, LIN4 => 104, 
+              TRI3  => 703, TRI6   => 706, TRI9 => 709, TRI10  => 710, 
+              QUAD4 => 904, QUAD8  => 908, 
+              TET4  => 704, TET10  => 710, HEX8  => 408, HEX20 => 420, 
+              QUAD9 => 909, QUAD12 => 912, QUAD16 => 916, 
+              LINK1 => 201, LINK2  => 202, LINK3  => 203 ]
+
+function get_shape_tag(shape::ShapeType)
+    return SHAPE_TAG[shape]
+end
+
 function get_vtk_type(shape::ShapeType)
     if shape in [LINK1, LINK2, LINK3, LIN4, TRI9, TRI10, QUAD9, QUAD12, QUAD16]
         return 2 # vtk_poly_vertex
@@ -80,6 +91,11 @@ end
 
 coords_lin2 =
 [ -1.0  1.0 
+   1.0  1.0 ]
+
+coords_lin3 =
+[ -1.0  1.0 
+   0.0  1.0 
    1.0  1.0 ]
 
 coords_tri6 =
@@ -128,6 +144,29 @@ coords_quad4 =
    1.0  1.0  1.0
   -1.0  1.0  1.0 ]
 
+coords_tet10 = 
+[  0.0  0.0  0.0  1.0 
+   1.0  0.0  0.0  1.0 
+   0.0  1.0  0.0  1.0 
+   0.0  0.0  1.0  1.0 
+
+   0.5  0.0  0.0  1.0 
+   0.5  0.5  0.0  1.0 
+   0.0  0.5  0.0  1.0 
+   0.0  0.0  0.5  1.0 
+   0.5  0.0  0.5  1.0 
+   0.0  0.5  0.5  1.0 ]
+
+function get_local_coords(st::ShapeType)
+    if     st == LIN2   return coords_lin2
+    elseif st == LIN3   return coords_lin3
+    elseif st == QUAD4  return coords_quad4
+    elseif st == TET10  return coords_tet10
+    end
+    @show st
+    return 0
+end
+
 
 immutable type Typed{N} end
 
@@ -164,6 +203,88 @@ function deriv_func(::Typed{LIN3}, R::Array{Float64,1})
     D[1, 1] = r - 0.5
     D[1, 2] = r + 0.5
     D[1, 3] = -2.0*r
+    return D
+end
+
+function shape_func(::Typed{TRI3}, R::Array{Float64,1})
+    #    s
+    #    ^
+    #    |
+    #  3
+    #    @,(0,1)
+    #    | ',
+    #    |   ',
+    #    |     ',
+    #    |       ',
+    #    |         ',
+    #    |           ',
+    #    |             ',
+    #    |               ',
+    #    |(0,0)            ', (1,0)
+    #    @-------------------@  --> r
+    #  1                      2
+    #
+    r, s = R[1:2]
+    N = Array(Float64,3)
+    N[1] = 1.0-r-s
+    N[2] = r
+    N[3] = s
+    return N
+end
+
+function deriv_func(::Typed{TRI3}, R::Array{Float64,1})
+    r, s = R
+    D = Array(Float64, 2, 3)
+    D[1,1] = -1.0;    D[2,1] = -1.0
+    D[1,2] =  1.0;    D[2,2] =  0.0
+    D[1,3] =  0.0;    D[2,3] =  1.0
+    return D
+end
+
+function shape_func(::Typed{TRI6}, R::Array{Float64,1})
+    #    s
+
+
+    #    ^
+    #    |
+    #  2
+    #    @,(0,1)
+    #    | ',
+    #    |   ',
+    #    |     ',
+    #    |       ',  4
+    #  5 @         '@
+    #    |           ',
+    #    |             ',
+    #    |               ',
+    #    |(0,0)            ', (1,0)
+    #    @---------@---------@  --> r
+    #  0           3          1
+    #
+    r, s = R
+
+    N = Array(Float64,6)
+    N[1] = 1.0-(r+s)*(3.0-2.0*(r+s))
+    N[2] = r*(2.0*r-1.0)
+    N[3] = s*(2.0*s-1.0)
+    N[4] = 4.0*r*(1.0-(r+s))
+    N[5] = 4.0*r*s
+    N[6] = 4.0*s*(1.0-(r+s))
+
+    return N
+end
+
+function deriv_func(::Typed{TRI6}, R::Array{Float64,1})
+    r, s = R
+
+    D = Array(Float64, 2, 6)
+    D[1,1] = -3.0 + 4.0 * (r + s);       D[2,1] = -3.0 + 4.0*(r + s)
+    D[1,2] =  4.0 * r - 1.;              D[2,2] =  0.0
+    D[1,3] =  0.0;                       D[2,3] =  4.0 * s - 1.0
+    D[1,4] =  4.0 - 8.0 * r - 4.0 * s;   D[2,4] = -4.0 * r
+    D[1,5] =  4.0 * s;                   D[2,5] =  4.0 * r
+    D[1,6] = -4.0 * s;                   D[2,6] =  4.0 - 4.0 * r - 8.0*s
+
     return D
 end
 
@@ -254,6 +375,83 @@ function deriv_func(::Typed{QUAD8}, R::Array{Float64,1})
     D[2,6] = - s * rp1
     D[2,7] =   0.50 * (1.0 - r * r)
     D[2,8] = - s * rm1
+    return D
+end
+
+
+function shape_func(::Typed{QUAD12}, R::Array{Float64,1})
+    #  
+    #    4      11       7        3
+    #      @-----@-------@------@
+    #      |               (1,1)|
+    #      |       s ^          |
+    #    8 @         |          @ 10
+    #      |         |          |
+    #      |         +----> r   |
+    #      |       (0,0)        |
+    #   12 @                    @ 6
+    #      |                    |
+    #      |(-1,-1)             |
+    #      @-----@-------@------@
+    #    1       5       9        2
+    #  
+    r, s = R[1:2]
+    N = Array(Float64,12)
+
+    RM = 1. - r
+    RP = 1. + r
+    SM = 1. - s
+    SP = 1. + s
+    N[1]  = RM*SM*( 9.*(r*r + s*s) - 10.)/32.
+    N[2]  = RP*SM*( 9.*(r*r + s*s) - 10.)/32.
+    N[3]  = RP*SP*( 9.*(r*r + s*s) - 10.)/32.
+    N[4]  = RM*SP*( 9.*(r*r + s*s) - 10.)/32.
+    N[5]  = 9.*(1. - r*r)*(1. - 3.*r)*SM/32.
+    N[6]  = 9.*(1. - s*s)*(1. - 3.*s)*RP/32.
+    N[7]  = 9.*(1. - r*r)*(1. + 3.*r)*SP/32.
+    N[8]  = 9.*(1. - s*s)*(1. + 3.*s)*RM/32.
+    N[9]  = 9.*(1. - r*r)*(1. + 3.*r)*SM/32.
+    N[10] = 9.*(1. - s*s)*(1. + 3.*s)*RP/32.
+    N[11] = 9.*(1. - r*r)*(1. - 3.*r)*SP/32.
+    N[12] = 9.*(1. - s*s)*(1. - 3.*s)*RM/32.
+
+    return N
+end
+
+function deriv_func(::Typed{QUAD12}, R::Array{Float64,1})
+    r, s = R[1:2]
+    D = Array(Float64, 2, 12)
+
+    RP = 1. + r
+    RM = 1. - r
+    SP = 1. + s
+    SM = 1. - s
+
+    D[1,1]  =  SM*(9.*(2.*r - 3.*r*r - s*s) + 10.)/32.
+    D[1,2]  =  SM*(9.*(2.*r + 3.*r*r + s*s) - 10.)/32.
+    D[1,3]  =  SP*(9.*(2.*r + 3.*r*r + s*s) - 10.)/32.
+    D[1,4]  =  SP*(9.*(2.*r - 3.*r*r - s*s) + 10.)/32.
+    D[1,5]  =  9.*SM*(9.*r*r - 2.*r - 3.)/32.
+    D[1,6]  =  9.*(1. - s*s)*(1. - 3.*s)/32.
+    D[1,7]  =  9.*SP*(-9.*r*r - 2.*r + 3.)/32.
+    D[1,8]  = -9.*(1. - s*s)*(1. + 3.*s)/32.
+    D[1,9]  =  9.*SM*(-9.*r*r - 2.*r + 3.)/32.
+    D[1,10] =  9.*(1. - s*s)*(1. + 3.*s)/32.
+    D[1,11] =  9.*SP*(9.*r*r - 2.*r - 3.)/32.
+    D[1,12] = -9.*(1. - s*s)*(1. - 3.*s)/32.
+    D[2,1]  =  RM*(9.*(2.*s - 3.*s*s - r*r) + 10.)/32.
+    D[2,2]  =  RP*(9.*(2.*s - 3.*s*s - r*r) + 10.)/32.
+    D[2,3]  =  RP*(9.*(2.*s + 3.*s*s + r*r) - 10.)/32.
+    D[2,4]  =  RM*(9.*(2.*s + 3.*s*s + r*r) - 10.)/32.
+    D[2,5]  = -9.*(1. - r*r)*(1. - 3.*r)/32.
+    D[2,6]  =  9.*RP*(9.*s*s - 2.*s - 3.)/32.
+    D[2,7]  =  9.*(1. - r*r)*(1. + 3.*r)/32.
+    D[2,8]  =  9.*RM*(-9.*s*s - 2.*s + 3.)/32.
+    D[2,9]  = -9.*(1. - r*r)*(1. + 3.*r)/32.
+    D[2,10] =  9.*RP*(-9.*s*s - 2.*s + 3.)/32.
+    D[2,11] =  9.*(1. - r*r)*(1. - 3.*r)/32.
+    D[2,12] =  9.*RM*(9.*s*s - 2.*s - 3.)/32.
+
     return D
 end
 
@@ -438,17 +636,137 @@ function deriv_func(::Typed{HEX20}, R::Array{Float64,1})
     return D
 end
 
+function shape_func(::Typed{TET4}, R::Array{Float64,1})
+    r, s, t = R
 
-function local_coords(st::ShapeType)
-    if     sh == LIN2   coords_lin2
-    elseif sh == QUAD4  coords_quad4
-    end
+    N = Array(Float64,4)
+    N[1] = 1.0-r-s-t
+    N[2] = r
+    N[3] = s
+    N[4] = t
+    return N
 end
+
+function deriv_func(::Typed{TET4}, R::Array{Float64,1})
+    r, s, t = R
+
+    D = Array(Float64, 3, 4)
+    D[1,1] = -1.0;   D[2,1]= -1.0;   D[3,1]= -1.0
+    D[1,2] =  1.0;   D[2,2]=  0.0;   D[3,2]=  0.0
+    D[1,3] =  0.0;   D[2,3]=  1.0;   D[3,3]=  0.0
+    D[1,4] =  0.0;   D[2,4]=  0.0;   D[3,4]=  1.0
+    return D
+end
+
+function shape_func(::Typed{TET10}, R::Array{Float64,1})
+
+    #                       t
+    #                       |
+    #                       |
+    #                       | 3
+    #                       @,
+    #                      /|`
+    #                      ||  `,
+    #                     / |    ',
+    #                     | |      \
+    #                    /  |       `.
+    #                    |  |         `,  9
+    #                   /   @ 7         `@
+    #                   |   |             \
+    #                  /    |              `.
+    #                  |    |                ',
+    #               8 @     |                  \
+    #                 |     @.,,_       6       `.
+    #                |     / 0   ``'-.,,@_        `.
+    #                |    /              ``''-.,,_  ', 2
+    #               |    /                        ``'@.,,,
+    #               |   '                       ,.-``     ``''- s
+    #              |  ,@ 4                 _,-'`
+    #              ' /                 ,.'`
+    #             | /             _.@``
+    #             '/          ,-'`   5
+    #            |/      ,.-``
+    #            /  _,-``
+    #          .@ '`
+    #         / 1
+    #        /
+    #       /
+    #      r
+    # 
+
+    r, s, t = R
+
+    N = Array(Float64,10)
+
+    u = 1.0 - r - s - t
+
+    # corners
+    N[1] = u*(2.0*u - 1.0)
+    N[2] = r*(2.0*r - 1.0)
+    N[3] = s*(2.0*s - 1.0)
+    N[4] = t*(2.0*t - 1.0)
+
+    # midedge
+    N[5] = 4.0 * u * r
+    N[6] = 4.0 * r * s
+    N[7] = 4.0 * s * u
+    N[8] = 4.0 * u * t
+    N[9] = 4.0 * r * t
+    N[10] = 4.0 * s * t
+
+    return N
+end
+
+function deriv_func(::Typed{TET10}, R::Array{Float64,1})
+    r, s, t = R
+
+    D = Array(Float64, 3, 10)
+
+    # r-derivatives: dN0/dr to dN9/dr
+    D[1,1]  =  4.0*(r + s + t) - 3.0
+    D[1,2]  =  4.0*r - 1.0
+    D[1,3]  =  0.0
+    D[1,4]  =  0.0
+    D[1,5]  =  4.0 - 8.0*r - 4.0*s - 4.0*t
+    D[1,6]  =  4.0*s
+    D[1,7]  = -4.0*s
+    D[1,8]  = -4.0*t
+    D[1,9]  =  4.0*t
+    D[1,10] =  0.0
+
+    # s-derivatives: dN0/ds to dN9/ds
+    D[2,1]  =  4.0*(r + s + t) - 3.0
+    D[2,2]  =  0.0
+    D[2,3]  =  4.0*s - 1.0
+    D[2,4]  =  0.0
+    D[2,5]  = -4.0*r
+    D[2,6]  =  4.0*r
+    D[2,7]  =  4.0 - 4.0*r - 8.0*s - 4.0*t
+    D[2,8]  = -4.0*t
+    D[2,9]  =  0.0
+    D[2,10] =  4.0*t
+
+    # t-derivatives: dN0/dt to dN9/dt
+    D[3,1]  =  4.0*(r + s + t) - 3.0
+    D[3,2]  =  0.0
+    D[3,3]  =  0.0
+    D[3,4]  =  4.0*t - 1.0
+    D[3,5]  = -4.0*r
+    D[3,6]  =  0.0
+    D[3,7]  = -4.0*s
+    D[3,8]  =  4.0 - 4.0*r - 4.0*s - 8.0*t
+    D[3,9]  =  4.0*r
+    D[3,10] =  4.0*s
+
+    return D
+end
+
+
 
 
 IP_FEM = [
     LIN2    => [0 => LIN_IP2,  2 => LIN_IP2,  3 => LIN_IP3,   4 => LIN_IP4                   ],
-    LIN3    => [0 => LIN_IP3,  2 => LIN_IP2,  3 => LIN_IP3,   4 => LIN_IP4                   ],
+    LIN3    => [0 => LIN_IP2,  2 => LIN_IP2,  3 => LIN_IP3,   4 => LIN_IP4                   ],
     LIN4    => [0 => LIN_IP3,  2 => LIN_IP2,  3 => LIN_IP3,   4 => LIN_IP4                   ],
     TRI3    => [0 => TRI_IP1,  1 => TRI_IP1,  3 => TRI_IP3,   6 => TRI_IP6                   ],
     TRI6    => [0 => TRI_IP3,  3 => TRI_IP3,  6 => TRI_IP6                                   ],
@@ -485,18 +803,12 @@ function bdistance(shape, R)
     #     a real value: if possitive then the point is inside the element and negative otherwise
     
     r, s, t = R
-    if shape == TRI3 ;  return min(r, s, 1.0-r-s) end
-    if shape == TRI6 ;  return min(r, s, 1.0-r-s) end
-    if shape == TRI9 ;  return min(r, s, 1.0-r-s) end
-    if shape == TRI10;  return min(r, s, 1.0-r-s) end
-    if shape == QUAD4;  return min(1.0 - abs(r), 1.0 - abs(s)) end
-    if shape == QUAD8;  return min(1.0 - abs(r), 1.0 - abs(s)) end
-    if shape == QUAD12; return min(1.0 - abs(r), 1.0 - abs(s)) end
-    if shape == QUAD16; return min(1.0 - abs(r), 1.0 - abs(s)) end
-    if shape == TET4 ;  return min(r, s, t, 1.0-r-s-t) end
-    if shape == TET10;  return min(r, s, t, 1.0-r-s-t) end
-    if shape == HEX8 ;  return min(1.0 - abs(r), 1.0 - abs(s), 1.0 - abs(t)) end
-    if shape == HEX20;  return min(1.0 - abs(r), 1.0 - abs(s), 1.0 - abs(t)) end
+    if shape in [ TRI3, TRI6, TRI9, TRI10 ] return min(r, s, 1.0-r-s) end
+    if shape in [ QUAD4, QUAD8, QUAD12, QUAD16 ]  return min(1.0 - abs(r), 1.0 - abs(s)) end
+    if shape in [ TET4, TET10 ] return min(r, s, t, 1.0-r-s-t) end
+    if shape in [ HEX8, HEX20 ] return min(1.0 - abs(r), 1.0 - abs(s), 1.0 - abs(t)) end
+    #if shape in [ QUAD4, QUAD8, QUAD12, QUAD16 ]  return min(1.0 - r*r, 1.0 - s*s) end
+    #if shape in [ HEX8, HEX20 ] return min(1.0 - r*r, 1.0 - s*s, 1.0 - t*t) end
     error("No boundary distance for shape ($shape)")
 end
 
@@ -567,9 +879,8 @@ function inverse_map(shape, coords, X0, Tol=1.0e-7)
     MAXIT = 25
     ndim  = get_ndim(shape)
     R = zeros(ndim)
-    C = size(coords,1)==2? [coords zeros(size(coords,1))] : coords
-    X = size(X0,1)==2? [X0, 0.0] : X0
-
+    C = coords
+    X = X0
     k = 0
     for k=1:MAXIT
         # calculate Jacobian
@@ -589,14 +900,12 @@ function inverse_map(shape, coords, X0, Tol=1.0e-7)
         if norm(ΔX) < Tol; break end
     end
 
-    #@out k
-    if k==MAXIT; print("Warning: max iterations reached in inverse mapping") end
+    if k==MAXIT; println("Warning: max iterations reached in inverse mapping") end
 
     if ndim==2
-        return [ R, 0.0 ]
-    else
-        return R
+        R = [ R, 0.0 ]
     end
+    return R
 end
 
 
@@ -663,6 +972,8 @@ function extrapolator(shape::ShapeType, nips::Int)
     # εip matrix: Local ip coordinates of integration points
     εip = [ IP[:,1:ndim] zeros(nips) ]
 
+    #@show nips
+    #@show nnodes
     # ε matrix: Local coordinates of nodal points
     ε = get_local_coords(shape)
 

@@ -39,6 +39,12 @@ type BlockInset <: Block
             ctype = get(cases, curvetype, -1)
             if ctype==-1; error("Wrong curve type") end
         end
+        
+        if size(coords,2)==2
+            nrows = size(coords,1)
+            coords = [ coords  zeros(nrows)]
+        end
+
         this = new(coords, ctype, closed, shape, tag, id)
         this.icount = 0
         this._endpoint   = nothing
@@ -129,22 +135,21 @@ function split_block(bl::BlockInset, msh::Mesh)
 
     # Lagrangian or Bezier with inner points
     if bl.curvetype in (2,3)
-        split_curve(bl.coords, bl, msh)
+        split_curve(bl.coords, bl, false, msh)
         return
     end
 
     # Polyline
-    if bl.closed && n<3; error("At least thre points are required for closed polyline in BlockInset") end
+    if bl.closed && n<3; error("At least three points are required for closed polyline in BlockInset") end
 
     bl._endpoint = nothing
-    for i=1:n
-        if i==n && !bl.closed; break end
-        if i<n
-            coords = bl.coords[i:i+1,:]
-        else
-            coords = [ bl.coords[n,:] ; bl.coords[1,:] ]
-        end
-        split_curve(coords, bl, msh)
+    for i=1:n-1
+        coords = bl.coords[i:i+1,:]
+        split_curve(coords, bl, false, msh)
+    end
+    if bl.closed
+        coords = [ bl.coords[n,:] ; bl.coords[1,:] ]
+        split_curve(coords, bl, true, msh)
     end
 end
 
@@ -157,11 +162,17 @@ function get_point(s::Float64, coords::Array{Float64,2}, curvetype::ShapeType)
     end
 end
 
-function split_curve(coords::Array{Float64,2}, bl::BlockInset, msh::Mesh)
+function split_curve(coords::Array{Float64,2}, bl::BlockInset, closed::Bool, msh::Mesh)
     # Constants
     TINY = 1.0e-4
     TOL  = 1.0e-9
     JMP  = 1.0e-2
+
+
+    #TINY = 1.0E-3 ##
+    #TOL  = 1.0E-4 ##
+    #JMP  = 1.0 ##
+
     nits = 25
     shape   = bl.shape
     npoints = shape==LIN2? 2 : 3
@@ -179,8 +190,6 @@ function split_curve(coords::Array{Float64,2}, bl::BlockInset, msh::Mesh)
     # Find the initial and final element
     ecells = Array(Cell,0)
     s0 = get_point(TINY,coords,curvetype)
-    #ncell::Union(Cell, Nothing); # next cell
-    #icell::Union(Cell, Nothing); # initial cell
     icell = find_cell(s0, msh.cells, msh.bins, TOL, ecells) # The first tresspased cell
 
     if icell == nothing
@@ -190,8 +199,8 @@ function split_curve(coords::Array{Float64,2}, bl::BlockInset, msh::Mesh)
     # Initializing more variables
     ccell  = icell
     points = Array(Point, npoints)
-    bl._endpoint   = nothing
-    end_reached = false
+    bl._endpoint = nothing
+    end_reached  = false
     s  = 0.0
     sp = 0.0
     nits = int(1./JMP)
@@ -221,9 +230,14 @@ function split_curve(coords::Array{Float64,2}, bl::BlockInset, msh::Mesh)
         X  = get_point(s, coords, curvetype)
         n  = ifloor(log(2, step/TOL)) + 1  # number of required iterations to find intersection
 
+        # R     = inverse_map(ccell.shape, ccell_coords, X) ##
+        # bdist = bdistance(ccell.shape, R) ##
+        #@printf(" %d  &  %10.6f  &  %10.6f  & %10.6f  & %10.6f \\\\\n", 0, s, X[1], X[2], bdist)
+
         for i=1:n
 
-            step *= 0.5+TOL
+            #step *= 0.5+TOL
+            step *= 0.5
             is_in = is_inside(ccell.shape, ccell_coords, X, TOL)
             if is_in
                 s += step
@@ -235,7 +249,14 @@ function split_curve(coords::Array{Float64,2}, bl::BlockInset, msh::Mesh)
 
             R     = inverse_map(ccell.shape, ccell_coords, X)
             bdist = bdistance(ccell.shape, R)
+            #@printf(" %d  &  %10.6f  &  %10.6f  & %10.6f  & %10.6f \\\\\n", i, s, X[1], X[2], bdist)
         end
+
+
+        # println()
+        # ds = (1-s)/2
+        # @printf(" %d  &  %10.6f  &  %2d  &  %10.6f  & %10.6f  & %10.6f \\\\\n", 1, ds, n, s, X[1], X[2])
+        # println()
 
         # Check if end was reached
         if s > len - TINY
@@ -255,7 +276,7 @@ function split_curve(coords::Array{Float64,2}, bl::BlockInset, msh::Mesh)
             P1 = bl._endpoint
         end
 
-        if !(bl.closed && end_reached)
+        if !(closed && end_reached)
             P2 = Point(X) 
             push!(msh.points, P2)
         else

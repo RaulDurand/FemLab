@@ -24,7 +24,7 @@ function mount_K(dom::Domain, ndofs::Int64)
     R, C, V = Int64[], Int64[], Float64[]
 
     for elem in dom.elems
-        Ke  = stiff(elem)
+        Ke  = elem_jacobian(elem)
         map = get_map(elem)
         nr, nc = size(Ke)
         for i=1:nr
@@ -36,7 +36,17 @@ function mount_K(dom::Domain, ndofs::Int64)
         end
     end
     
-    sparse(R, C, V, ndofs, ndofs)
+    return sparse(R, C, V, ndofs, ndofs)
+end
+
+function mount_RHS(dom::Domain, ndofs::Int64, Δt::Float64)
+    RHS = zeros(ndofs)
+    for elem in dom.elems
+        map      = get_map(elem)
+        #RHS[map] = elem_RHS(elem, Δt::Float64)
+        RHS[map] = elem_RHS(elem)
+    end
+    return RHS
 end
 
 function solve!(dom::Domain; nincs::Int=1, scheme::String="FE", precision::Float64=0.01, reset_bc::Bool=true, verbose::Bool=true)
@@ -70,10 +80,13 @@ function solve!(dom::Domain; nincs::Int=1, scheme::String="FE", precision::Float
     umap  = [dof.eq_id for dof in udofs]
     pmap  = [dof.eq_id for dof in pdofs]
 
+    # Global RHS vector 
+    RHS = mount_RHS(dom::Domain, ndofs::Int64, 0.0)
+
     # Global U F vectors
-    U = [ dof.bryU for dof in dofs]
-    F = [ dof.bryF for dof in dofs]
-    #println(U)
+    U  = [ dof.bryU for dof in dofs]
+    F  = [ dof.bryF for dof in dofs] # nodal and face boundary conditions
+    F += RHS
 
     # Solving process
     nu  = length(udofs)
@@ -90,23 +103,28 @@ function solve!(dom::Domain; nincs::Int=1, scheme::String="FE", precision::Float
         R      = copy(DF) # residual
         #println(R)
         DFa    = zeros(ndofs)
+        DUa    = zeros(ndofs)
 
-        maxits    = 100
+        maxits    = 50
         converged = false
         for it=1:maxits
             if it>1; DU = zeros(ndofs) end
             solve_inc(dom, DU, R, umap, pmap, verbose)   # Changes DU and R
             if verbose; print("    updating... \r") end
+            DUa += DU
             DFin = update!(dom.elems, dofs, DU) # Internal forces (DU+DUaccum?)
 
             R    = R - DFin
             DFa += DFin
         
             #residue = norm(R)
-            residue =maxabs(R)
-            tracking(dom) # Tracking nodes, ips, elements, etc.
+            residue = maxabs(R)
 
-            if verbose; println("    it $it  residue: $residue") end
+            #if verbose; println("    it $it  residue: $residue") end
+            if verbose
+                @printf("    it %s  residue: %-15.4e", it, residue)
+                println()
+            end
             if residue<precision; converged = true ; break end
             if isnan(residue);    converged = false; break end
         end
@@ -114,6 +132,7 @@ function solve!(dom::Domain; nincs::Int=1, scheme::String="FE", precision::Float
         if !converged
             error("solve!: solver did not converge")
         else
+            tracking(dom) # Tracking nodes, ips, elements, etc.
             continue
         end
     end
@@ -142,6 +161,8 @@ function solve_inc(dom::Domain, DU::Vect, DF::Vect, umap::Array{Int,1}, pmap::Ar
     if verbose; print("    assembling... \r") end
     K = mount_K(dom, ndofs)
     #println(full(K))
+    #println()
+    #@show nu
     if nu>0
         nu1 = nu+1
         K11 = K[1:nu, 1:nu]

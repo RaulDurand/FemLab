@@ -20,6 +20,10 @@ type Truss<:AbsTruss
     A::Float64
     new_ipdata::DataType
 
+    function Truss(prms::Dict{Symbol,Float64})
+        return  Truss(;prms...)
+    end
+
     function Truss(;E::Float64=1.0, A::Float64=1.0)
         if E<=0.0; error("Invalid value for E: $E") end
         if A<=0.0; error("Invalid value for A: $A") end
@@ -42,25 +46,26 @@ function stress_update(mat::Truss, ipd::TrussIpData, Δε::Float64)
     return Δσ
 end
 
-function getvals(ipd::TrussIpData)
+function getvals(mat::Truss, ipd::TrussIpData)
     return [ 
       :sa => ipd.σ,
-      :ea => ipd.ε]
-      #:Fa => ipd.σ*mat.A,
-      #:A  => mat.A ]
+      :ea => ipd.ε,
+      :Fa => ipd.σ*mat.A,
+      :A  => mat.A ]
 end
 
 
 function mount_B(::AbsTruss, elem::Element, R::Vect, C::Matx, B::Matx)
     ndim   = elem.ndim
     nnodes = length(elem.nodes)
-    D = deriv_func(elem.shape, R)
-    J = D*C
+    dNdR = deriv_func(elem.shape, R)
+    J = dNdR*C
     detJ = norm(J)
     B[:] = 0.0
+
     for i in 1:nnodes
         for j=1:ndim
-            B[1,j+(i-1)*ndim] = D[1,i]*J[j]/detJ^2.0
+            B[1,j+(i-1)*ndim] = dNdR[1,i]*J[j]/detJ^2.0
         end
     end
 
@@ -71,7 +76,7 @@ function calcD(mat::Truss, ips::TrussIpData)
     return mat.E
 end
 
-function stiff(mat::AbsTruss, elem::Element)
+function elem_jacobian(mat::AbsTruss, elem::Element)
     ndim   = elem.ndim
     nnodes = length(elem.nodes)
     A = elem.mat.A
@@ -82,6 +87,7 @@ function stiff(mat::AbsTruss, elem::Element)
     for ip in elem.ips
         detJ = mount_B(elem.mat, elem, ip.R, C, B)
         D    = calcD(mat,ip.data)
+
         coef = D*A*detJ*ip.w
         K   += B'*B*coef
     end
@@ -121,7 +127,7 @@ function node_and_elem_vals(mat::AbsTruss, elem::Element)
     end
 
     # Elem vals
-    all_ip_vals = [ getvals(ip.data) for ip in elem.ips ]
+    all_ip_vals = [ getvals(mat, ip.data) for ip in elem.ips ]
     # completing with axial forces
     for ip_val in all_ip_vals
         ip_val[:A ] = mat.A

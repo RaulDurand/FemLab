@@ -114,10 +114,12 @@ end
 function mount_B(::Mechanical, elem::Element, R::Vect, C::Matx, B::Matx)
     ndim   = elem.ndim
     nnodes = length(elem.nodes)
-    D = deriv_func(elem.shape, R)
-    J = D*C
-    dNdX = inv(J)*D
+    N    = shape_func(elem.shape, R)
+    dNdR = deriv_func(elem.shape, R)
+    J    = dNdR*C
+    dNdX = inv(J)*dNdR
     detJ = det(J)
+    @check detJ > 0.0 "Negative jacobian determinant in element $(elem.id)"
     sqr2 = 2.0^0.5
     B[:] = 0.0
     if ndim==2
@@ -125,6 +127,15 @@ function mount_B(::Mechanical, elem::Element, R::Vect, C::Matx, B::Matx)
             j = i-1
             B[1,1+j*ndim] = dNdX[1,i]
             B[2,2+j*ndim] = dNdX[2,i]
+            B[4,1+j*ndim] = dNdX[2,i]/sqr2; B[4,2+j*ndim] = dNdX[1,i]/sqr2
+        end
+        axisym = false
+        if axisym
+            j = i-1
+            r = R[0]
+            B[1,1+j*ndim] = dNdX[1,i]
+            B[2,2+j*ndim] = dNdX[2,i]
+            B[3,1+j*ndim] =    N[i]/r
             B[4,1+j*ndim] = dNdX[2,i]/sqr2; B[4,2+j*ndim] = dNdX[1,i]/sqr2
         end
     else
@@ -146,11 +157,11 @@ function mount_B(::Mechanical, elem::Element, R::Vect, C::Matx, B::Matx)
 end
 
 
-function stiff(elem::Element)
-    stiff(elem.mat, elem)
+function elem_jacobian(elem::Element)
+    elem_jacobian(elem.mat, elem)
 end
 
-function stiff(::Mechanical, elem::Element)
+function elem_jacobian(::Mechanical, elem::Element)
     ndim   = elem.ndim
     nnodes = length(elem.nodes)
     mat    = elem.mat
@@ -165,6 +176,17 @@ function stiff(::Mechanical, elem::Element)
         K   += B'*D*B*coef
     end
     return K
+end
+
+function elem_RHS(elem::Element)
+    return elem_RHS(elem.mat, elem)
+end
+
+function elem_RHS(::Mechanical, elem::Element)
+    # Appropriate for body forces
+    ndim   = elem.ndim
+    nnodes = length(elem.nodes)
+    return zeros(ndim*nnodes)
 end
 
 function update!(elem::Element, DU::Array{Float64,1}, DF::Array{Float64,1})
@@ -220,7 +242,7 @@ function node_and_elem_vals(mat::Mechanical, elem::Element)
     end
 
     # Elem vals
-    all_ip_vals = [ getvals(ip.data) for ip in elem.ips ]
+    all_ip_vals = [ getvals(mat, ip.data) for ip in elem.ips ]
     labels      = keys(all_ip_vals[1])
     nips        = length(elem.ips) 
 

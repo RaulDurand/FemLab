@@ -33,7 +33,7 @@ type Point
     tag::String
     id::Int64
     function Point(x,y,z; tag="")
-        const NDIG = 8
+        const NDIG = 14
         x = round(x, NDIG)
         y = round(y, NDIG)
         z = round(z, NDIG)

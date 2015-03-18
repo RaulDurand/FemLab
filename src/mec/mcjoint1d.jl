@@ -48,6 +48,10 @@ type MCJoint1D<:AbsJoint1D
     kh::Float64
     new_ipdata::DataType
 
+    function MCJoint1D(prms::Dict{Symbol,Float64})
+        return  MCJoint1D(;prms...)
+    end
+
     function MCJoint1D(;ks=NaN, kn=NaN, h=NaN, A=NaN, dm=NaN, c=NaN, C=NaN, mu=NaN, phi=NaN, kh=0.0)
         @check ks>=0
         @check (h>=0 || A>0 || dm>0)
@@ -144,7 +148,6 @@ function stress_update(mat::MCJoint1D, ipd::MCJoint1DIpData, Δε::Vect)
 
     return Δσ
 end
-
 
 function getvals(mat::MCJoint1D, ipd::MCJoint1DIpData)
     τmax = mat.c + abs(ipd.σc)*mat.μ

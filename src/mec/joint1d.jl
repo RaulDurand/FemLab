@@ -40,6 +40,10 @@ type Joint1D<:AbsJoint1D
     h ::Float64
     new_ipdata::DataType
 
+    function Joint1D(prms::Dict{Symbol,Float64})
+        return  Joint1D(;prms...)
+    end
+
     function Joint1D(;ks=NaN, kn=NaN, h=NaN, A=NaN, dm=NaN)
         # A : section area
         # dm: section diameter
@@ -233,7 +237,7 @@ function mountB(mat::AbsJoint1D, elem::Element, R, Ch, Ct, B)
     return detJ
 end
 
-function stiff(mat::AbsJoint1D, elem::Element)
+function elem_jacobian(mat::AbsJoint1D, elem::Element)
     ndim   = elem.ndim
     nnodes = length(elem.nodes)
     bar    = elem.extra[:bar]
@@ -283,6 +287,12 @@ function update!(mat::AbsJoint1D, elem::Element, DU::Array{Float64,1}, DF::Array
 
     # Update global vector
     DF[map] += dF
+end
+
+function getvals(ipd::Joint1DIpData)
+    return [ 
+      :ur   => ipd.eps[1] ,
+      :tau  => ipd.sig[1] ]
 end
 
 function getvals(mat::Joint1D, ipd::Joint1DIpData)

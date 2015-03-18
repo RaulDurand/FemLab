@@ -20,9 +20,13 @@
 
 export Mesh
 export copy, move
-export generate_mesh, save
+export generate_mesh, save, loadmesh
 
 include("entities.jl")
+
+Pkg.installed("JSON")==nothing?  Pkg.add("JSON") : nothing
+
+using JSON
 
 
 ### Type Mesh
@@ -100,7 +104,7 @@ function get_surface_alt(cells::Array{Cell,1})
     # Get incidence matrix (shares) (fast)
     np = length(points)
     N = [ Cell[] for i=1:np]
-    @time for cell in cells
+    for cell in cells
         for pt in cell.points
             push!(N[pt.id], cell)
         end
@@ -109,11 +113,11 @@ function get_surface_alt(cells::Array{Cell,1})
     @show 1
 
     # Get matrix of cells faces
-    @time F = [ get_faces(cell) for cell in cells]
+    F = [ get_faces(cell) for cell in cells]
     nc = length(cells)
     #CF = Array(Array{Array{Int64,1},1}, nc)
     CF = Array(Array{Uint64,1}, nc)
-    @time for cell in cells # fast
+    for cell in cells # fast
         #CF[cell.id] = [ sort([pt.id for pt in face.points]) for face in F[cell.id]]
         CF[cell.id] = [ hash(face) for face in F[cell.id]]
     end
@@ -121,7 +125,7 @@ function get_surface_alt(cells::Array{Cell,1})
 
     # Get cells boundary flag matrix
     CB = [ trues(length(CF[cell.id])) for cell in cells]
-    @time for cell in cells
+    for cell in cells
         for (i,fcon) in enumerate(CF[cell.id])
             for pid in fcon
                 for cl in N[pid]
@@ -137,7 +141,7 @@ function get_surface_alt(cells::Array{Cell,1})
 
     # Get list of boundary faces (almost fast)
     facets = Cell[]
-    @time for cell in cells
+    for cell in cells
         for (i,face) in enumerate(F[cell.id])
             if CB[cell.id][i]
                 push!(facets, face)
@@ -148,17 +152,22 @@ function get_surface_alt(cells::Array{Cell,1})
     return facets
 end
 
-function generate_mesh(blocks::Block...; verbose::Bool=true, genfacets=true, genedges=false)
-    generate_mesh([blocks...], verbose, genfacets, genedges)
+function generate_mesh(blocks::Block...; verbose::Bool=true, genfacets=true, genedges=false, initial_mesh=nothing)
+    generate_mesh([blocks...], verbose, genfacets, genedges, initial_mesh)
 end
 
-function generate_mesh(blocks::Array, verbose::Bool=true, genfacets=true, genedges=false)
+function generate_mesh(initial_mesh::Mesh, blocks::Block...; verbose::Bool=true, genfacets=true, genedges=false)
+    generate_mesh([blocks...], verbose, genfacets, genedges, initial_mesh)
+end
+
+function generate_mesh(blocks::Array, verbose::Bool=true, genfacets=true, genedges=false, initial_mesh=nothing)
     nblocks = length(blocks)
     if verbose
         println("Mesh generation:")
         println("  analyzing $nblocks block(s)") 
     end
-    mesh = Mesh()
+
+    mesh = initial_mesh==nothing? Mesh(): initial_mesh
 
     # Split blocks
     for (i,b) in enumerate(blocks)
@@ -170,7 +179,7 @@ function generate_mesh(blocks::Array, verbose::Bool=true, genfacets=true, genedg
     # Get ndim
     ndim = 2
     for point in mesh.points
-        if point.z>0.0; ndim = 3; break end
+        if point.z != 0.0; ndim = 3; break end
     end
     mesh.ndim = ndim
     
@@ -290,4 +299,86 @@ function Definitions.save(mesh::Mesh, filename::String, verbose=true)
 
 end
 
+function get_shape_type(geo, npoints=0)
+    types = [ LIN2, LIN3, -1, TRI3, TRI6, -1, QUAD4, QUAD8, QUAD9, TET4, TET10, HEX8, HEX20, -2, LIN4, TRI10, QUAD12, QUAD16]
+    shapetype = types[geo+1]
+    if shapetype==-2 #joint
+        shapetype = npoints==2? LINK2: LINK3
+    end
 
+    return shapetype
+end
+
+
+function loadmesh(filename; format="json")
+    mesh = Mesh()
+
+    data = JSON.parsefile(filename)
+    verts = data["verts"]
+    cells = data["cells"]
+
+    # Loading points
+    for vert in verts
+        C = float(vert["c"])
+        C = [C, 0.0][1:3]
+        #push!(C, 0.0)
+        P = Point(C)
+        P.id  = vert["id"]+1
+        P.tag = string(vert["tag"])
+        push!(mesh.points, P)
+
+    end
+
+    # Get ndim
+    ndim = 2
+    for point in mesh.points
+        if point.z != 0.0; ndim = 3; break end
+    end
+    mesh.ndim = ndim
+
+    # Loading cells
+    for cell in cells
+        geo   = cell["geo"]
+        conn  = cell["verts"]
+        conn  = [ i+1 for i in conn]
+        npoints = length(conn)
+
+        # check for embedded joint
+        if haskey(cell, "jlinid") # is joint element
+            lincell = cells[cell["jlinid"]]
+            npoints = length(lincell["verts"])
+        end
+
+        shapetype = get_shape_type(geo, npoints)
+        points    = [ mesh.points[i] for i in conn ]
+        C = Cell(shapetype, points, string(cell["tag"]))
+        C.id  = cell["id"]+1
+        push!(mesh.cells, C)
+    end
+
+    # Generating faces
+    mesh.faces = get_surface(mesh.cells)
+    surf_dict = [ hash(F) => F for F in mesh.faces]
+
+    all_faces = Face[]
+    for (i,C) in enumerate(mesh.cells)
+        if is_solid(C.shape)
+            faces = get_faces(C)
+            ftags = get(cells[i],"ftags", [])
+            #@show ftags
+            if length(ftags) > 0
+                for (j,F) in enumerate(faces)
+                    tag = string(ftags[j])
+                    if ftags != "0"
+                        F.tag = tag
+                        surf_dict[hash(F)] = F
+                    end
+                end
+            end
+        end
+    end
+
+    mesh.faces = [ face for face in values(surf_dict) ]
+
+    return mesh
+end

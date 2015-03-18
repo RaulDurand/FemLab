@@ -45,14 +45,14 @@ type PPTruss<:AbsTruss
     H::Float64
     new_ipdata::DataType
 
+    function PPTruss(prms::Dict{Symbol,Float64})
+        return  PPTruss(;prms...)
+    end
+
     function PPTruss(;E=NaN, A=NaN, sig_y=NaN, H=0.0)
         @check E>0
         @check A>0
         @check sig_y>0
-        #if H==0.0
-            #H = E*1.0e-15
-            #H = 0.01
-        #end
         this = new(E, A, sig_y, H)
         this.new_ipdata = PPTrussIpData
         this
@@ -95,9 +95,18 @@ end
 function getvals(ipd::PPTrussIpData)
     return [ 
       :sa => ipd.σ,
-      :ea => ipd.ε]
+      :ea => ipd.ε,
+      :epa_ppt => ipd.εpa]
       #:Fa => ipd.σ*mat.A,
       #:A  => mat.A ]
 end
 
+function getvals(mat::PPTruss, ipd::PPTrussIpData)
+    return [ 
+      :sa => ipd.σ,
+      :ea => ipd.ε,
+      :epa_ppt => ipd.εpa,
+      :Fa => ipd.σ*mat.A,
+      :A  => mat.A ]
+end
 
