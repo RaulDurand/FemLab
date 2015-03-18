@@ -41,6 +41,6 @@ include("domain.jl")
 include("mec/solver.jl")
 include("mec/mechanical.jl")
 
-include("seep/seep.jl")
+#include("seep/seep.jl")
 
 end#module
