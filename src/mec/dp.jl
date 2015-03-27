@@ -64,6 +64,11 @@ type DruckerPrager<:Mechanical
     end
 end
 
+function nlE(fc::Float64, εc::Float64, ε::Array{Float64,1})
+    εv = abs(sum(ε[1:3]))
+    return 2*fc*(εc-εv)/εc^2
+end
+
 function set_state(ipd::DruckerPragerIpData; sig=zeros(0), eps=zeros(0))
     if length(sig)==6
         ipd.σ[:] = sig.*V2M
@@ -156,7 +161,7 @@ function getvals(mat::DruckerPrager, ipd::DruckerPragerIpData)
     j1   = trace(σ)
     sr2  = √2.
     srj2d = √J2D(σ)
-    pl_r  = srj2d/(mat.κ- mat.α*j1)
+    #pl_r  = srj2d/(mat.κ- mat.α*j1)
     #pl_r  = srj2d/j1
 
     if ndim==2;
@@ -189,8 +194,8 @@ function getvals(mat::DruckerPrager, ipd::DruckerPragerIpData)
           :dg  => ipd.Δγ,
           :j1  => j1,
           :srj2d => srj2d,
-          :p   => trace(σ)/3.0,
-          :pl_r=> pl_r
+          :p   => trace(σ)/3.0
+          #:pl_r=> pl_r
           ]
       end
 end

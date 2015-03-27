@@ -26,11 +26,16 @@ type BlockInset <: Block
     closed   ::Bool
     shape    ::ShapeType
     tag      ::String
+    ε        ::Float64 # bisection tolerance
+    εn       ::Float64 # increment to find next cell
+    εc       ::Float64 # tolerance to find cells
+    λ        ::Float64 # jump to find multiple intersections in one cell
     id       ::Int64
     icount   ::Int64
     _endpoint  ::Union(Point, Nothing)
     _startpoint::Union(Point, Nothing)
-    function BlockInset(coords; curvetype=0, closed=false, shape=LIN3, tag="", id=-1)
+
+    function BlockInset(coords; curvetype=0, closed=false, shape=LIN3, tag="", tol=1e-9, toln=1e-4, tolc=1e-9, lam=1., id=-1)
         if typeof(curvetype)<:Integer
             if !(0<=curvetype<=3); error("Wrong curve type") end
             ctype = curvetype
@@ -45,8 +50,12 @@ type BlockInset <: Block
             coords = [ coords  zeros(nrows)]
         end
 
-        this = new(coords, ctype, closed, shape, tag, id)
+        this = new(coords, ctype, closed, shape, tag, tol, toln, tolc, lam, id)
         this.icount = 0
+        this.ε  = tol
+        this.εn = toln
+        this.εc = tolc
+        this.λ  = lam
         this._endpoint   = nothing
         this._startpoint = nothing
         return this
@@ -163,17 +172,15 @@ function get_point(s::Float64, coords::Array{Float64,2}, curvetype::ShapeType)
 end
 
 function split_curve(coords::Array{Float64,2}, bl::BlockInset, closed::Bool, msh::Mesh)
+    # Tolerances
+    ε  = bl.ε
+    εn = bl.εn
+    εc = bl.εc
+    λ  = bl.λ
+
+    itcount=0 ##
+
     # Constants
-    TINY = 1.0e-4
-    TOL  = 1.0e-9
-    JMP  = 1.0e-2
-
-
-    #TINY = 1.0E-3 ##
-    #TOL  = 1.0E-4 ##
-    #JMP  = 1.0 ##
-
-    nits = 25
     shape   = bl.shape
     npoints = shape==LIN2? 2 : 3
     lnkshape = shape==LIN2? LINK2 : LINK3
@@ -189,8 +196,8 @@ function split_curve(coords::Array{Float64,2}, bl::BlockInset, closed::Bool, msh
 
     # Find the initial and final element
     ecells = Array(Cell,0)
-    s0 = get_point(TINY,coords,curvetype)
-    icell = find_cell(s0, msh.cells, msh.bins, TOL, ecells) # The first tresspased cell
+    s0 = get_point(εn,coords,curvetype)
+    icell = find_cell(s0, msh.cells, msh.bins, εc, ecells) # The first tresspased cell
 
     if icell == nothing
         error("Inset limits outside the mesh")
@@ -203,7 +210,8 @@ function split_curve(coords::Array{Float64,2}, bl::BlockInset, closed::Bool, msh
     end_reached  = false
     s  = 0.0
     sp = 0.0
-    nits = int(1./JMP)
+    nits = int(1./λ)
+
 
     # Splitting inset
     k = 0
@@ -216,10 +224,10 @@ function split_curve(coords::Array{Float64,2}, bl::BlockInset, closed::Bool, msh
         # Finding step
         st = s     # trial point
         for i=1:nits
-            st += JMP
+            st += λ
             if st>1.0; break end
             X = get_point(st, coords, curvetype)
-            is_in = is_inside(ccell.shape, ccell_coords, X, TOL)
+            is_in = is_inside(ccell.shape, ccell_coords, X, ε)
             if !is_in
                 step  = 0.5*(st-s)
                 break
@@ -228,7 +236,9 @@ function split_curve(coords::Array{Float64,2}, bl::BlockInset, closed::Bool, msh
 
         s += step
         X  = get_point(s, coords, curvetype)
-        n  = ifloor(log(2, step/TOL)) + 1  # number of required iterations to find intersection
+        n  = ifloor(log(2, step/ε)) + 1  # number of required iterations to find intersection
+
+        itcount+=n ##
 
         # R     = inverse_map(ccell.shape, ccell_coords, X) ##
         # bdist = bdistance(ccell.shape, R) ##
@@ -236,9 +246,8 @@ function split_curve(coords::Array{Float64,2}, bl::BlockInset, closed::Bool, msh
 
         for i=1:n
 
-            #step *= 0.5+TOL
             step *= 0.5
-            is_in = is_inside(ccell.shape, ccell_coords, X, TOL)
+            is_in = is_inside(ccell.shape, ccell_coords, X, εc)
             if is_in
                 s += step
             else
@@ -259,7 +268,7 @@ function split_curve(coords::Array{Float64,2}, bl::BlockInset, closed::Bool, msh
         # println()
 
         # Check if end was reached
-        if s > len - TINY
+        if s > len - εn
             end_reached = true
             if curvetype<=1; X=Xn end
             # TODO test (check also incomplete Bezier...)
@@ -306,18 +315,18 @@ function split_curve(coords::Array{Float64,2}, bl::BlockInset, closed::Bool, msh
         ccell.crossed = true
 
         if end_reached
+            #@show itcount
             return
         end
 
         # Preparing for the next iteration
-        #ecells = [ ccell ]
-        ncell  = find_cell(get_point(s + TINY, coords, curvetype), msh.cells, msh.bins, TOL, [ccell])
+        ncell  = find_cell(get_point(s + εn, coords, curvetype), msh.cells, msh.bins, εc, [ccell])
         if ncell == nothing
             error("Hole found while searching for next tresspassed cell")
         end
 
         ccell = ncell
         sp = s
-        s = s+TINY
+        s = s+εn
     end
 end

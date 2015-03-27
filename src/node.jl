@@ -184,7 +184,7 @@ end
 # Define boundary conditions for a collection of nodes
 function set_bc(nodes::Array{Node,1}; args...) 
     if length(nodes)==0
-        println("Warning, applying boundary conditions to empty array of nodes")
+        println(RED, "Warning, applying boundary conditions to empty array of nodes", DEFAULT)
     end
 
     for node in nodes

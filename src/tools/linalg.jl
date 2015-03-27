@@ -1,3 +1,4 @@
+
 ##############################################################################
 #    FemLab - Finite Element Library                                         #
 #    Copyright (C) 2014 Raul Durand <raul.durand at gmail.com>               #
@@ -18,31 +19,30 @@
 #    along with FemLab.  If not, see <http://www.gnu.org/licenses/>.         #
 ##############################################################################
 
-module FemLab
+# Fancy matrix printing
+function print_matrix(M::Array{Float64,2})
+    n, m = size(M)
+    for i=1:n
+        for j=1:m
+            @printf( "%23.11e", M[i,j] )
+        end
+        println()
+    end
+end
 
-using Base
+# Pseudo determinant of non-square matrices
+function norm2(J)
 
-# Definitions module
-include("definitions.jl")
-include("tools/linalg.jl")
-include("tools/table.jl")
+    if ndims(J)==1; return norm(J) end
 
-export DTable , push!, getindex, save, loadtable
-
-# Mesh module
-include("mesh/mesh.jl")
-#using .MeshGen
-export is_solid, is_line, is_joint
-export Block2D, Block3D, BlockTruss, BlockInset, Mesh
-export generate_mesh#, save
-
-# Fem module
-include("node.jl")
-include("elem.jl")
-include("domain.jl")
-include("mec/solver.jl")
-include("mec/mechanical.jl")
-
-#include("seep/seep.jl")
-
-end#module
+    r, c = size(J)
+    if r==1; return norm(J) end
+    if r==2 && c==3
+        j1 = J[1,1]*J[2,2] - J[1,2]*J[2,1]
+        j2 = J[1,2]*J[2,3] - J[1,3]*J[2,2]
+        j3 = J[1,3]*J[2,1] - J[1,1]*J[2,3]
+        return (j1*j1 + j2*j2 + j3*j3)^0.5  # jacobian determinant
+    end
+    if r==c; return det(J) end
+    error("No rule to calculate norm2 of a $r x $c matrix")
+end

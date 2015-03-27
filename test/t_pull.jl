@@ -31,6 +31,10 @@ for i=1:nstages
     set_bc(solid_nodes, ux=0, uy=0, uz=0)
     set_bc(hook_node, fy = tload*load_incs[i])
 
-    solve!(dom, nincs=1)
+    solve!(dom, nincs=1, verbose=false)
     #save(dom, "output$i.vtk")
+end
+
+facts("\nTest Pull-out") do
+    @fact 1 => 1
 end

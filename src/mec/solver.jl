@@ -49,7 +49,8 @@ function mount_RHS(dom::Domain, ndofs::Int64, Δt::Float64)
     return RHS
 end
 
-function solve!(dom::Domain; nincs::Int=1, scheme::String="FE", precision::Float64=0.01, reset_bc::Bool=true, verbose::Bool=true)
+function solve!(dom::Domain; nincs::Int=1, scheme::String="FE", precision::Float64=0.01, reset_bc::Bool=true, verbose::Bool=true, autosave::Bool=true)
+
     if verbose; println("FEM analysis:") end
     # Fill array of dofs
     udofs = Array(Dof, 0)
@@ -97,6 +98,8 @@ function solve!(dom::Domain; nincs::Int=1, scheme::String="FE", precision::Float
     residue = 0.0
     tracking(dom) # Tracking nodes, ips, elements, etc.
 
+    autosave && save(dom, dom.filekey * "-0" * ".vtk", verbose=false)
+
     for inc=1:nincs
         if verbose; println("  increment $inc:") end
         DU, DF = lam*U, lam*F
@@ -104,6 +107,7 @@ function solve!(dom::Domain; nincs::Int=1, scheme::String="FE", precision::Float
         #println(R)
         DFa    = zeros(ndofs)
         DUa    = zeros(ndofs)
+        nbigger= 0
 
         maxits    = 50
         converged = false
@@ -118,23 +122,32 @@ function solve!(dom::Domain; nincs::Int=1, scheme::String="FE", precision::Float
             DFa += DFin
         
             #residue = norm(R)
+            lastres = residue
             residue = maxabs(R)
 
-            #if verbose; println("    it $it  residue: $residue") end
             if verbose
                 @printf("    it %s  residue: %-15.4e", it, residue)
                 println()
             end
+
+            if residue > lastres; nbigger+=1 end
             if residue<precision; converged = true ; break end
+            if nbigger>20;         converged = false; break end
             if isnan(residue);    converged = false; break end
+            #if it==2  converged=false; break end##
         end
 
+        tracking(dom) # Tracking nodes, ips, elements, etc.
+        autosave && save(dom, dom.filekey * "-$inc" * ".vtk", verbose=false)
+
         if !converged
-            error("solve!: solver did not converge")
-        else
-            tracking(dom) # Tracking nodes, ips, elements, etc.
-            continue
+            println(RED, "solve!: solver did not converge", DEFAULT)
+            return false
         end
+    end
+
+    if verbose && autosave
+        println(GREEN, "  $(dom.filekey)..vtk files written (Domain)", DEFAULT)
     end
 
     if reset_bc
@@ -146,6 +159,8 @@ function solve!(dom::Domain; nincs::Int=1, scheme::String="FE", precision::Float
             end
         end
     end
+
+    return true
 
 end
 

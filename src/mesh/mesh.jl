@@ -25,7 +25,6 @@ export generate_mesh, save, loadmesh
 include("entities.jl")
 
 Pkg.installed("JSON")==nothing?  Pkg.add("JSON") : nothing
-
 using JSON
 
 
@@ -226,8 +225,8 @@ function generate_mesh(blocks::Array, verbose::Bool=true, genfacets=true, genedg
 end
 
 
-import .Definitions.save
-function Definitions.save(mesh::Mesh, filename::String, verbose=true)
+#import .Definitions.save
+function save(mesh::Mesh, filename::String, verbose=true)
     # Saves the mesh information in vtk format
 
     npoints = length(mesh.points)

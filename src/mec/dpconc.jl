@@ -18,78 +18,97 @@
 #    along with FemLab.  If not, see <http://www.gnu.org/licenses/>.         #
 ##############################################################################
 
-export SingleCap
+export DPConc
 export set_state
 
-type SingleCapIpData<:IpData
-    ndim::Int
+type DPConcIpData<:IpData
+    ndim::Int64
     σ::Tensor2
     ε::Tensor2
     εpa::Float64
     Δγ::Float64
-    function SingleCapIpData(ndim=3) 
+    function DPConcIpData(ndim=3) 
         this = new(ndim)
-        this.σ = zeros(6)
-        this.ε = zeros(6)
+        this.σ   = zeros(6)
+        this.ε   = zeros(6)
         this.εpa = 0.0
         this.Δγ  = 0.0
         this
     end
 end
 
-type SingleCap<:Mechanical
-    E::Float64
+type DPConc<:Mechanical
     ν::Float64
     α::Float64
     κ::Float64
-    ρ::Float64
     H::Float64
-    De::Tensor4
+    fc::Float64
+    εc::Float64
+    #De::Tensor4
     new_ipdata::DataType
 
-    function SingleCap(;E=NaN, nu=0.0, alpha=0.0, kappa=0.0, rho=0.0, H=0.0)
-        @check E>0.0
+    function DPConc(prms::Dict{Symbol,Float64})
+        return DPConc(;prms...)
+    end
+
+    function DPConc(;nu=0.0, alpha=0.0, kappa=0.0, H=0.0, fc=0.0, eps_c=0.0)
         @check 0.0<=nu<0.5
         @check alpha>=0.0
         @check kappa>0.0
-        @check rho>0.0
         @check H>=0.0
 
-        this     = new(E, nu, alpha, kappa, rho, H)
-        this.De  = mount_De(E,nu) # elastic tensor
-        this.new_ipdata = SingleCapIpData
+        this     = new(nu, alpha, kappa, H, fc, eps_c)
+        this.new_ipdata = DPConcIpData
         return this 
     end
 end
 
-function set_state(ipd::SingleCapIpData; sig=zeros(0), eps=zeros(0))
+function nlE(fc::Float64, εc::Float64, ε::Array{Float64,1})
+    #ε = sum(ε[1:3])
+    ε = maxabs(ε[1:3])
+    #εt = 0.0005
+
+    # traction
+    #if ε>εt
+        #return 1000.0
+    #end
+
+    # compression
+    if abs(ε)>=εc
+        return 1.0
+    end
+    return 2*fc*(εc-ε)/εc^2
+end
+
+function set_state(ipd::DPConcIpData; sig=zeros(0), eps=zeros(0))
     if length(sig)==6
         ipd.σ[:] = sig.*V2M
     else
-        if length(sig)!=0; error("SingleCap: Wrong size for stress array: $sig") end
+        if length(sig)!=0; error("DPConc: Wrong size for stress array: $sig") end
     end
     if length(eps)==6
         ipd.ε[:] = eps.*V2M
     else
-        if length(eps)!=0; error("SingleCap: Wrong size for strain array: $eps") end
+        if length(eps)!=0; error("DPConc: Wrong size for strain array: $eps") end
     end
 end
 
-function yield_func(mat::SingleCap, ipd::SingleCapIpData, σ::Tensor2)
+function yield_func(mat::DPConc, ipd::DPConcIpData, σ::Tensor2)
     j1  = J1(σ)
     j2d = J2D(σ)
     α,κ = mat.α, mat.κ
-    ρ   = mat.ρ
     H   = mat.H
     εpa = ipd.εpa
-    return √j2d - (κ-α*j1)*(1. - j1^2./(ρ+H*εpa)^2.)
+    return α*j1 + √j2d - κ - H*εpa
 end
 
-function mount_D(mat::SingleCap, ipd::SingleCapIpData)
+function mount_D(mat::DPConc, ipd::DPConcIpData)
     α   = mat.α
     H   = mat.H
 
-    De = mat.De
+    E  = nlE(mat.fc, mat.εc, ipd.ε)
+    De = mount_De(E, mat.ν) # elastic tensor
+
     if ipd.Δγ==0.0
         return De
     end
@@ -98,21 +117,11 @@ function mount_D(mat::SingleCap, ipd::SingleCapIpData)
     if j2d != 0.0
         s  = dev(ipd.σ) 
         su = s/norm(s)
-        α, H  = mat.α, mat.H
-        κ     = mat.κ
-        ρ  = mat.ρ
-        j1 = J1(ipd.σ)
-        r  = α*(1. - j1^2./(ρ+H*ipd.εpa)^2.) - 2.*(κ-α*j1)*j1/(ρ+H*ipd.εpa)^2.  #df/dj1
-        V  = r*tI + su/√2 # df/dσ
+        V  = α*tI + su/√2 # df/dσ
         N  = V
         Nu = N/norm(N)
     else # apex
-        j1 = J1(ipd.σ)
-        if j1>0.0
-            Nu = 1./√3.*tI
-        else
-            Nu = -1./√3.*tI
-        end
+        Nu = 1./√3.*tI
         V  = Nu
     end
 
@@ -120,101 +129,57 @@ function mount_D(mat::SingleCap, ipd::SingleCapIpData)
 
 end
 
-function secant_root(f::Function, x0::Float64)
-    eps = 1.0e-8
-    err = eps + 1.0
-    x   = x0
-    h   = 1.0
-    x0 = 0.001
-    #@show f(x)
-    while abs(f(x))>eps
-        dfdx = (f(x+h)-f(x-h))/(2.0*h)
-        x    = x0 - f(x0)/dfdx
-        h    = x - x0
-        x0   = x
-        #@show x
-        #@show f(x)
-    end 
-        #@show x
-        #@show f(x)
-    #x = 0.0
-    #for i=1:100
-        #@show x
-        #@show(f(x))
-        #x += 0.002
-    #end
-    return x
-end
+function stress_update(mat::DPConc, ipd::DPConcIpData, Δε::Array{Float64,1})
+    E  = nlE(mat.fc, mat.εc, ipd.ε)
+    De = mount_De(E, mat.ν) # elastic tensor
 
-
-function stress_update(mat::SingleCap, ipd::SingleCapIpData, Δε::Array{Float64,1})
     σini   = ipd.σ
-    σtr    = ipd.σ + inner(mat.De, Δε)
+    σtr    = ipd.σ + inner(De, Δε)
     ftr    = yield_func(mat, ipd, σtr)
 
-
-    if ftr <= 0.0
+    if ftr < 1.e-8
         # elastic
         ipd.Δγ = 0.0
         ipd.σ  = σtr
     else
         # plastic 
-        K, G  = mat.E/(3.*(1.-2.*mat.ν)), mat.E/(2.*(1.+mat.ν))
+        K, G  = E/(3.*(1.-2.*mat.ν)), E/(2.*(1.+mat.ν))
+        #K, G  = mat.E/(3.*(1.-2.*mat.ν)), mat.E/(2.*(1.+mat.ν))
         α, H  = mat.α, mat.H
-        κ     = mat.κ
-        ρ     = mat.ρ
-        j1    = J1(ipd.σ) # warning: evaluated at step n and not at n+1
-        #@show  j1
-        r     = α*(1. - j1^2./(ρ+H*ipd.εpa)^2.) - 2.*(κ-α*j1)*j1/(ρ+H*ipd.εpa)^2.  #df/dj1
-        n     = 1./√(3.*r*r+0.5)
+        n     = 1./√(3.*α*α+0.5)
         j1tr  = J1(σtr)
-        #@show  j1tr
         j2dtr = J2D(σtr)
 
         if √j2dtr - ipd.Δγ*n*G > 0.0 # conventional return
-            #@show "Hi"
-            # find Δγ
-            fn1 = (Δγ) -> begin 
-                j1n1 = j1tr-9.*Δγ*r*n*K;
-                √j2dtr - Δγ*n*G - (κ-α*j1n1) * (1. - j1n1^2./(ρ+H*ipd.εpa+Δγ*H)^2.)
-            end
-            #@show j1
-            ipd.Δγ    = secant_root(fn1, 0.0)
-            #@show ipd.Δγ
-            j1    = j1tr - 9.*ipd.Δγ*r*n*K
-            m     = 1. - ipd.Δγ*n*G/√j2dtr
-            ipd.σ = m*dev(σtr) + j1/3.*tI
+            ipd.Δγ = ftr/(9*α*α*n*K + n*G + H)
+            j1     = j1tr - 9*ipd.Δγ*α*n*K
+            m      = 1. - ipd.Δγ*n*G/√j2dtr
+            ipd.σ  = m*dev(σtr) + j1/3.*tI
         else # return to apex
-            #exit()
-            #@show "Hi"
-            #kkk=1
-            sgn = j1tr>0.0? -1.0: 1.0
-            # find Δγ
-            fn1 = (Δγ) -> begin 
-                j1n1 = j1tr + sgn*3*√3*Δγ*K;
-                (κ-α*j1n1) * (1. - j1n1^2./(ρ+H*ipd.εpa+Δγ*H)^2.)
-            end
-            ipd.Δγ    = secant_root(fn1, 0.0)
-            #@show ipd.Δγ
-            j1    = j1tr + sgn*3*√3*ipd.Δγ*K;
-            #@show j1
-            ipd.σ = j1/3.*tI
+            κ      = mat.κ
+            ipd.Δγ = (α*j1tr-κ-H*ipd.εpa)/(3*√3*α*K + H)
+            j1     = j1tr - 3*√3*ipd.Δγ*K
+            ipd.σ  = j1/3.*tI
         end
 
         ipd.εpa += ipd.Δγ
-    end
 
+    end
 
     ipd.ε += Δε
     Δσ     = ipd.σ - σini
     return Δσ
 end
 
-function getvals(ipd::SingleCapIpData)
+function getvals(mat::DPConc, ipd::DPConcIpData)
     σ  = ipd.σ
     ε  = ipd.ε
     ndim = ipd.ndim
+    j1   = trace(σ)
     sr2  = √2.
+    srj2d = √J2D(σ)
+    #pl_r  = srj2d/(mat.κ- mat.α*j1)
+    #pl_r  = srj2d/j1
 
     if ndim==2;
         return [
@@ -242,10 +207,12 @@ function getvals(ipd::SingleCapIpData)
           :eyz => ε[5]/sr2,
           :exz => ε[6]/sr2,
           :ev  => trace(ε),
+          :epa => trace(ipd.εpa),
           :dg  => ipd.Δγ,
-          :j1  => trace(σ),
-          :srj2d => √J2D(σ),
-          :p   => trace(σ)/3. ]
+          :j1  => j1,
+          :srj2d => srj2d,
+          :p   => trace(σ)/3.0
+          #:pl_r=> pl_r
+          ]
       end
 end
-

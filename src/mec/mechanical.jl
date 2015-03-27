@@ -270,5 +270,6 @@ include("pptruss.jl")
 include("joint1d.jl")
 include("mcjoint1d.jl")
 include("dp.jl")
-include("scap.jl")
+include("dpcap.jl")
+include("dpconc.jl")
 

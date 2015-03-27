@@ -56,15 +56,21 @@ function show(io::IO, cell::TCell)
 end
 
 
-inc(v, n) = (v+n-1)%3 + 1
+#inc(v, n) = (v+n-1)%3 + 1
 
-#inc(v, n) = v+n>3? (v+n)%3 : v+n
+inc(v, n) = v+n>3? (v+n)%3 : v+n
 
 function find_cell(x, y, cell) # recursive search algorithm
+    @show cell
     for i=1:3
         pa = cell.points[i]
         pb = cell.points[inc(i,1)]
+        @show i, inc(i,1)
+        @show pa
+        @show pb
         if (pb.x-pa.x)*(y-pa.y) - (pb.y-pa.y)*(x-pa.x) < 0.0 # point lies on right side
+            acell = cell.adjacs[i]
+            @show acell
             return find_cell(x, y, cell.adjacs[i])
         end
     end
@@ -139,8 +145,8 @@ function triangulate(vertices::Array{Float64,2})
     @show Δ 
 
     pp0 = TPoint(minx-Δ  , miny-Δ)
-    pp1 = TPoint(maxx+Δ  , miny-Δ)
-    pp2 = TPoint(minx-Δ  , maxy+Δ)
+    pp1 = TPoint(maxx+3*Δ  , miny-Δ)
+    pp2 = TPoint(minx-Δ  , maxy+3*Δ)
     @show pp0
     @show pp1
     @show pp2
@@ -149,11 +155,12 @@ function triangulate(vertices::Array{Float64,2})
     push!(cells, scell)
     
     for i=1:n
+        println()
         p = TPoint(vertices[i,1:end]...)
         push!(points, p)
 
-        @show length(cells)
         @show p.x, p.y
+        @show cells[end]
 
         cell = find_cell(p.x, p.y, cells[end])
 
@@ -177,20 +184,37 @@ function triangulate(vertices::Array{Float64,2})
 
         toswap = [t0, t1, t2]
 
-        while length(toswap)>0
-            cell0 = pop!(toswap)
-            cell1 = cell0.adjacs[2] # adjacent cell opposito to point P in cell0 cell
-            if cell1==nothing
-                continue
-            end
+        if false
+            for (cell0, cell1) in zip(toswap, [a0, a1, a2] )
+                if cell1==nothing
+                    continue
+                end
 
-            if swap_cells(cell0, cell1)
-                push!(toswap, cell0)
-                push!(toswap, cell1)
-            end
+                @show cell0
+                @show cell1
 
+                swap_cells(cell0, cell1)
+
+            end
         end
 
+        if true
+            while length(toswap)>0
+                cell0 = pop!(toswap)
+                cell1 = cell0.adjacs[2] # adjacent cell opposito to point P in cell0 cell
+                if cell1==nothing
+                    continue
+                end
+
+                if swap_cells(cell0, cell1)
+                    push!(toswap, cell0)
+                    push!(toswap, cell1)
+                end
+
+            end
+        end
+
+        @show length(cells)
     end
 
 
@@ -215,15 +239,38 @@ function triangulate(vertices::Array{Float64,2})
     end
 
     @show icells
-    cells = cells[icells]
+    #cells = cells[icells]
+
+    # numbering points
+    points = TPoint[]
+    #i = 0
+    for c in cells
+        for p in c.points
+            if !(p in points)
+                push!(points, p)
+                #i += 1
+                #p.id = i
+            end
+        end
+    end
+
 
     # numbering points
     for (i,point) in enumerate(points)
         point.id = i
     end
 
+    # point coordinates matrix
+    Co = Array(Float64, length(points), 2)
+    for (i,point) in enumerate(points)
+        Co[i, 1] = point.x
+        Co[i, 2] = point.y
+    end
+
+
     # connectivities
     n = length(cells)
+    @show n
     C = Array(Int64, n, 3)
     for (i,cell) in enumerate(cells)
         C[i,1] = cell.points[1].id
@@ -249,23 +296,27 @@ function triangulate(vertices::Array{Float64,2})
         E[i,1] = edge[1]
         E[i,2] = edge[2]
     end
+    E = [ edge[j] for edge in edges, j=1:2 ]
 
     @show E
+    @show C
 
-    return C, E
+    return Co, E
 
 end
 
 
 V = [ 1. 2; 2 1; 1 3 ; 2 4; 3 2; 4 3 ]
+#V = [ 0. 0; 1 0; 0 1 ]
 C, E = triangulate(V)
 
 
 using FemLab
 
-bl = BlockTruss(V, E)
+#bl = BlockTruss(V, E)
+bl = BlockTruss(C, E)
 mesh = generate_mesh(bl)
-save(mesh, "tri.vtk")
+save(mesh, "tri1.vtk")
 
 
 

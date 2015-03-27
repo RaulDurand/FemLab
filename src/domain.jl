@@ -18,7 +18,6 @@
 #    along with FemLab.  If not, see <http://www.gnu.org/licenses/>.         #
 ##############################################################################
 
-import .Definitions.save
 export Domain
 export track
 
@@ -75,12 +74,11 @@ function set_bc(face::Face; args...)
 end
 
 function set_bc(faces::Array{Face,1}; args...)
-    if length(faces)==0; println("Warning, applying boundary conditions to empty array of faces") end
+    if length(faces)==0; println(RED, "Warning, applying boundary conditions to empty array of faces", DEFAULT) end
     for face in faces
         set_bc(face; args...)
     end
 end
-
 
 
 type Domain
@@ -89,13 +87,16 @@ type Domain
     elems::Array{Element,1}
     faces::Array{Face,1}
     edges::Array{Edge,1}
+    filekey::String
 
     trk_nodes     ::Array{(Node, DTable), 1}
     trk_ips       ::Array{(Ip  , DTable), 1}
     trk_list_nodes::Array{(Array{Node,1}, DBook), 1}
     trk_list_ips  ::Array{(Array{Ip  ,1}, DBook), 1}
-    function Domain(mesh::Mesh)
+    function Domain(mesh::Mesh; filekey="out")
         this = new()
+        this.filekey = filekey
+
         load_mesh(this, mesh)
         this.trk_nodes = []
         this.trk_ips   = []
@@ -505,10 +506,93 @@ function save(dom::Domain, filename::String; verbose=true)
     close(f)
 
     if verbose
-        println("  file $filename written (Domain)")
+        println(GREEN, "  file $filename written (Domain)", DEFAULT)
+    end
+
+    # save ip information as vtk
+    if has_data
+        basename, ext = splitext(filename)
+        save_ips(dom, basename*"-ip"*ext, verbose)
     end
 
 end
+
+
+function save_ips(dom::Domain, filename::String, verbose=true)
+    # Saves ips information from domain as a vtk file
+
+    # Get all ips
+    ips = Ip[]
+    for elem in dom.elems
+        for ip in elem.ips
+            push!(ips, ip)
+        end
+    end
+
+    nips   = length(ips)
+    ncells = nips
+
+    # Number of total connectivities
+    nconns = nips*2 
+
+    # Open filename
+    f = open(filename, "w")
+
+    println(f, "# vtk DataFile Version 3.0")
+    println(f, "FemLab output ")
+    println(f, "ASCII")
+    println(f, "DATASET UNSTRUCTURED_GRID")
+    println(f, "")
+    println(f, "POINTS ", nips, " float64")
+
+    # Write ip points
+    for ip in ips
+        @printf f "%23.15e %23.15e %23.15e \n" ip.X[1] ip.X[2] ip.X[3]
+    end
+    println(f)
+
+    # Write ip connectivities (vertex)
+    println(f, "CELLS ", ncells, " ", nconns)
+    for (i,ip) in enumerate(ips)
+        println(f, "1 $(i-1)", )
+    end
+    println(f)
+
+    # Ips cell types
+    println(f, "CELL_TYPES ", nips)
+    vtk_vertex = 1
+    for ip in ips
+        print(f, vtk_vertex, " ")
+    end
+    println(f)
+
+    # Get values at ips
+    table = DTable()
+    for ip in ips
+        push!(table, getvals(ip))
+    end
+
+    # Write point data
+    println(f, "POINT_DATA ", nips)
+
+    # Write ip scalar data TODO
+    for field in table.header
+        println(f, "SCALARS ", field, " float64 1")
+        println(f, "LOOKUP_TABLE default")
+        field_data = table.dict[field]
+        for i in 1:nips
+            @printf f "%23.10e" field_data[i]
+        end
+        println(f, )
+    end
+
+    close(f)
+
+    if verbose
+        println(GREEN, "  file $filename written (Domain)", DEFAULT)
+    end
+end
+
 
 function save2(dom::Domain, filename::String; verbose=true)
     # Saves the dom information in vtk format
@@ -679,7 +763,7 @@ function save2(dom::Domain, filename::String; verbose=true)
     close(f)
 
     if verbose
-        println("  file $filename written (Domain)")
+        println(GREEN, "  file $filename written (Domain)", DEFAULT)
     end
 
 end
