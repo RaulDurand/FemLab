@@ -42,42 +42,48 @@ typealias Edge Face
 function fix_comparison_arrays(expr::Expr)
     mexpr = copy(expr) # expression to be modified
     tol = 1e-6
-    for (i,arg) in enumerate(mexpr.args)
-        if typeof(arg)!=Expr; continue end
-        if arg.head == :comparison
-            symb = arg.args[2]
-            a = arg.args[1]
-            b = arg.args[3]
-            if symb == :(==)
-                #mexpr.args[i] = :(isapprox($a,$b,rtol= tol ))
-                mexpr.args[i] = :(maximum(abs($a-$b)) < $tol)
-                continue
+
+    fix_comp = function(expr::Expr)
+        symb = expr.args[2]
+        a = expr.args[1]
+        b = expr.args[3]
+        if symb == :(==)
+            return :(maximum(abs($a-$b)) < $tol)
+        end
+        if symb == :(>=)
+            return :(minimum($a) > maximum($b) - $tol)
+        end
+        if symb == :(>)
+            return :(minimum($a) > maximum($b) + $tol)
+        end
+        if symb == :(<=)
+            return :(maximum($a) < minimum($b) + $tol)
+        end
+        if symb == :(<)
+            return :(maximum($a) < minimum($b) - $tol)
+        end
+        return expr
+    end
+
+    if mexpr.head == :comparison
+        return fix_comp(mexpr)
+    else
+        for (i,arg) in enumerate(mexpr.args)
+            if typeof(arg)!=Expr; continue end
+            if arg.head == :comparison
+                mexpr.args[i] = fix_comp(arg)
+            else
+                mexpr.args[i] = fix_comparison_arrays(arg)
             end
-            if symb == :(>=)
-                mexpr.args[i] = :(minimum($a) > maximum($b) - $tol)
-                continue
-            end
-            if symb == :(>)
-                mexpr.args[i] = :(minimum($a) > maximum($b) + $tol)
-                continue
-            end
-            if symb == :(<=)
-                mexpr.args[i] = :(maximum($a) < minimum($b) + $tol)
-                continue
-            end
-            if symb == :(<)
-                mexpr.args[i] = :(maximum($a) < minimum($b) - $tol)
-                continue
-            end
-        else
-            fix_comparison_arrays(arg)
         end
     end
     return mexpr
 end
 
 function getindex(faces::Array{Face,1}, cond::Expr)
-    condm = subs_equal_by_approx(cond)
+    #condm = subs_equal_by_approx(cond)
+    condm = fix_comparison_arrays(cond)
+    #@show condm
     funex = :( (x,y,z) -> x*y*z )
     funex.args[2].args[2] = condm
     fun = nothing
@@ -91,9 +97,8 @@ function getindex(faces::Array{Face,1}, cond::Expr)
     for face in faces
         coords = getcoords(face.nodes)
         x = coords[:,1]
-        x = all(coords[:,1].==coords[1,1]) ? coords[1,1] : NaN
-        y = all(coords[:,2].==coords[1,2]) ? coords[1,2] : NaN
-        z = all(coords[:,3].==coords[1,3]) ? coords[1,3] : NaN
+        y = coords[:,2]
+        z = coords[:,3]
         if fun(x, y, z)
             push!(result, face) 
         end

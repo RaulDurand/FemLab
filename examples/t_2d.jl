@@ -14,6 +14,7 @@ set_mat(dom.elems, ElasticSolid(E=1.0, nu=0.2) )
 set_bc( dom.nodes[:(x==0)] , ux=0, uy=0)
 set_bc( dom.nodes[:(y==1)] , fy=-10.)
 set_bc( dom.faces[:(y==1)] , ty=-10.)
+#set_bc( dom.faces[:(y==1 && x>=0.5 )] , ty=-10.)
 
 solve!(dom, nincs=1, verbose=true)
 save(dom, "output.vtk")
