@@ -23,6 +23,7 @@ export copy, move
 export generate_mesh, save, loadmesh
 
 include("entities.jl")
+include("delaunay.jl")
 
 Pkg.installed("JSON")==nothing?  Pkg.add("JSON") : nothing
 using JSON
@@ -162,7 +163,7 @@ end
 function generate_mesh(blocks::Array, verbose::Bool=true, genfacets=true, genedges=false, initial_mesh=nothing)
     nblocks = length(blocks)
     if verbose
-        println("Mesh generation:")
+        println(BOLD, CYAN, "Mesh generation:", DEFAULT)
         println("  analyzing $nblocks block(s)") 
     end
 
@@ -293,7 +294,7 @@ function save(mesh::Mesh, filename::String, verbose=true)
     end
 
     if verbose
-        println("  file $filename written")
+        println(GREEN, "  file $filename written (Mesh)", DEFAULT)
     end
 
 end

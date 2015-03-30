@@ -92,7 +92,7 @@ type Block3D <: Block
     end
 end
 
-copy(bl::Block3D) = Block2D(copy(bl.coords), nx=bl.nx, ny=bl.ny, nz=bl.nz, shape=bl.shape, tag=bl.tag)
+copy(bl::Block3D) = Block3D(copy(bl.coords), nx=bl.nx, ny=bl.ny, nz=bl.nz, shape=bl.shape, tag=bl.tag)
 
 
 

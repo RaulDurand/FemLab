@@ -20,6 +20,7 @@
 
 export Domain
 export track
+export get_node
 
 type Face
     shape::ShapeType
@@ -38,6 +39,43 @@ end
 typealias Edge Face
 
 
+function fix_comparison_arrays(expr::Expr)
+    mexpr = copy(expr) # expression to be modified
+    tol = 1e-6
+    for (i,arg) in enumerate(mexpr.args)
+        if typeof(arg)!=Expr; continue end
+        if arg.head == :comparison
+            symb = arg.args[2]
+            a = arg.args[1]
+            b = arg.args[3]
+            if symb == :(==)
+                #mexpr.args[i] = :(isapprox($a,$b,rtol= tol ))
+                mexpr.args[i] = :(maximum(abs($a-$b)) < $tol)
+                continue
+            end
+            if symb == :(>=)
+                mexpr.args[i] = :(minimum($a) > maximum($b) - $tol)
+                continue
+            end
+            if symb == :(>)
+                mexpr.args[i] = :(minimum($a) > maximum($b) + $tol)
+                continue
+            end
+            if symb == :(<=)
+                mexpr.args[i] = :(maximum($a) < minimum($b) + $tol)
+                continue
+            end
+            if symb == :(<)
+                mexpr.args[i] = :(maximum($a) < minimum($b) - $tol)
+                continue
+            end
+        else
+            fix_comparison_arrays(arg)
+        end
+    end
+    return mexpr
+end
+
 function getindex(faces::Array{Face,1}, cond::Expr)
     condm = subs_equal_by_approx(cond)
     funex = :( (x,y,z) -> x*y*z )
@@ -52,6 +90,7 @@ function getindex(faces::Array{Face,1}, cond::Expr)
     result = Array(Face,0)
     for face in faces
         coords = getcoords(face.nodes)
+        x = coords[:,1]
         x = all(coords[:,1].==coords[1,1]) ? coords[1,1] : NaN
         y = all(coords[:,2].==coords[1,2]) ? coords[1,2] : NaN
         z = all(coords[:,3].==coords[1,3]) ? coords[1,3] : NaN
@@ -319,18 +358,15 @@ function node_and_elem_vals2(nodes::Array{Node,1}, elems::Array{Element,1})
     return Node_vals, node_keys, Elem_vals, elem_keys
 end
 
-function get_node(dom::Domain, X::Array{Float64,1})
-    x, y, z = [ X, 0.0 ]
+function get_node(dom::Domain, coord::Array{Float64,1})
+    X = [ coord, 0.0 ][1:3]
     tol     = 1.0e-8
     for node in dom.nodes
-        if isapprox(node.x, x, rtol=tol)
-            if isapprox(node.y, y, rtol=tol)
-                if isapprox(node.z, z, rtol=tol)
-                    return node
-                end
-            end
+        if norm(X-node.X) < tol
+            return node
         end
     end
+    return nothing
 end
 
 function track(dom::Domain, node::Node)
@@ -400,7 +436,7 @@ end
 
 
 
-function save(dom::Domain, filename::String; verbose=true)
+function save(dom::Domain, filename::String; verbose=true, save_ips=false)
     # Saves the dom information in vtk format
     nnodes = length(dom.nodes)
     nelems  = length(dom.elems)
@@ -510,15 +546,15 @@ function save(dom::Domain, filename::String; verbose=true)
     end
 
     # save ip information as vtk
-    if has_data
+    if has_data && save_ips
         basename, ext = splitext(filename)
-        save_ips(dom, basename*"-ip"*ext, verbose)
+        save_dom_ips(dom, basename*"-ip"*ext, verbose)
     end
 
 end
 
 
-function save_ips(dom::Domain, filename::String, verbose=true)
+function save_dom_ips(dom::Domain, filename::String, verbose=true)
     # Saves ips information from domain as a vtk file
 
     # Get all ips
@@ -547,7 +583,10 @@ function save_ips(dom::Domain, filename::String, verbose=true)
 
     # Write ip points
     for ip in ips
-        @printf f "%23.15e %23.15e %23.15e \n" ip.X[1] ip.X[2] ip.X[3]
+        x = ip.X[1]
+        y = ip.X[2]
+        z = length(ip.X)>2? ip.X[3] : 0.0
+        @printf f "%23.15e %23.15e %23.15e \n" x y z
     end
     println(f)
 

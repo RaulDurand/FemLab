@@ -49,9 +49,9 @@ function mount_RHS(dom::Domain, ndofs::Int64, Δt::Float64)
     return RHS
 end
 
-function solve!(dom::Domain; nincs::Int=1, scheme::String="FE", precision::Float64=0.01, reset_bc::Bool=true, verbose::Bool=true, autosave::Bool=true)
+function solve!(dom::Domain; nincs::Int=1, scheme::String="FE", precision::Float64=0.01, reset_bc::Bool=true, verbose::Bool=true, autosave::Bool=false)
 
-    if verbose; println("FEM analysis:") end
+    if verbose; println(CYAN, BOLD, "FEM analysis:", DEFAULT) end
     # Fill array of dofs
     udofs = Array(Dof, 0)
     pdofs = Array(Dof, 0)
@@ -98,7 +98,9 @@ function solve!(dom::Domain; nincs::Int=1, scheme::String="FE", precision::Float
     residue = 0.0
     tracking(dom) # Tracking nodes, ips, elements, etc.
 
-    autosave && save(dom, dom.filekey * "-0" * ".vtk", verbose=false)
+    if autosave
+        save(dom, dom.filekey * "-0" * ".vtk", verbose=false, save_ips=true)
+    end
 
     for inc=1:nincs
         if verbose; println("  increment $inc:") end
@@ -132,13 +134,13 @@ function solve!(dom::Domain; nincs::Int=1, scheme::String="FE", precision::Float
 
             if residue > lastres; nbigger+=1 end
             if residue<precision; converged = true ; break end
-            if nbigger>20;         converged = false; break end
+            if nbigger>10;         converged = false; break end
             if isnan(residue);    converged = false; break end
             #if it==2  converged=false; break end##
         end
 
         tracking(dom) # Tracking nodes, ips, elements, etc.
-        autosave && save(dom, dom.filekey * "-$inc" * ".vtk", verbose=false)
+        autosave && save(dom, dom.filekey * "-$inc" * ".vtk", verbose=false, save_ips=true)
 
         if !converged
             println(RED, "solve!: solver did not converge", DEFAULT)
