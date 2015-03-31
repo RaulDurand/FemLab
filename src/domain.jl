@@ -119,7 +119,7 @@ function load_mesh(dom::Domain, mesh::Mesh)
     dom.elems = Array(Element,0)
     for (i,cell) in enumerate(mesh.cells)
         conn = [ p.id for p in cell.points ]
-        elem = Element(cell.shape, dom.nodes[conn], ndim)
+        elem = Element(cell.shape, dom.nodes[conn], ndim, cell.tag)
         elem.id = i
         push!(dom.elems, elem)
     end

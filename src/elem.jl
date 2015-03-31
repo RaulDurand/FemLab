@@ -171,7 +171,19 @@ function getindex(elems::Array{Element,1}, cond::Expr)
     return result
 end
 
-getindex(elems::Array{Element,1}, cond::String) = getindex(elems, parse(cond))
+function getindex(elems::Array{Element,1}, cond::String) 
+    if typeof(parse(cond)) == Symbol
+        result = Array(Element,0)
+        for elem in elems
+            if cond == elem.tag
+                push!(result, elem) 
+            end
+        end
+        return result
+    end
+
+    return getindex(elems, parse(cond))
+end
 
 # Get the element coordinates matrix
 function getcoords(elem::Element)
