@@ -175,11 +175,13 @@ function solve_inc(dom::Domain, DU::Vect, DF::Vect, umap::Array{Int,1}, pmap::Ar
     # Global stifness matrix
     ndofs = length(DU)
     nu = length(umap)
+    if nu == ndofs 
+        println(RED, "solve!: Warnig, no essential boundary conditions.", DEFAULT)
+    end
+
     if verbose; print("    assembling... \r") end
+
     K = mount_K(dom, ndofs)
-    #println(full(K))
-    #println()
-    #@show nu
     if nu>0
         nu1 = nu+1
         K11 = K[1:nu, 1:nu]

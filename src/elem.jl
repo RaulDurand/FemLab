@@ -61,7 +61,7 @@ end
 
 # Index operator for a ip collection using expression
 function getindex(ips::Array{Ip,1}, cond::Expr) 
-    condm = subs_equal_by_approx(cond)
+    condm = fix_comparison_scalar(cond)
     funex = :( (x,y,z) -> x*y*z )
     funex.args[2].args[2] = condm
     fun = nothing
@@ -148,7 +148,7 @@ function getindex(elems::Array{Element,1}, s::Symbol)
 end
 
 function getindex(elems::Array{Element,1}, cond::Expr)
-    condm = subs_equal_by_approx(cond)
+    condm = fix_comparison_arrays(cond)
     funex = :( (x,y,z) -> x*y*z )
     funex.args[2].args[2] = condm
     fun = nothing
@@ -161,15 +161,17 @@ function getindex(elems::Array{Element,1}, cond::Expr)
     result = Array(Element,0)
     for elem in elems
         coords = getcoords(elem.nodes)
-        x = all(coords[:,1].==coords[1,1]) ? coords[1,1] : NaN
-        y = all(coords[:,2].==coords[1,2]) ? coords[1,2] : NaN
-        z = all(coords[:,3].==coords[1,3]) ? coords[1,3] : NaN
+        x = coords[:,1]
+        y = coords[:,2]
+        z = coords[:,3]
         if fun(x, y, z)
             push!(result, elem) 
         end
     end
     return result
 end
+
+getindex(elems::Array{Element,1}, cond::String) = getindex(elems, parse(cond))
 
 # Get the element coordinates matrix
 function getcoords(elem::Element)

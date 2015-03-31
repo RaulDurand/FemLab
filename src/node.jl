@@ -49,7 +49,7 @@ end
 
 # Show basic information of a dof using print
 function show(io::IO, dof::Dof)
-    @printf "Dof( eq_id=%s  %s=%-18.10e    %s=%-18.10e    bry_%s=%-18.10e   bry_%s=%-18.10e )" dof.eq_id   dof.sU dof.U dof.sF dof.F   dof.sU dof.bryU dof.sF dof.bryF
+    @printf "Dof( eq_id=%s  %s=%-18.10e    %s=%-18.10e    bry_%s=%-18.10e   bry_%s=%-18.10e  presc=%s)" dof.eq_id   dof.sU dof.U dof.sF dof.F   dof.sU dof.bryU dof.sF dof.bryF dof.prescU
 end
 
 
@@ -152,7 +152,7 @@ end
 
 # Index operator for an collection of nodes
 function getindex(nodes::Array{Node,1}, cond::Expr) 
-    condm = subs_equal_by_approx(cond)
+    condm = fix_comparison_scalar(cond)
     funex = :( (x,y,z) -> x*y*z )
     funex.args[2].args[2] = condm
     fun = nothing
