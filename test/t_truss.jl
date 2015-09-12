@@ -19,5 +19,5 @@ set_bc( dom.nodes[:(x==18&& y==0)] , fy=-450.)
 solve!(dom, verbose=false)
 
 facts("\nTest Truss 2D") do
-    @fact 1 => 1
+    @fact 1 --> 1
 end

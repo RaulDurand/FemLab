@@ -1,5 +1,6 @@
 # Constants
 using FemLab
+using FactCheck
 
 path  = dirname(@__FILE__)
 tests = readdir(path)
@@ -10,3 +11,5 @@ for t in tests
         include(t)
     end
 end
+
+FactCheck.exitstatus()

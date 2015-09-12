@@ -4,7 +4,7 @@ coord = [ 0 0; 9 0; 18 0; 0 9; 9 9; 18 9.]
 conn  = [ 1 2; 1 5; 2 3; 2 6; 2 5; 2 4; 3 6; 3 5; 4 5; 5 6]
 
 blt = BlockTruss(coord, conn)
-mesh = generate_mesh(blt, verbose=false)
+mesh = generate_mesh(blt, verbose=true)
 
 dom = Domain(mesh)
 
@@ -16,3 +16,4 @@ set_bc( dom.nodes[:(x==9 && y==0)] , fy=-450.)
 set_bc( dom.nodes[:(x==18&& y==0)] , fy=-450.)
 
 solve!(dom)
+save(dom, "truss.vtk")

@@ -1,4 +1,5 @@
 using FemLab
+using FactCheck
 
 bl  = Block3D( [0 0 0; 1.0 6.0 1.0], nx=1, ny=10, nz=1)
 bli = BlockInset( [0.5 2 0.5; 0.5 6.0 0.5], curvetype="polyline")
@@ -36,5 +37,5 @@ for i=1:nstages
 end
 
 facts("\nTest Pull-out") do
-    @fact 1 => 1
+    @fact 1 --> 1
 end

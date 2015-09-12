@@ -27,5 +27,5 @@ set_bc( dom.nodes[:(y==0 || y==1.0)], ux=0, uy=0)
 solve!(dom, nincs=10, verbose=false)
 
 facts("\nTest Drucker Prager:") do
-    @fact 1 => 1
+    @fact 1 --> 1
 end

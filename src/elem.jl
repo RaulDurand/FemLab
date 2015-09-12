@@ -19,8 +19,8 @@
 ##############################################################################
 
 import Base.reset
-export Element
-export set_mat, get_nodes, get_ips, set_state, reset
+export Element, Dof
+export set_mat, get_nodes, get_ips, set_state, reset, getcoords
 export getvals
 export read_prms
 

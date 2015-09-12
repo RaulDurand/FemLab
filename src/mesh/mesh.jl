@@ -20,7 +20,8 @@
 
 export Mesh
 export copy, move
-export generate_mesh, save, loadmesh
+export update!, generate_mesh, save, loadmesh
+export get_surface, get_neighbors
 
 include("entities.jl")
 include("delaunay.jl")
@@ -38,6 +39,8 @@ type Mesh
     bpoints::Dict{Uint64,Point}
     ndim   ::Int
     bins   ::Bins
+    quality::Float64
+    qmin   ::Float64 
 
     function Mesh()
         this = new()
@@ -48,6 +51,8 @@ type Mesh
         this.edges  = []
         this.ndim   = 0
         this.bins   = Bins()
+        this.quality = 0.0
+        this.qmin    = 0.0
         return this
     end
 end
@@ -90,6 +95,31 @@ function get_edges(surf_cells::Array{Cell,1})
     return [ edge for edge in values(edges_dict) ] 
 end
 
+# Return a list of neighbors for each cell
+function get_neighbors(cells::Array{Cell,1})
+    faces_dict = Dict{Uint64, Cell}()
+    neighbors = [ Cell[] for i=1:length(cells) ]
+
+    # Get cell faces. If dup, original and dup are deleted but neigh info saved
+    for cell in cells
+        for face in get_faces(cell)
+            hs = hash(face)
+            other = get(faces_dict, hs, nothing)
+            if other == nothing
+                faces_dict[hs] = face
+            else
+                push!(neighbors[face.ocell.id], other.ocell)
+                push!(neighbors[other.ocell.id], face.ocell)
+                delete!(faces_dict, hs)
+            end
+        end
+    end
+
+    return neighbors
+
+end
+
+# TESTING
 function get_surface_alt(cells::Array{Cell,1})
     # Actually slower....
     # Get all points
@@ -148,19 +178,58 @@ function get_surface_alt(cells::Array{Cell,1})
             end
         end
     end
-    @show 4
     return facets
 end
 
-function generate_mesh(blocks::Block...; verbose::Bool=true, genfacets=true, genedges=false, initial_mesh=nothing)
-    generate_mesh([blocks...], verbose, genfacets, genedges, initial_mesh)
+# Updates numbering, faces and edges in a Mesh object
+function update!(mesh::Mesh; verbose::Bool=false, genfacets::Bool=true, genedges::Bool=false)
+
+    # Get ndim
+    ndim = 2
+    for point in mesh.points
+        if point.z != 0.0; ndim = 3; break end
+    end
+    mesh.ndim = ndim
+    
+    # Numberig nodes
+    for (i,p) in enumerate(mesh.points) p.id = i end
+
+    # Numberig cells 
+    for (i,c) in enumerate(mesh.cells ) 
+        c.id = i; 
+        c.ndim=ndim; 
+    end
+
+    # Mesh quality
+    Q = [ cell_quality(c) for c in mesh.cells]
+    mesh.quality = sum(Q)/length(mesh.cells)
+    mesh.qmin    = minimum(Q)
+
+    # Facets
+    if genfacets
+        verbose && print("  finding faces...\r")
+        mesh.faces = get_surface(mesh.cells)
+    end
+
+    # Edges
+    if genedges && ndim==3
+        verbose && print("  finding edges...\r")
+        mesh.edges = get_edges(mesh.faces)
+    end
+
+
+    return nothing
 end
 
-function generate_mesh(initial_mesh::Mesh, blocks::Block...; verbose::Bool=true, genfacets=true, genedges=false)
-    generate_mesh([blocks...], verbose, genfacets, genedges, initial_mesh)
+function generate_mesh(blocks::Block...; verbose::Bool=true, genfacets::Bool=true, genedges::Bool=false, initial_mesh=nothing)
+    generate_mesh([blocks...], verbose=verbose, genfacets=genfacets, genedges=genedges, initial_mesh=initial_mesh)
 end
 
-function generate_mesh(blocks::Array, verbose::Bool=true, genfacets=true, genedges=false, initial_mesh=nothing)
+function generate_mesh(initial_mesh::Mesh, blocks::Block...; verbose::Bool=true, genfacets::Bool=true, genedges::Bool=false)
+    generate_mesh([blocks...], verbose=verbose, genfacets=genfacets, genedges=genedges, initial_mesh=initial_mesh)
+end
+
+function generate_mesh(blocks::Array; verbose::Bool=true, genfacets::Bool=true, genedges::Bool=false, initial_mesh=nothing)
     nblocks = length(blocks)
     if verbose
         println(BOLD, CYAN, "Mesh generation:", DEFAULT)
@@ -173,38 +242,18 @@ function generate_mesh(blocks::Array, verbose::Bool=true, genfacets=true, genedg
     for (i,b) in enumerate(blocks)
         b.id = i
         split_block(b, mesh)
-        if verbose; print("  spliting block ",i,"...\r") end
+        verbose && print("  spliting block ",i,"...\r")
     end
 
-    # Get ndim
-    ndim = 2
-    for point in mesh.points
-        if point.z != 0.0; ndim = 3; break end
-    end
-    mesh.ndim = ndim
-    
-    # Numberig
-    for (i,p) in enumerate(mesh.points) p.id = i end
-    for (i,c) in enumerate(mesh.cells ) c.id = i; c.ndim=ndim end
-
-    # Facets
-    if genfacets
-        if verbose; print("  finding faces...\r") end
-        mesh.faces = get_surface(mesh.cells)
-    end
-
-    # Edges
-    if genedges && ndim==3
-        if verbose; print("  finding edges...\r") end
-        mesh.edges = get_edges(mesh.faces)
-    end
+    # Updates numbering, qualitu, facets and edges
+    update!(mesh, verbose=verbose, genfacets=genfacets, genedges=genedges)
 
     if verbose
         npoints = length(mesh.points)
         ncells  = length(mesh.cells)
         nfaces  = length(mesh.faces)
         nedges  = length(mesh.edges)
-        println("  $ndim","d found             ")
+        println("  ", mesh.ndim, "d found             ")
         @printf "  %5d points obtained\n" npoints
         @printf "  %5d cells obtained\n" ncells
         if genfacets
@@ -222,12 +271,15 @@ function generate_mesh(blocks::Array, verbose::Bool=true, genfacets=true, genedg
         end
     end
 
+    verbose && println("  done.")
+
     return mesh
 end
 
+#precompile(generate_mesh, (Array,))
 
-#import .Definitions.save
-function save(mesh::Mesh, filename::String, verbose=true)
+
+function save(mesh::Mesh, filename::String; verbose::Bool=true)
     # Saves the mesh information in vtk format
 
     npoints = length(mesh.points)
@@ -275,6 +327,14 @@ function save(mesh::Mesh, filename::String, verbose=true)
 
     println(f, "CELL_DATA ", ncells)
 
+    # Write cells quality
+    println(f, "SCALARS quality float 1")
+    println(f, "LOOKUP_TABLE default")
+    for cell in mesh.cells
+        println(f, cell.quality)
+    end
+    println(f, )
+
     # Write cell type as cell data
     println(f, "SCALARS cell_type int 1")
     println(f, "LOOKUP_TABLE default")
@@ -288,7 +348,7 @@ function save(mesh::Mesh, filename::String, verbose=true)
         println(f, "SCALARS crossed int 1")
         println(f, "LOOKUP_TABLE default")
         for cell in mesh.cells
-            println(f, int(cell.crossed))
+            println(f, Int(cell.crossed))
         end
         println(f, )
     end
@@ -353,8 +413,18 @@ function loadmesh(filename; format="json")
         points    = [ mesh.points[i] for i in conn ]
         C = Cell(shapetype, points, string(cell["tag"]))
         C.id  = cell["id"]+1
+        c.ndim=ndim; 
         push!(mesh.cells, C)
     end
+
+    # Mesh quality
+    for c in mesh.cells
+        update!(c)
+    end
+
+    Q = [ c.quality for c in mesh.cells]
+    mesh.quality = sum(Q)/length(mesh.cells)
+    mesh.qmin    = minimum(Q)
 
     # Generating faces
     mesh.faces = get_surface(mesh.cells)
@@ -365,7 +435,6 @@ function loadmesh(filename; format="json")
         if is_solid(C.shape)
             faces = get_faces(C)
             ftags = get(cells[i],"ftags", [])
-            #@show ftags
             if length(ftags) > 0
                 for (j,F) in enumerate(faces)
                     tag = string(ftags[j])
@@ -378,7 +447,9 @@ function loadmesh(filename; format="json")
         end
     end
 
-    mesh.faces = [ face for face in values(surf_dict) ]
+    mesh.faces = Cell[ face for face in values(surf_dict) ]
 
     return mesh
 end
+
+include("smooth.jl") 

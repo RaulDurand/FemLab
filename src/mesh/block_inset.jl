@@ -210,7 +210,7 @@ function split_curve(coords::Array{Float64,2}, bl::BlockInset, closed::Bool, msh
     end_reached  = false
     s  = 0.0
     sp = 0.0
-    nits = int(1./λ)
+    nits = round(Int, 1./λ)
 
 
     # Splitting inset
@@ -236,7 +236,7 @@ function split_curve(coords::Array{Float64,2}, bl::BlockInset, closed::Bool, msh
 
         s += step
         X  = get_point(s, coords, curvetype)
-        n  = ifloor(log(2, step/ε)) + 1  # number of required iterations to find intersection
+        n  = floor(Int, log(2, step/ε)) + 1  # number of required iterations to find intersection
 
         itcount+=n ##
 
@@ -308,7 +308,8 @@ function split_curve(coords::Array{Float64,2}, bl::BlockInset, closed::Bool, msh
         push!(msh.cells, lcell)
 
         # Create a continuous joint element
-        lnkpts  = [ ccell.points, lcell.points ]
+        #lnkpts  = [ ccell.points, lcell.points ]
+        lnkpts  = vcat( ccell.points, lcell.points )
         lnkcell = Cell(lnkshape, lnkpts, bl.tag)
         push!(msh.cells, lnkcell)
 

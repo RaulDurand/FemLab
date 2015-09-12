@@ -1,6 +1,6 @@
 using FemLab
 
-bl  = Block3D( [0 0 0; 1 1 1], nx=100, ny=100, nz=100)
+bl  = Block3D( [0 0 0; 1 1 1], nx=10, ny=10, nz=10)
 bli = BlockInset( [0 0 0; 0.3 0.3 0.7; 0.7 0.7 0.3; 1 1 1], curvetype="Bezier")
 
 mesh = generate_mesh(bl, bli, genfacets=false)

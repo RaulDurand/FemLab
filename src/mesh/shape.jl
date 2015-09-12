@@ -21,7 +21,7 @@
 
 include("quadrature.jl")
 
-export get_shape_tag, get_vtk_type, get_shape_from_vtk
+export get_shape_tag, get_vtk_type, get_shape_from_vtk, get_ndim, get_name
 export LIN2, LIN3, TRI3, TRI6, QUAD4, QUAD8, TET4, TET10, HEX8, HEX20 
 export LINK1, LINK2, LINK3, LIN4, TRI9, TRI10, QUAD9, QUAD12, QUAD16
 export ShapeType
@@ -29,6 +29,7 @@ export shape_func, deriv_func, local_coords
 export get_ip_coords
 export is_solid, is_line, is_joint, is_inside
 export inverse_map, extrapolator
+export coords_tri6, coords_tri9, coords_tri10, coords_quad4, coords_quad8 #...
 
 # Shape types:
 const LIN2  = 3
@@ -53,6 +54,14 @@ const LINK1  = 51
 const LINK2  = 52
 const LINK3  = 53
 
+const JLIN2  = 100 + LIN2 
+const JLIN3  = 100 + LIN3 
+const JLIN4  = 100 + LIN4 
+const JTRI3  = 100 + TRI3 
+const JTRI6  = 100 + TRI6 
+const JQUAD4 = 100 + QUAD4
+const JQUAD8 = 100 + QUAD8
+
 typealias ShapeType Integer
 
 SHAPE_TAG = [ LIN2  => 102, LIN3   => 103, LIN4 => 104, 
@@ -62,30 +71,50 @@ SHAPE_TAG = [ LIN2  => 102, LIN3   => 103, LIN4 => 104,
               QUAD9 => 909, QUAD12 => 912, QUAD16 => 916, 
               LINK1 => 201, LINK2  => 202, LINK3  => 203 ]
 
+SHAPE_NAME = [ LIN2  => "LIN2" , LIN3   => "LIN3"  , LIN4   => "LIN4", 
+               TRI3  => "TRI3" , TRI6   => "TRI6"  , TRI9   => "TRI9", TRI10 => "TRI10", 
+               QUAD4 => "QUAD4", QUAD8  => "QUAD8" , 
+               TET4  => "TET4" , TET10  => "TET10" , HEX8   => "HEX8", HEX20 => "HEX20", 
+               QUAD9 => "QUAD9", QUAD12 => "QUAD12", QUAD16 => "QUAD16", 
+               LINK1 => "LINK1", LINK2  => "LINK2" , LINK3  => "LINK3" ]
+
 function get_shape_tag(shape::ShapeType)
     return SHAPE_TAG[shape]
 end
 
+function get_name(shape::ShapeType)
+    SHAPE_NAME[shape]
+end
+
 function get_vtk_type(shape::ShapeType)
-    if shape in [LINK1, LINK2, LINK3, LIN4, TRI9, TRI10, QUAD9, QUAD12, QUAD16]
+    if shape in [LINK1, LINK2, LINK3, LIN4, TRI9, TRI10, QUAD9, QUAD12, QUAD16] || shape>100
         return 2 # vtk_poly_vertex
     end
 
     return shape # Conventional:
 end
 
-
-function get_shape_from_vtk(vtk_type::Int64, npoints=None)
+function get_shape_from_vtk(vtk_type::Int64, npoints::Int64, ndim::Int64)
     if vtk_type!=2 return vtk_type end # poly_vertex
 
-    if     npoints==1   LINK1
-    elseif npoints==2   LINK2
-    elseif npoints==3   LINK3
-    elseif npoints==9   TRI9
-    elseif npoints==10  TRI10
-    elseif npoints==12  QUAD12
-    elseif npoints==16  QUAD16
+    if     npoints==1   return LINK1
+    elseif npoints==2   return LINK2
+    elseif npoints==3   return LINK3
+    elseif npoints==4   return JLIN2
+    elseif npoints==6   return JLIN3
+    elseif npoints==8   return JLIN4
+    elseif npoints==9   return TRI9
+    elseif npoints==10  return TRI10
+    elseif npoints==12  
+        if ndim==2 return QUAD12 end
+        if ndim==3 return JTRI6  end
+    elseif npoints==16
+        if ndim==2 return QUAD16 end
+        if ndim==3 return JQUAD8 end
+    elseif npoints==18  return JTRI9
+    elseif npoints==20  return JTRI10
     end
+
 end
 
 
@@ -144,6 +173,32 @@ coords_quad4 =
    1.0  1.0  1.0
   -1.0  1.0  1.0 ]
 
+coords_quad8 = 
+[ -1.0 -1.0  1.0
+   1.0 -1.0  1.0
+   1.0  1.0  1.0
+  -1.0  1.0  1.0
+   0.0 -1.0  1.0
+   1.0  0.0  1.0
+   0.0  1.0  1.0
+  -1.0  0.0  1.0 ]
+
+coords_hex8 = 
+[ -1.0 -1.0  0.0  1.0
+   1.0 -1.0  0.0  1.0
+   1.0  1.0  0.0  1.0
+  -1.0  1.0  0.0  1.0
+  -1.0 -1.0  1.0  1.0
+   1.0 -1.0  1.0  1.0
+   1.0  1.0  1.0  1.0
+  -1.0  1.0  1.0  1.0 ]
+
+coords_tet4 = 
+[  0.0  0.0  0.0  1.0 
+   1.0  0.0  0.0  1.0 
+   0.0  1.0  0.0  1.0 
+   0.0  0.0  1.0  1.0 ]
+
 coords_tet10 = 
 [  0.0  0.0  0.0  1.0 
    1.0  0.0  0.0  1.0 
@@ -168,7 +223,8 @@ function get_local_coords(st::ShapeType)
 end
 
 
-immutable type Typed{N} end
+#immutable type Typed{N} end
+immutable Typed{N} end
 
 shape_func(shape::ShapeType, R::Array{Float64,1}) = shape_func(Typed{shape}(), R)
 deriv_func(shape::ShapeType, R::Array{Float64,1}) = deriv_func(Typed{shape}(), R)
@@ -762,8 +818,6 @@ function deriv_func(::Typed{TET10}, R::Array{Float64,1})
 end
 
 
-
-
 IP_FEM = [
     LIN2    => [0 => LIN_IP2,  2 => LIN_IP2,  3 => LIN_IP3,   4 => LIN_IP4                   ],
     LIN3    => [0 => LIN_IP2,  2 => LIN_IP2,  3 => LIN_IP3,   4 => LIN_IP4                   ],
@@ -795,7 +849,7 @@ function get_ip_coords(shape::ShapeType, nips=0)
     all_shape_coord[nips]
 end
 
-function bdistance(shape, R)
+function bdistance(shape::ShapeType, R::Array{Float64,1})
     # Returns a real value which is a pseudo distance from a point to the border of an element
     # Arguments:
     #     R - a vector containing the point coordinates
@@ -812,7 +866,7 @@ function bdistance(shape, R)
     error("No boundary distance for shape ($shape)")
 end
 
-function get_ndim(shape)
+function get_ndim(shape::ShapeType)
     # Returns the local dimension based on the shape geometry.
     # It does not match necessarily the space where the shape is used.
     
@@ -836,7 +890,7 @@ function get_ndim(shape)
     error("Unknown shape ($shape)")
 end
 
-function get_nnodes(shape)
+function get_nnodes(shape::ShapeType)
     # Returns the local dimension based on the shape geometry.
     # It does not match necessarily the space where the shape is used.
     
@@ -857,6 +911,7 @@ function get_nnodes(shape)
     if shape == TET10 ; return 10 end
     if shape == HEX8  ; return  8 end
     if shape == HEX20 ; return 20 end
+    if shape>100;       return get_nnodes(shape-100)*2 end
     error("Unknown shape ($shape)")
 end
 
@@ -874,8 +929,7 @@ function is_solid(shape::ShapeType)
     !is_line(shape) && !is_joint(shape) ? true : false
 end
 
-
-function inverse_map(shape, coords, X0, Tol=1.0e-7)
+function inverse_map(shape::ShapeType, coords::Array{Float64,2}, X0::Array{Float64,1}, Tol=1.0e-7)
     MAXIT = 25
     ndim  = get_ndim(shape)
     R = zeros(ndim)

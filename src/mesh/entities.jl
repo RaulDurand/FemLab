@@ -22,7 +22,7 @@
 include("shape.jl")
 
 #using Shape
-export Point, Cell, hash, get_coords, get_point, get_faces
+export Point, Cell, hash, get_coords, get_point, get_faces, cell_metric, cell_quality
 
 ### Type Point definition
 
@@ -32,15 +32,20 @@ type Point
     z::Float64
     tag::String
     id::Int64
+    extra::Int64
     function Point(x,y,z; tag="")
         const NDIG = 14
         x = round(x, NDIG)
         y = round(y, NDIG)
         z = round(z, NDIG)
-        return new(x,y,z,tag,-1)
+        return new(x,y,z,tag,-1,-1)
     end
     function Point(C::Array{Float64,1})
-        return Point(C[1], C[2], C[3])
+        if length(C)==2
+            return Point(C[1], C[2], 0.0)
+        else
+            return Point(C[1], C[2], C[3])
+        end
     end
 end
 
@@ -66,14 +71,17 @@ end
 type Cell
     shape ::ShapeType
     points::Array{Point,1}
-    tag ::String
-    id  ::Integer
-    ndim::Integer
-    crossed::Bool
-    ocell::Union(Cell,Nothing)
+    tag   ::String
+    id    ::Integer
+    ndim  ::Integer
+    quality::Float64              # quality index: surf/(reg_surf) 
+    crossed::Bool                 # flag if cell crossed by linear inclusion
+    ocell  ::Union(Cell,Nothing)  # owner cell in the case of a face
+    extra  ::Integer
     function Cell(shape::ShapeType, points, tag="", ocell=nothing)
         this = new(shape, points, tag, -1)
         this.ndim = 0
+        this.quality = 0.0
         this.crossed = false
         this.ocell   = ocell
         return this
@@ -86,15 +94,21 @@ end
 
 hash(c::Cell) = sum([ hash(p) for p in c.points])
 
-function get_coords(c::Cell)
+function get_coords(c::Cell, ndim=3)
     n = length(c.points)
-    C = Array(Float64, n, 3)
+    C = Array(Float64, n, ndim)
     for (i,p) in enumerate(c.points)
         C[i,1] = p.x
-        C[i,2] = p.y
-        C[i,3] = p.z
+        if ndim>1 C[i,2] = p.y end
+        if ndim>2 C[i,3] = p.z end
     end
     return C
+end
+
+
+function update!(c::Cell)
+    c.quality = cell_quality(c)
+    return nothing
 end
 
 type Bins
@@ -166,14 +180,14 @@ function build_bins(cells::Array{Cell,1}, bins::Bins)
     end
 
     # Get number of divisions
-    ndiv = min(50, 1*ifloor(max_L/max_l)) # calibrate for bins efficiency
+    ndiv = min(50, 1*floor(Int, max_L/max_l)) # calibrate for bins efficiency
 
     lbin = max_L/ndiv     # Get bin length
     bins.lbin = lbin
 
-    nx = ifloor(Lx/lbin) + 1
-    ny = ifloor(Ly/lbin) + 1
-    nz = ifloor(Lz/lbin) + 1
+    nx = floor(Int, Lx/lbin) + 1
+    ny = floor(Int, Ly/lbin) + 1
+    nz = floor(Int, Lz/lbin) + 1
 
     # Allocate bins
     bins.bins = Array(Array{Cell,1}, nx, ny, nz)
@@ -189,9 +203,9 @@ function build_bins(cells::Array{Cell,1}, bins::Bins)
         cell_pos = Set()
         for V in verts
             x, y, z = V
-            ix = ifloor((x - minx)/lbin) + 1
-            iy = ifloor((y - miny)/lbin) + 1
-            iz = ifloor((z - minz)/lbin) + 1
+            ix = floor(Int, (x - minx)/lbin) + 1
+            iy = floor(Int, (y - miny)/lbin) + 1
+            iz = floor(Int, (z - minz)/lbin) + 1
             push!(cell_pos, (ix, iy, iz))
         end
 
@@ -203,7 +217,8 @@ end
 
 function find_cell(X::Array{Float64,1}, cells::Array{Cell,1}, bins::Bins, Tol::Float64, exc_cells::Array{Cell,1})
     # Point coordinates
-    x, y, z = [X, 0][1:3]
+    #x, y, z = [X, 0][1:3]
+    x, y, z = vcat(X, 0)[1:3]
     lbin = bins.lbin
 
     # Build bins if empty
@@ -221,9 +236,9 @@ function find_cell(X::Array{Float64,1}, cells::Array{Cell,1}, bins::Bins, Tol::F
         end
 
         # Find bin index
-        ix = ifloor((x - Cmin[1])/lbin) + 1
-        iy = ifloor((y - Cmin[2])/lbin) + 1
-        iz = ifloor((z - Cmin[3])/lbin) + 1
+        ix = floor(Int, (x - Cmin[1])/lbin) + 1
+        iy = floor(Int, (y - Cmin[2])/lbin) + 1
+        iz = floor(Int, (z - Cmin[3])/lbin) + 1
 
         # Search cell in bin
         bin = bins.bins[ix, iy, iz]
@@ -287,6 +302,128 @@ function get_faces(cell::Cell)
     end
 
     return faces
+end
+
+# Pseudo determinant of non-square matrices
+function norm2(J::Array{Float64,2})
+
+    if ndims(J)==1; return norm(J) end
+
+    r, c = size(J)
+    if r==1; return norm(J) end
+    if r==2 && c==3
+        j1 = J[1,1]*J[2,2] - J[1,2]*J[2,1]
+        j2 = J[1,2]*J[2,3] - J[1,3]*J[2,2]
+        j3 = J[1,3]*J[2,1] - J[1,1]*J[2,3]
+        return (j1*j1 + j2*j2 + j3*j3)^0.5  # jacobian determinant
+    end
+    if r==c; return det(J) end
+    error("No rule to calculate norm2 of a $r x $c matrix")
+end
+
+# Returns the volume/area/length of a cell, returns zero if jacobian<=0 at any ip
+function cell_metric(c::Cell)
+    IP = get_ip_coords(c.shape)
+    nip = size(IP,1)
+    nldim = get_ndim(c.shape) # cell basic dimension 
+
+    # get coordinates matrix
+    C = get_coords(c)
+    J = Array(Float64, nldim, size(C,2))
+
+    # calc metric
+    vol = 0.0
+    for i=1:nip
+        R    = vec(IP[i,1:3])
+        dNdR = deriv_func(c.shape, R)
+        @gemm J = dNdR*C
+        w    = IP[i,4]
+        normJ = norm2(J)
+        normJ <= 0.0 && return 0.0
+        vol += normJ*w
+    end
+    return vol
+end
+
+# Returns the surface given the volume/area of a cell
+function regular_surface(metric::Float64, shape::ShapeType)
+    if shape in [ TRI3, TRI6, TRI9, TRI10 ] 
+        A = metric
+        a = 2.*√( A/√3.)
+        return 3*a
+    end
+    if shape in [ QUAD4, QUAD8, QUAD12, QUAD16 ] 
+        A = metric
+        a = √A
+        return 4*a
+    end
+    if shape in [ TET4, TET10 ] 
+        V = metric
+        a = ( 6.*√2.*V )^(1./3.)
+        return √3.*a^2
+    end
+    if shape in [ HEX8, HEX20 ] 
+        V = metric
+        a = V^(1./3.)
+        return 6*a^2.
+    end
+    error("No regular surface value for shape $(get_name(shape))")
+end
+
+
+# Returns the cell quality ratio as reg_surf/surf
+function cell_quality2(c::Cell)
+    # get faces
+    faces = get_faces(c)
+    if length(faces)==0 
+        return 1.0
+    end
+
+    # cell surface
+    fmetrics = [ cell_metric(f) for f in faces ]
+    surf = sum(fmetrics)
+    ar = minimum(fmetrics)/maximum(fmetrics)
+    #@show ar
+
+    # quality calculation
+    metric = cell_metric(c) # volume or area
+    rsurf  = regular_surface(metric, c.shape)
+    return rsurf/surf
+
+    #c.quality = rsurf/surf
+    #c.quality =rsurf/surf*ar^0.1
+
+    #return √(c.quality*ar)
+    #return c.quality
+end
+
+# Returns the cell quality ratio as reg_surf/surf
+function cell_quality(c::Cell)
+    # get faces
+    faces = get_faces(c)
+    if length(faces)==0 
+        return 1.0
+    end
+
+    # cell surface
+    surf = 0.0
+    for f in faces
+        surf += cell_metric(f)
+    end
+
+    # quality calculation
+    metric = cell_metric(c) # volume or area
+    rsurf  = regular_surface(metric, c.shape)
+
+    c.quality = rsurf/surf # << updates cell property!!!
+    return c.quality
+end
+
+function cell_aspect_ratio(c::Cell)
+    faces = get_faces(c)
+    len = [ cell_metric(f) for f in faces ]
+    c.quality = minimum(len)/maximum(len)
+    return c.quality
 end
 
 #end #module

@@ -19,7 +19,7 @@
 #    along with FemLab.  If not, see <http://www.gnu.org/licenses/>.         #
 ##############################################################################
 
-import Base.getindex!
+import Base.getindex
 export DTable, DBook, push!, getindex, save, loadtable
 
 

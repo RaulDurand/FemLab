@@ -66,7 +66,8 @@ function solve!(dom::Domain; nincs::Int=1, scheme::String="FE", precision::Float
         end
     end
 
-    dofs  = [udofs, pdofs]
+    #dofs  = [udofs, pdofs]
+    dofs  = vcat(udofs, pdofs)
     ndofs = length(dofs)
 
     # Set equation id

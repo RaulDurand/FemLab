@@ -82,29 +82,57 @@ function set_bc(faces::Array{Face,1}; args...)
     end
 end
 
+if VERSION.minor<4
+    type Domain
+        ndim ::Int
+        nodes::Array{Node,1}
+        elems::Array{Element,1}
+        faces::Array{Face,1}
+        edges::Array{Edge,1}
+        filekey::String
 
-type Domain
-    ndim ::Int
-    nodes::Array{Node,1}
-    elems::Array{Element,1}
-    faces::Array{Face,1}
-    edges::Array{Edge,1}
-    filekey::String
+        trk_nodes     ::Array{(Node, DTable), 1}
+        trk_ips       ::Array{(Ip  , DTable), 1}
+        trk_list_nodes::Array{(Array{Node,1}, DBook), 1}
+        trk_list_ips  ::Array{(Array{Ip  ,1}, DBook), 1}
 
-    trk_nodes     ::Array{(Node, DTable), 1}
-    trk_ips       ::Array{(Ip  , DTable), 1}
-    trk_list_nodes::Array{(Array{Node,1}, DBook), 1}
-    trk_list_ips  ::Array{(Array{Ip  ,1}, DBook), 1}
-    function Domain(mesh::Mesh; filekey="out")
-        this = new()
-        this.filekey = filekey
+        function Domain(mesh::Mesh; filekey="out")
+            this = new()
+            this.filekey = filekey
 
-        load_mesh(this, mesh)
-        this.trk_nodes = []
-        this.trk_ips   = []
-        this.trk_list_nodes = []
-        this.trk_list_ips   = []
-        return this
+            load_mesh(this, mesh)
+            this.trk_nodes = []
+            this.trk_ips   = []
+            this.trk_list_nodes = []
+            this.trk_list_ips   = []
+            return this
+        end
+    end
+else
+    type Domain
+        ndim ::Int
+        nodes::Array{Node,1}
+        elems::Array{Element,1}
+        faces::Array{Face,1}
+        edges::Array{Edge,1}
+        filekey::String
+
+        trk_nodes     ::Array{Tuple{Node, DTable}, 1}
+        trk_ips       ::Array{Tuple{Ip  , DTable}, 1}
+        trk_list_nodes::Array{Tuple{Array{Node,1}, DBook}, 1}
+        trk_list_ips  ::Array{Tuple{Array{Ip  ,1}, DBook}, 1}
+
+        function Domain(mesh::Mesh; filekey="out")
+            this = new()
+            this.filekey = filekey
+
+            load_mesh(this, mesh)
+            this.trk_nodes = []
+            this.trk_ips   = []
+            this.trk_list_nodes = []
+            this.trk_list_ips   = []
+            return this
+        end
     end
 end
 

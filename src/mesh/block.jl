@@ -18,7 +18,7 @@
 #    along with FemLab.  If not, see <http://www.gnu.org/licenses/>.         #
 ##############################################################################
 
-export Block2D, Block3D, BlockTruss
+export Block2D, Block3D, BlockTruss, BlockCoords
 import Base.copy
 
 ### Type Block
@@ -51,6 +51,26 @@ end
 
 copy(bl::BlockTruss) = BlockTruss(copy(bl.coords), bl.conns, shape=bl.shape, tag=bl.tag)
 
+type BlockCoords <: Block
+    coords::Array{Float64,2}
+    conns ::Array{Int64,2}
+    tag::String
+    id::Int64
+
+    function BlockCoords(coords::Array{Float64,2}, conns::Array{Int64,2}; tag="", id=-1)
+        ncols = size(coords,2)
+        if !(ncols in (2,3)); error("Invalid coordinates matrix for BlockCoords") end
+        if ncols==2
+            C = [coords  zeros(size(coords,1)) ]
+        else
+            C = coords
+        end
+        this = new(C, conns, tag, id)
+        return this
+    end
+end
+
+copy(bl::BlockTruss) = BlockTruss(copy(bl.coords), bl.conns, shape=bl.shape, tag=bl.tag)
 
 
 type Block2D <: Block
@@ -107,6 +127,20 @@ function move(bl::Block;x=0.0, y=0.0, z=0.0)
 end
 
 
+function array(bl::Block; n=1, x=0.0, y=0.0, z=0.0)
+    blocks = [ bl ]
+    for i=1:n-1
+        dx = i*x
+        dy = i*y
+        dz = i*z
+        cp = copy(bl)
+        move(cp, x=dx, y=dy, z=dz)
+        push!(blocks, cp)
+    end
+    return blocks
+end
+
+
 function box_coords{T1<:Number, T2<:Number}(C1::Array{T1,1}, C2::Array{T2,1})
     C = Array(Float64, 8, 3)
     x1 = C1[1]
@@ -135,10 +169,13 @@ function box_coords{T1<:Number, T2<:Number}(C1::Array{T1,1}, C2::Array{T2,1})
     end
 end
 
-
+# Splits a 2D block
+# TODO: replace msh::Mesh by points, bpoints and cells
+# TODO: optimize matrix products
 function split_block(bl::Block2D, msh::Mesh)
     nx, ny = bl.nx, bl.ny
-    shape = bl.shape
+    shape  = bl.shape # cell shape
+    bshape = size(bl.coords,1)==4? QUAD4:QUAD8 # block shape
 
     if shape==QUAD4
         p_arr = Array(Point, nx+1, ny+1)
@@ -146,7 +183,7 @@ function split_block(bl::Block2D, msh::Mesh)
             for i = 1:nx+1
                 r = (2.0/nx)*(i-1) - 1.0
                 s = (2.0/ny)*(j-1) - 1.0
-                N = shape_func(shape, [r, s])
+                N = shape_func(bshape, [r, s])
                 C = round(N'*bl.coords, 8)
                 C = reshape(C, 3)
                 p::Any = nothing
@@ -174,7 +211,10 @@ function split_block(bl::Block2D, msh::Mesh)
                 push!(msh.cells, cell)
             end
         end
-    elseif shape == QUAD8 || shape == QUAD9
+        return
+    end
+
+    if shape == QUAD8 || shape == QUAD9
         p_arr = Array(Point, 2*nx+1, 2*ny+1)
         for j = 1:2*ny+1
             for i = 1:2*nx+1
@@ -182,7 +222,7 @@ function split_block(bl::Block2D, msh::Mesh)
 
                 r = (1.0/nx)*(i-1) - 1.0
                 s = (1.0/ny)*(j-1) - 1.0
-                N = shape_func(shape, [r, s])
+                N = shape_func(bshape, [r, s])
                 C = round(N'*bl.coords, 8)
                 C = reshape(C, 3)
                 p::Any = nothing
@@ -220,7 +260,10 @@ function split_block(bl::Block2D, msh::Mesh)
                 push!(msh.cells, cell)
             end
         end
-    elseif shape == QUAD12
+        return
+    end
+
+    if shape == QUAD12
         p_arr = Array(Point, 3*nx+1, 3*ny+1)
         for j = 1:3*ny+1
             for i = 1:3*nx+1
@@ -228,7 +271,7 @@ function split_block(bl::Block2D, msh::Mesh)
 
                 r = ((2/3)/nx)*(i-1) - 1.0
                 s = ((2/3)/ny)*(j-1) - 1.0
-                N = shape_func(shape, [r, s])
+                N = shape_func(bshape, [r, s])
                 C = round(N'*bl.coords, 8)
                 C = reshape(C, 3)
                 p::Any = nothing
@@ -266,13 +309,113 @@ function split_block(bl::Block2D, msh::Mesh)
                 push!(msh.cells, cell)
             end
         end
-
+        return
     end
+
+    if shape == TRI3
+        p_arr = Array(Point, nx+1, ny+1)
+        for j = 1:ny+1
+            for i = 1:nx+1
+                r = (2.0/nx)*(i-1) - 1.0
+                s = (2.0/ny)*(j-1) - 1.0
+                N = shape_func(bshape, [r, s])
+                C = round(N'*bl.coords, 8)
+                C = reshape(C, 3)
+                p::Any = nothing
+                if i in (1, nx+1) || j in (1, ny+1)
+                    p = get_point(msh.bpoints, C)
+                    if p==nothing
+                        p = Point(C); push!(msh.points, p)
+                        msh.bpoints[hash(p)] = p
+                    end
+                else
+                    p = Point(C); push!(msh.points, p)
+                end
+                p_arr[i,j] = p
+            end
+        end
+
+        for j = 1:ny
+            for i = 1:nx
+                p1 = p_arr[i  , j  ]
+                p2 = p_arr[i+1, j  ]
+                p3 = p_arr[i+1, j+1]
+                p4 = p_arr[i  , j+1]
+
+                cell1 = Cell(shape, [p1, p2, p3], bl.tag)
+                cell2 = Cell(shape, [p4, p1, p3], bl.tag)
+                push!(msh.cells, cell1)
+                push!(msh.cells, cell2)
+            end
+        end
+        return
+    end
+
+    if shape == TRI6
+
+        #=   4       7       3
+               @-----@-----@
+               |         / |
+               |       /   |
+             8 @     @     @ 6
+               |   /  9    |
+               | /         |
+               @-----@-----@
+             1       5       2     =#
+
+        p_arr = Array(Point, 2*nx+1, 2*ny+1)
+        for j = 1:2*ny+1
+            for i = 1:2*nx+1
+                r = (1.0/nx)*(i-1) - 1.0
+                s = (1.0/ny)*(j-1) - 1.0
+                N = shape_func(bshape, [r, s])
+                C = round(N'*bl.coords, 8)
+                C = reshape(C, 3)
+                p::Any = nothing
+                if i in (1, 2*nx+1) || j in (1, 2*ny+1)
+                    p = get_point(msh.bpoints, C)
+                    if p==nothing
+                        p = Point(C); push!(msh.points, p)
+                        msh.bpoints[hash(p)] = p
+                    end
+                else
+                    p = Point(C); push!(msh.points, p)
+                end
+                p_arr[i,j] = p
+            end
+        end
+
+        for j = 1:2:2*ny
+            for i = 1:2:2*nx
+                p1 = p_arr[i  , j  ]
+                p2 = p_arr[i+2, j  ]
+                p3 = p_arr[i+2, j+2]
+                p4 = p_arr[i  , j+2]
+
+                p5 = p_arr[i+1, j  ]
+                p6 = p_arr[i+2, j+1]
+                p7 = p_arr[i+1, j+2]
+                p8 = p_arr[i  , j+1]
+
+                p9   = p_arr[i+1, j+1]
+
+                cell1 = Cell(shape, [p1, p2, p3, p5, p6, p9], bl.tag)
+                cell2 = Cell(shape, [p4, p1, p3, p8, p9, p7], bl.tag)
+                push!(msh.cells, cell1)
+                push!(msh.cells, cell2)
+            end
+        end
+        return
+    end
+
+    error("block: Can not discretize using shape $shape")
 end
+
 
 function split_block(bl::Block3D, msh::Mesh)
     nx, ny, nz = bl.nx, bl.ny, bl.nz
-    shape = bl.shape
+    shape  = bl.shape
+    bshape = size(bl.coords,1)==8? HEX8:HEX20 # block shape
 
     if shape==HEX8
         p_arr = Array(Point, nx+1, ny+1, nz+1)
@@ -282,11 +425,12 @@ function split_block(bl::Block3D, msh::Mesh)
                     r = (2.0/nx)*(i-1) - 1.0
                     s = (2.0/ny)*(j-1) - 1.0
                     t = (2.0/nz)*(k-1) - 1.0
-                    if size(bl.coords,1)==8
-                        N = shape_func(HEX8, [r, s, t])
-                    else
-                        N = shape_func(HEX20, [r, s, t])
-                    end
+                    N = shape_func(bshape, [r, s, t])
+                    #if size(bl.coords,1)==8
+                        #N = shape_func(HEX8, [r, s, t])
+                    #else
+                        #N = shape_func(HEX20, [r, s, t])
+                    #end
                     C = round(N'*bl.coords, 8)
                     C = reshape(C, 3)
                     p::Any = nothing
@@ -334,11 +478,7 @@ function split_block(bl::Block3D, msh::Mesh)
                     r = (1.0/nx)*(i-1) - 1.0
                     s = (1.0/ny)*(j-1) - 1.0
                     t = (1.0/nz)*(k-1) - 1.0
-                    if size(bl.coords,1)==8
-                        N = shape_func(HEX8, [r, s, t])
-                    else
-                        N = shape_func(HEX20, [r, s, t])
-                    end
+                    N = shape_func(bshape, [r, s, t])
                     C = round(N'*bl.coords, 8)
                     C = reshape(C, 3)
                     p::Any = nothing
@@ -415,3 +555,26 @@ function split_block(bl::BlockTruss, msh::Mesh)
     end
 end
 
+function split_block(bl::BlockCoords, msh::Mesh)
+    n = size(bl.coords, 1) # number of points
+    m = size(bl.conns , 1) # number of cells
+    p_arr = Array(Point, n)
+    for i=1:n
+        C = vec(bl.coords[i,:])
+        p = get_point(msh.bpoints, C)
+        if p==nothing; 
+            p = Point(C) 
+            msh.bpoints[hash(p)] = p
+            push!(msh.points, p)
+        end
+        p_arr[i] = p
+    end
+    
+    for i=1:m
+        points = [ p_arr[j] for j in bl.conns[i,:] ] 
+        #TODO: update shape calculation
+        shape = [nothing, LIN2, TRI3, QUAD4, nothing, nothing, nothing ][length(points)]
+        cell = Cell(shape, points, bl.tag)
+        push!(msh.cells, cell)
+    end
+end

@@ -46,3 +46,144 @@ function norm2(J)
     if r==c; return det(J) end
     error("No rule to calculate norm2 of a $r x $c matrix")
 end
+
+
+macro gemm(expr)
+    β = 0.0
+    s = 1.0
+    if expr.head == :(=)
+    elseif expr.head == :(+=)
+        β = 1.0
+    elseif expr.head == :(-=)
+        s = -1.0
+        β =  1.0
+    else
+        error("@gemm: =, +=, -= operator expected, found $(expr.head)")
+    end
+
+    C = expr.args[1]
+    rhs = expr.args[2]
+
+    if rhs.args[1] !=  :(*)
+        error("@inplace: * operator expected, found $(rhs.args[1])")
+    end
+
+    if length(rhs.args) == 4
+        α = rhs.args[2]
+        A = rhs.args[3]
+        B = rhs.args[4]
+    else
+        α = 1.0
+        A = rhs.args[2]
+        B = rhs.args[3]
+    end
+    
+    tA = 'N'
+    if typeof(A) == Expr 
+        if A.head == symbol("'"); 
+            tA = 'T' 
+            A  = A.args[1]
+        end
+    end
+
+    tB = 'N'
+    if typeof(B) == Expr
+        if B.head == symbol("'"); 
+            tB = 'T' 
+            B  = B.args[1]
+        end
+    end
+
+    return :( BLAS.gemm!($tA, $tB, $(esc(α))*$s, $(esc(A)), $(esc(B)), $β, $(esc(C)) ) )
+end
+
+
+macro gemv(expr)
+    β = 0.0
+    s = 1.0
+    if expr.head == :(=)
+    elseif expr.head == :(+=)
+        β = 1.0
+    elseif expr.head == :(-=)
+        s = -1.0
+        β =  1.0
+    else
+        error("@inplace: =, +=, -= operator expected, found $(expr.head)")
+    end
+
+    C = expr.args[1]
+    rhs = expr.args[2]
+
+    if rhs.args[1] !=  :(*)
+        error("@inplace: * operator expected, found $(rhs.args[1])")
+    end
+
+    if length(rhs.args) == 4
+        α = rhs.args[2]
+        A = rhs.args[3]
+        B = rhs.args[4]
+    else
+        α = 1.0
+        A = rhs.args[2]
+        B = rhs.args[3]
+    end
+    
+    tA = 'N'
+    if typeof(A) == Expr 
+        if A.head == symbol("'"); 
+            tA = 'T' 
+            A  = A.args[1]
+        end
+    end
+
+    return :( BLAS.gemv!($tA, $(esc(α))*$s, $(esc(A)), $(esc(B)), $(β), $(esc(C)) ) )
+end
+
+# Y += α*X   
+# Y  = α*X
+macro scale(expr)
+    α = 1.0
+    β = 0.0
+    s = 1.0
+    if expr.head == :(=)
+    elseif expr.head == :(+=)
+        β = 1.0
+    elseif expr.head == :(-=)
+        s = -1.0
+        β =  1.0
+    else
+        error("@scale: =, +=, -= operator expected, found $(expr.head)")
+    end
+
+    Y = expr.args[1]
+    rhs = expr.args[2]
+
+    if typeof(rhs)==Expr
+        if rhs.args[1] !=  :(*)
+            error("@scale: * operator expected, found $(rhs.args[1])")
+        end
+
+        if length(rhs.args) == 3
+            α = rhs.args[2]
+            X = rhs.args[3]
+        else
+            X = rhs.args[2]
+        end
+    else
+        X = rhs
+    end
+
+    if β == 0.0
+        return quote
+            n = length($(esc(X)))
+            @assert n==length($(esc(Y)))
+            @inbounds for i=1:n
+                $(esc(Y))[i] = $(esc(α))*$(esc(X))[i]
+            end
+        end
+    else
+        return :( BLAS.axpy!( $(esc(α))*$s, $(esc(X)), $(esc(Y)) ) )
+    end
+end
+
+

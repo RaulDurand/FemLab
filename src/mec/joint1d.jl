@@ -322,7 +322,8 @@ function node_and_elem_vals(mat::AbsJoint1D, elem::Element)
     N = E*IP # (nnodes x nvals)
 
     nhnodes = length(elem.extra[:hook].nodes)
-    N = [ zeros(nhnodes, length(labels)), N ]
+    #N = [ zeros(nhnodes, length(labels)), N ]
+    N = vcat( zeros(nhnodes, length(labels)), N )
 
     # Filling nodal and elem vals
     for (i,key) in enumerate(labels)
