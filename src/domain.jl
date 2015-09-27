@@ -22,66 +22,6 @@ export Domain
 export track
 export get_node
 
-type Face
-    shape::ShapeType
-    nodes::Array{Node,1}
-    ndim ::Integer
-    oelem::Union(Element,Nothing)
-    isedge::Bool
-    function Face(shape, nodes, ndim)
-        this = new(shape, nodes, ndim)
-        this.oelem  = nothing
-        this.isedge = false
-        return this
-    end
-end
-
-typealias Edge Face
-
-function getindex(faces::Array{Face,1}, cond::Expr)
-    #condm = subs_equal_by_approx(cond)
-    condm = fix_comparison_arrays(cond)
-    #@show condm
-    funex = :( (x,y,z) -> x*y*z )
-    funex.args[2].args[2] = condm
-    fun = nothing
-    try
-        fun   = eval(funex)
-    catch
-        error("Faces getindex: Invalid condition ", cond)
-    end
-
-    result = Array(Face,0)
-    for face in faces
-        coords = getcoords(face.nodes)
-        x = coords[:,1]
-        y = coords[:,2]
-        z = coords[:,3]
-        if fun(x, y, z)
-            push!(result, face) 
-        end
-    end
-    return result
-end
-
-getindex(faces::Array{Face,1}, cond::String) = getindex(faces, parse(cond))
-
-function set_bc(face::Face; args...)
-    oelem = face.oelem # owner element
-    if oelem==nothing; error("Face with no owner element") end
-
-    for (key,val) in args
-        set_facet_bc(oelem.mat, oelem, face, key, float(val))
-    end
-end
-
-function set_bc(faces::Array{Face,1}; args...)
-    if length(faces)==0; println(RED, "Warning, applying boundary conditions to empty array of faces", DEFAULT) end
-    for face in faces
-        set_bc(face; args...)
-    end
-end
-
 if VERSION.minor<4
     type Domain
         ndim ::Int
@@ -533,7 +473,7 @@ function save(dom::Domain, filename::String; verbose=true, save_ips=false)
     close(f)
 
     if verbose
-        println(GREEN, "  file $filename written (Domain)", DEFAULT)
+        pcolor(:green, "  file $filename written (Domain)\n")
     end
 
     # save ip information as vtk
@@ -619,7 +559,7 @@ function save_dom_ips(dom::Domain, filename::String, verbose=true)
     close(f)
 
     if verbose
-        println(GREEN, "  file $filename written (Domain)", DEFAULT)
+        pcolor(:green, "  file $filename written (Domain)\n")
     end
 end
 
@@ -793,7 +733,7 @@ function save2(dom::Domain, filename::String; verbose=true)
     close(f)
 
     if verbose
-        println(GREEN, "  file $filename written (Domain)", DEFAULT)
+        pcolor(:green, "  file $filename written (Domain)\n")
     end
 
 end

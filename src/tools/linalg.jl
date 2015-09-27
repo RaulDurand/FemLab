@@ -19,6 +19,10 @@
 #    along with FemLab.  If not, see <http://www.gnu.org/licenses/>.         #
 ##############################################################################
 
+# Types
+typealias Vect Array{Float64, 1}
+typealias Matx Array{Float64, 2}
+
 # Fancy matrix printing
 function print_matrix(M::Array{Float64,2})
     n, m = size(M)

@@ -27,6 +27,7 @@ import Base.show
 
 export Node
 export set_bc, max, min, sort, reset
+export @get_nodes
 
 
 # Dof
@@ -184,7 +185,7 @@ end
 # Define boundary conditions for a collection of nodes
 function set_bc(nodes::Array{Node,1}; args...) 
     if length(nodes)==0
-        println(RED, "Warning, applying boundary conditions to empty array of nodes", DEFAULT)
+        pcolor(:red, "Warning, applying boundary conditions to empty array of nodes\n")
     end
 
     for node in nodes
@@ -213,3 +214,20 @@ function sort(nodes::Array{Node,1}, dir::Symbol=:x, rev::Bool=false)
     return nodes[idxs]
 end
 
+# Macro to filter nodes using a condition expression
+macro get_nodes(dom, expr)
+
+    # fix condition
+    cond = fix_comparison_scalar(expr)
+
+    # generate the filter function
+    func = quote
+        (X::Array{Float64,1}) -> begin x,y,z=X ; $(cond) end
+    end
+
+    quote
+        ff = $(esc(func))
+        tt = Bool[ ff(n.X) for n in $(esc(dom)).nodes ]
+        $(esc(dom)).nodes[ tt ]
+    end
+end

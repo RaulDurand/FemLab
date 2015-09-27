@@ -23,6 +23,7 @@ export Element, Dof
 export set_mat, get_nodes, get_ips, set_state, reset, getcoords
 export getvals
 export read_prms
+export @get_elems
 
 
 # Abstract type for IP data
@@ -299,3 +300,25 @@ function get_ips(elems::Array{Element,1})
     return ips
 end
 
+# Macro to filter elems using a condition expression
+macro get_elems(dom, expr)
+
+    # fix condition
+    cond = fix_comparison_arrays(expr)
+
+    # generate the filter function
+    func = quote
+        (elem::Element) -> begin 
+            x = [ node.X[1] for node in elem.nodes ]
+            y = [ node.X[2] for node in elem.nodes ]
+            z = [ node.X[3] for node in elem.nodes ]
+            $(cond) 
+        end
+    end
+
+    quote
+        ff = $(esc(func))
+        tt = Bool[ ff(elem) for elem in $(esc(dom)).elems]
+        $(esc(dom)).elems[ tt ]
+    end
+end

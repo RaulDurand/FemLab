@@ -51,7 +51,7 @@ end
 
 function solve!(dom::Domain; nincs::Int=1, scheme::String="FE", precision::Float64=0.01, reset_bc::Bool=true, verbose::Bool=true, autosave::Bool=false)
 
-    if verbose; println(CYAN, BOLD, "FEM analysis:", DEFAULT) end
+    if verbose; pbcolor(:cyan,"FEM analysis:\n") end
     # Fill array of dofs
     udofs = Array(Dof, 0)
     pdofs = Array(Dof, 0)
@@ -144,13 +144,13 @@ function solve!(dom::Domain; nincs::Int=1, scheme::String="FE", precision::Float
         autosave && save(dom, dom.filekey * "-$inc" * ".vtk", verbose=false, save_ips=true)
 
         if !converged
-            println(RED, "solve!: solver did not converge", DEFAULT)
+            pcolor(:red, "solve!: solver did not converge\n",)
             return false
         end
     end
 
     if verbose && autosave
-        println(GREEN, "  $(dom.filekey)..vtk files written (Domain)", DEFAULT)
+        pcolor(:green, "  $(dom.filekey)..vtk files written (Domain)\n")
     end
 
     if reset_bc
@@ -177,7 +177,7 @@ function solve_inc(dom::Domain, DU::Vect, DF::Vect, umap::Array{Int,1}, pmap::Ar
     ndofs = length(DU)
     nu = length(umap)
     if nu == ndofs 
-        println(RED, "solve!: Warnig, no essential boundary conditions.", DEFAULT)
+        pcolor(:red, "solve!: Warnig, no essential boundary conditions.\n")
     end
 
     if verbose; print("    assembling... \r") end

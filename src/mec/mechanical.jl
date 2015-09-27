@@ -124,7 +124,7 @@ function matrixB(ndim::Int, dNdX::Matx, detJ::Float64, B::Matx)
     #J    = dNdR*C
     #dNdX = inv(J)*dNdR
     #detJ = det(J)
-    #@check detJ > 0.0 "Negative jacobian determinant in element $(elem.id)"
+    #@assert detJ > 0.0 "Negative jacobian determinant in element $(elem.id)"
     #sqr2 = 2.0^0.5
     #B[:] = 0.0
     if ndim==2
@@ -191,6 +191,8 @@ function elem_jacobian(::Mechanical, elem::Element)
         @gemm DB = D*B
         @gemm K += coef*B'*DB
 
+        #gemm("T", "N", A, B, 1.0, K)
+
         #detJ = mount_B(mat, elem, ip.R, C, B)
         #D    = mount_D(mat, ip.data)
         #coef = detJ*ip.w
@@ -208,7 +210,7 @@ function mount_B2(::Mechanical, elem::Element, R::Vect, C::Matx, B::Matx)
     J    = dNdR*C
     dNdX = inv(J)*dNdR
     detJ = det(J)
-    @check detJ > 0.0 "Negative jacobian determinant in element $(elem.id)"
+    @assert detJ > 0.0 "Negative jacobian determinant in element $(elem.id)"
     sqr2 = 2.0^0.5
     B[:] = 0.0
     if ndim==2

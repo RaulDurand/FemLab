@@ -53,10 +53,10 @@ type MCJoint1D<:AbsJoint1D
     end
 
     function MCJoint1D(;ks=NaN, kn=NaN, h=NaN, A=NaN, dm=NaN, c=NaN, C=NaN, mu=NaN, phi=NaN, kh=0.0)
-        @check ks>=0
-        @check (h>=0 || A>0 || dm>0)
-        @check (c>=0 || C>=0)
-        @check (phi>=0 || mu>=0)
+        @assert ks>=0
+        @assert (h>=0 || A>0 || dm>0)
+        @assert (c>=0 || C>=0)
+        @assert (phi>=0 || mu>=0)
 
         if isnan(kn)
             kn = ks
@@ -68,7 +68,7 @@ type MCJoint1D<:AbsJoint1D
                 h = pi*dm
             end
         end
-        @check h>=0
+        @assert h>=0
         if isnan(c)
             c = C
         end

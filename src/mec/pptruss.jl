@@ -50,9 +50,9 @@ type PPTruss<:AbsTruss
     end
 
     function PPTruss(;E=NaN, A=NaN, sig_y=NaN, H=0.0)
-        @check E>0
-        @check A>0
-        @check sig_y>0
+        @assert E>0
+        @assert A>0
+        @assert sig_y>0
         this = new(E, A, sig_y, H)
         this.new_ipdata = PPTrussIpData
         this

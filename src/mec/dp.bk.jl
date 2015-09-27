@@ -48,11 +48,11 @@ type DruckerPrager<:Mechanical
     new_ipdata::DataType
 
     function DruckerPrager(;E=NaN, nu=0.0, alpha=0.0, kappa=0.0, T=-0., H=0.0)
-        @check E>0.0
-        @check 0.0<=nu<0.5
-        @check alpha>=0.0
-        @check kappa>0.0
-        @check H>=0.0
+        @assert E>0.0
+        @assert 0.0<=nu<0.5
+        @assert alpha>=0.0
+        @assert kappa>0.0
+        @assert H>=0.0
 
         this     = new(E, nu, alpha, kappa, T, H)
         this.De  = mount_De(E,nu) # elastic tensor

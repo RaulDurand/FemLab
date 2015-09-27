@@ -52,10 +52,10 @@ type DPConc<:Mechanical
     end
 
     function DPConc(;nu=0.0, alpha=0.0, kappa=0.0, H=0.0, fc=0.0, eps_c=0.0)
-        @check 0.0<=nu<0.5
-        @check alpha>=0.0
-        @check kappa>0.0
-        @check H>=0.0
+        @assert 0.0<=nu<0.5
+        @assert alpha>=0.0
+        @assert kappa>0.0
+        @assert H>=0.0
 
         this     = new(nu, alpha, kappa, H, fc, eps_c)
         this.new_ipdata = DPConcIpData

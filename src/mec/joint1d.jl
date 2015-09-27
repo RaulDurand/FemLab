@@ -48,9 +48,9 @@ type Joint1D<:AbsJoint1D
         # A : section area
         # dm: section diameter
         # h : section perimeter
-        @check ks>=0
-        @check kn>=0
-        @check (h>0 || A>0 || dm>0)
+        @assert ks>=0
+        @assert kn>=0
+        @assert (h>0 || A>0 || dm>0)
 
         if isnan(h) 
             if A>0
@@ -59,7 +59,7 @@ type Joint1D<:AbsJoint1D
                 h = pi*dm
             end
         end
-        @check h>0
+        @assert h>0
 
         this = new(ks, kn, h)
         this.new_ipdata = Joint1DIpData

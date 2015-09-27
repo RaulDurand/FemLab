@@ -22,29 +22,67 @@ VERSION >= v"0.4.0-dev+6521" && __precompile__()
 
 module FemLab
 
+# Alias to print with color
+pcolor = print_with_color
+
+# Print bold with color
+function pbcolor(col::Symbol, msg::AbstractString...)
+    const BOLD    = "\x1b[1m"
+    const DEFAULT = "\x1b[0m"
+    @unix_only print(BOLD)
+    print_with_color(col, msg...)
+    @unix_only print(DEFAULT)
+end
+
 using Base
 
-# Definitions module
-include("definitions.jl")
+# Code snippet from simonster
+# https://github.com/simonster/Reexport.jl
+macro reexport(ex)
+    isa(ex, Expr) && (ex.head == :module ||
+                      ex.head == :using ||
+                      (ex.head == :toplevel &&
+                       all(e->isa(e, Expr) && e.head == :using, ex.args))) ||
+        error("@reexport: syntax error")
+
+    if ex.head == :module
+        modules = Any[ex.args[2]]
+        ex = Expr(:toplevel, ex, Expr(:using, :., ex.args[2]))
+    elseif ex.head == :using
+        modules = Any[ex.args[end]]
+    else
+        modules = Any[e.args[end] for e in ex.args]
+    end
+
+    esc(Expr(:toplevel, ex,
+             [:(eval(Expr(:export, setdiff(names($(mod)), [mod])...))) for mod in modules]...))
+end
+
+#Use non-registered (jet) package FemMesh
+
+#Pkg.installed("FemMesh") == nothing && Pkg.clone("https://github.com/RaulDurand/FemMesh")
+
+try
+    eval(:(using FemMesh))
+catch err
+    println(err)
+    Pkg.clone("https://github.com/RaulDurand/FemMesh")
+end
+
+@reexport using FemMesh
+
+# Tools
 include("tools/linalg.jl")
+include("tools/expr.jl")
 include("tools/table.jl")
-
-export DTable , push!, getindex, save, loadtable
-
-# Mesh module
-include("mesh/mesh.jl")
-#using .MeshGen
-export is_solid, is_line, is_joint
-export Block2D, Block3D, BlockTruss, BlockInset, Mesh
-export generate_mesh#, save
 
 # Fem module
 include("node.jl")
 include("elem.jl")
+include("face.jl")
 include("domain.jl")
 include("mec/solver.jl")
 include("mec/mechanical.jl")
-
 #include("seep/seep.jl")
 
 end#module
