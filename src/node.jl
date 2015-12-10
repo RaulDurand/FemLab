@@ -34,14 +34,14 @@ export @get_nodes
 # ===
 
 type Dof
-    sU    ::Symbol
-    sF    ::Symbol
-    U     ::Float64
-    F     ::Float64
+    sU    ::Symbol  # essential bc name
+    sF    ::Symbol  # natural bc name
+    U     ::Float64 # essential value
+    F     ::Float64 # natural value
     bryU  ::Float64
     bryF  ::Float64
-    eq_id ::Int64
-    prescU::Bool
+    eq_id ::Int64   # number of equation in global system
+    prescU::Bool    # flag for prescribed dof
     function Dof(sU::Symbol, sF::Symbol) 
         new(sU, sF, 0.0, 0.0, 0.0, 0.0, 0, false)
     end
@@ -59,11 +59,12 @@ end
 
 type Node
     X       ::Array{Float64,1}
-    tag     ::String
+    tag     ::AbstractString
     id      ::Int
     dofs    ::Array{Dof,1}
     dofdict ::Dict{Symbol,Dof}
     n_shares::Int
+    #domain::AbstractDomain
     function Node(X::Array{Float64,1}; tag="", id=-1)
         this = new(X, tag, id)
         this.dofs = []
@@ -125,6 +126,7 @@ end
 # Define boundary conditions for a node
 function set_bc(node::Node; args...)
     for (key,val) in args
+        #@show (key,val)
         if !haskey(node.dofdict, key); error("key ($key) not found in node ($(node.id)).") end
         dof = node.dofdict[key]
         if key==dof.sU
@@ -172,7 +174,7 @@ function getindex(nodes::Array{Node,1}, cond::Expr)
     return result
 end
 
-getindex(nodes::Array{Node,1}, cond::String) = getindex(nodes, parse(cond))
+getindex(nodes::Array{Node,1}, cond::AbstractString) = getindex(nodes, parse(cond))
 
 
 # Get node coordinates for an collection of nodes as a matrix

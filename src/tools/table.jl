@@ -108,7 +108,7 @@ function getindex(book::DBook, index::Int64)
     return book.tables[index]
 end
 
-function save(table::DTable, filename::String; verbose=true, format="")
+function save(table::DTable, filename::AbstractString; verbose=true, format="")
     f  = open(filename, "w")
     nc = length(table.header)   # number of fields (columns)
     nr = length(table.data[1])  # number of rows
@@ -149,7 +149,7 @@ function save(table::DTable, filename::String; verbose=true, format="")
     end
 end
 
-function save(book::DBook, filename::String; verbose=true, format="dat")
+function save(book::DBook, filename::AbstractString; verbose=true, format="dat")
     f  = open(filename, "w") 
 
     if format=="json"
@@ -172,7 +172,7 @@ function save(book::DBook, filename::String; verbose=true, format="dat")
 end
 
 
-function loadtable(filename::String)
+function loadtable(filename::AbstractString)
     data, headstr = readdlm(filename, '\t',header=true)
     header = Symbol[ symbol(strip(field)) for field in headstr ]
     @show typeof(data)

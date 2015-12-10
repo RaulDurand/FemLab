@@ -59,7 +59,6 @@ macro reexport(ex)
 end
 
 #Use non-registered (jet) package FemMesh
-
 #Pkg.installed("FemMesh") == nothing && Pkg.clone("https://github.com/RaulDurand/FemMesh")
 
 try
@@ -70,6 +69,9 @@ catch err
 end
 
 @reexport using FemMesh
+import FemMesh.save # to be extended
+
+using JSON
 
 # Tools
 include("tools/linalg.jl")
@@ -80,6 +82,7 @@ include("tools/table.jl")
 include("node.jl")
 include("elem.jl")
 include("face.jl")
+include("bcs.jl")
 include("domain.jl")
 include("mec/solver.jl")
 include("mec/mechanical.jl")

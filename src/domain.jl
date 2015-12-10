@@ -22,62 +22,40 @@ export Domain
 export track
 export get_node
 
-if VERSION.minor<4
-    type Domain
-        ndim ::Int
-        nodes::Array{Node,1}
-        elems::Array{Element,1}
-        faces::Array{Face,1}
-        edges::Array{Edge,1}
-        filekey::String
+type Domain
+    ndim ::Int
+    nodes::Array{Node,1}
+    elems::Array{Element,1}
+    faces::Array{Face,1}
+    edges::Array{Edge,1}
+    node_bcs::Array{BC, 1}
+    face_bcs::Array{BC, 1}
+    edge_bcs::Array{BC, 1}
+    filekey::AbstractString
 
-        trk_nodes     ::Array{(Node, DTable), 1}
-        trk_ips       ::Array{(Ip  , DTable), 1}
-        trk_list_nodes::Array{(Array{Node,1}, DBook), 1}
-        trk_list_ips  ::Array{(Array{Ip  ,1}, DBook), 1}
+    trk_nodes     ::Array{Tuple{Node, DTable}, 1}
+    trk_ips       ::Array{Tuple{Ip  , DTable}, 1}
+    trk_list_nodes::Array{Tuple{Array{Node,1}, DBook}, 1}
+    trk_list_ips  ::Array{Tuple{Array{Ip  ,1}, DBook}, 1}
 
-        function Domain(mesh::Mesh; filekey="out")
-            this = new()
-            this.filekey = filekey
+    function Domain(;filekey::AbstractString="out")
+        this = new()
 
-            load_mesh(this, mesh)
-            this.trk_nodes = []
-            this.trk_ips   = []
-            this.trk_list_nodes = []
-            this.trk_list_ips   = []
-            return this
-        end
-    end
-else
-    type Domain
-        ndim ::Int
-        nodes::Array{Node,1}
-        elems::Array{Element,1}
-        faces::Array{Face,1}
-        edges::Array{Edge,1}
-        filekey::String
+        this.node_bcs = []
+        this.face_bcs = []
+        this.edge_bcs = []
+        this.filekey = filekey
 
-        trk_nodes     ::Array{Tuple{Node, DTable}, 1}
-        trk_ips       ::Array{Tuple{Ip  , DTable}, 1}
-        trk_list_nodes::Array{Tuple{Array{Node,1}, DBook}, 1}
-        trk_list_ips  ::Array{Tuple{Array{Ip  ,1}, DBook}, 1}
-
-        function Domain(mesh::Mesh; filekey="out")
-            this = new()
-            this.filekey = filekey
-
-            load_mesh(this, mesh)
-            this.trk_nodes = []
-            this.trk_ips   = []
-            this.trk_list_nodes = []
-            this.trk_list_ips   = []
-            return this
-        end
+        this.trk_nodes = []
+        this.trk_ips   = []
+        this.trk_list_nodes = []
+        this.trk_list_ips   = []
+        return this
     end
 end
 
-
-function load_mesh(dom::Domain, mesh::Mesh)
+function Domain(mesh::Mesh; filekey::AbstractString="out")
+    dom = Domain(filekey=filekey)
     ndim = dom.ndim = mesh.ndim
 
     # Setting nodes
@@ -111,7 +89,7 @@ function load_mesh(dom::Domain, mesh::Mesh)
     end
 
     # Setting embeddeds
-    edict = Dict{Uint64, Element}()
+    edict = Dict{UInt64, Element}()
     for elem in dom.elems
         #hs = hash(getcoords(elem))
         hs = hash(getconns(elem))
@@ -127,11 +105,115 @@ function load_mesh(dom::Domain, mesh::Mesh)
             elem.extra[:bar ] = edict[hs_truss]
         end
     end
+
+    return dom
     
 end
 
-#macro 
+function dom_load_json(filename::AbstractString)
+    mesh = Mesh(filename)
+    dom  = Domain(mesh)
 
+    file = open(filename)
+    data = JSON.parse(readall(file))
+    close(file)
+
+    # Read materials list
+    mats  = Material[]
+    for dmat in data["materials"] # array of materials data
+        id    = dmat["id"]
+        model = eval(parse(dmat["model"]))
+        delete!(dmat, "id")
+        delete!(dmat, "model")
+
+        args = [ Symbol(k) => v for (k,v) in dmat ]
+        mat = model(;args...)
+        push!(mats, mat)
+    end
+
+    # Read and set material for each element
+    cells = data["cells"]
+    for i in 1:endof(cells)
+        mat_id = cells[i]["mat"]
+        set_mat( dom.elems[i], mats[mat_id] )
+    end
+
+    # Node boundary conditions
+    node_bc = data["node_bc"]
+    for bc in node_bc
+        id = get(bc,"id",0)
+
+        if id>0
+            delete!(bc, "id")
+            args = [ Symbol(k) => v for (k,v) in  bc]
+            set_bc(dom.nodes[id]; args...)
+        else
+            cond = parse(bc["cond"])
+            delete!(bc, "cond")
+            args = [ Symbol(k) => v for (k,v) in  bc]
+            set_bc( dom.nodes[cond]; args...)
+        end
+    end
+
+    # Face boundary conditions
+    face_bc = data["face_bc"]
+    for bc in face_bc
+        if haskey(bc, "id")
+            error("Unsupported key id for face boundary condition while reading input file.")
+        end
+
+        cond = parse(bc["cond"])
+        delete!(bc, "cond")
+        args = [ Symbol(k) => v for (k,v) in  bc]
+        set_bc( dom.faces[cond]; args...)
+    end
+
+    return dom
+end
+
+function Domain(filename::AbstractString; filekey::AbstractString="out")
+    ext  = splitext(filename)[2]
+
+    if ext in (".json", ".msh")
+        dom = dom_load_json(filename)
+        dom.filekey = filekey
+        return dom
+    else
+        mesh = Mesh(filename)
+        return Domain(mesh, filekey=filekey)
+    end
+
+end
+
+function set_bc(dom::Domain, bc::NodeBC)
+    if bc.expr != :()
+        bc.nodes = dom.nodes[bc.expr]
+    end
+    push!(dom.node_bcs, bc)
+end
+
+function set_bc(dom::Domain, bc::FaceBC) 
+    if bc.expr != :()
+        bc.faces = dom.faces[bc.expr]
+    end
+    push!(dom.face_bcs, bc)
+end
+
+#function set_bc(dom::Domain, bc::EdgeBC) 
+    #if bc.expr != :()
+        #bc.edges = dom.edges[bc.expr]
+    #end
+    #push!(dom.edge_bcs, bc)
+#end
+
+function set_bc(dom::Domain, bcs::BC...)
+    dom.node_bcs = []
+    dom.face_bcs = []
+    dom.edge_bcs = []
+    for bc in bcs
+        set_bc(dom, bc)
+    end
+end
 
 function calc_nodal_vals(dom::Domain)
     # Get incidence matrix (shares) (fast)
@@ -146,6 +228,7 @@ function calc_nodal_vals(dom::Domain)
     # Interpolating solid elements
     #for node in dom.nodes
         #patch = @list(elem, elem in node.shares, if issolid(elem) end)
+        #patch = node.shares[ [issolid(elem) for elem in node.shares]  ]
         #patch = node.shares[ map(is_solid, node.shares) ]
     #end
 end
@@ -366,8 +449,7 @@ function tracking(dom::Domain)
 end
 
 
-
-function save(dom::Domain, filename::String; verbose=true, save_ips=false)
+function save(dom::Domain, filename::AbstractString; verbose=true, save_ips=false)
     # Saves the dom information in vtk format
     nnodes = length(dom.nodes)
     nelems  = length(dom.elems)
@@ -485,7 +567,7 @@ function save(dom::Domain, filename::String; verbose=true, save_ips=false)
 end
 
 
-function save_dom_ips(dom::Domain, filename::String, verbose=true)
+function save_dom_ips(dom::Domain, filename::AbstractString, verbose=true)
     # Saves ips information from domain as a vtk file
 
     # Get all ips
@@ -564,7 +646,7 @@ function save_dom_ips(dom::Domain, filename::String, verbose=true)
 end
 
 
-function save2(dom::Domain, filename::String; verbose=true)
+function save2(dom::Domain, filename::AbstractString; verbose=true)
     # Saves the dom information in vtk format
     nnodes = length(dom.nodes)
     nelems = length(dom.elems)
@@ -739,7 +821,7 @@ function save2(dom::Domain, filename::String; verbose=true)
 end
 
 
-function save(nodes::Array{Node,1}, filename::String; dir::Symbol=:nodir, rev::Bool=false, verbose=true)
+function save(nodes::Array{Node,1}, filename::AbstractString; dir::Symbol=:nodir, rev::Bool=false, verbose::Bool=true)
     # sort nodes
     if dir in (:x, :y, :z)
         nodes = sort(nodes, dir=dir, rev=rev)
@@ -763,7 +845,7 @@ function save(nodes::Array{Node,1}, filename::String; dir::Symbol=:nodir, rev::B
     save(table, filename, verbose)
 end
 
-function save(ips::Array{Ip,1}, filename::String; offset::Float64=0.0, dir::Symbol=:nodir, rev::Bool=false, verbose=true)
+function save(ips::Array{Ip,1}, filename::AbstractString; offset::Float64=0.0, dir::Symbol=:nodir, rev::Bool=false, verbose=true)
     # sort ips
     if dir in (:x, :y, :z)
         ips = sort(ips, dir=dir, rev=rev)

@@ -26,7 +26,7 @@ type Face
     shape::ShapeType
     nodes::Array{Node,1}
     ndim ::Integer
-    oelem::Union(Element,Nothing)
+    oelem::Union{Element,Void}
     isedge::Bool
     function Face(shape, nodes, ndim)
         this = new(shape, nodes, ndim)
@@ -63,13 +63,14 @@ function getindex(faces::Array{Face,1}, cond::Expr)
     return result
 end
 
-getindex(faces::Array{Face,1}, cond::String) = getindex(faces, parse(cond))
+getindex(faces::Array{Face,1}, cond::AbstractString) = getindex(faces, parse(cond))
 
 function set_bc(face::Face; args...)
     oelem = face.oelem # owner element
     if oelem==nothing; error("Face with no owner element") end
 
     for (key,val) in args
+        #@show (key,val)
         set_facet_bc(oelem.mat, oelem, face, key, float(val))
     end
 end

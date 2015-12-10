@@ -432,6 +432,8 @@ include("truss.jl")
 include("pptruss.jl")
 include("joint1d.jl")
 include("mcjoint1d.jl")
+include("cebjoint1d.jl")
+
 include("dp.jl")
 include("dpcap.jl")
 include("dpconc.jl")

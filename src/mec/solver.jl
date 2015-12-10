@@ -49,9 +49,23 @@ function mount_RHS(dom::Domain, ndofs::Int64, Δt::Float64)
     return RHS
 end
 
-function solve!(dom::Domain; nincs::Int=1, scheme::String="FE", precision::Float64=0.01, reset_bc::Bool=true, verbose::Bool=true, autosave::Bool=false)
+function solve!(dom::Domain; nincs::Int=1, scheme::AbstractString="FE", precision::Float64=0.01, reset_bc::Bool=true, verbose::Bool=true, autosave::Bool=false)
 
     if verbose; pbcolor(:cyan,"FEM analysis:\n") end
+
+    # Set boundary conditions
+    for bc in dom.node_bcs
+        set_bc(bc.nodes; bc.conds...)
+    end
+
+    for bc in dom.face_bcs
+        set_bc(bc.faces; bc.conds...)
+    end
+
+    for bc in dom.edge_bcs
+        set_bc(bc.edges; bc.conds...)
+    end
+
     # Fill array of dofs
     udofs = Array(Dof, 0)
     pdofs = Array(Dof, 0)
@@ -66,7 +80,6 @@ function solve!(dom::Domain; nincs::Int=1, scheme::String="FE", precision::Float
         end
     end
 
-    #dofs  = [udofs, pdofs]
     dofs  = vcat(udofs, pdofs)
     ndofs = length(dofs)
 
@@ -90,11 +103,13 @@ function solve!(dom::Domain; nincs::Int=1, scheme::String="FE", precision::Float
     F  = [ dof.bryF for dof in dofs] # nodal and face boundary conditions
     F += RHS
 
+    #@show F
+
     # Solving process
     nu  = length(udofs)
     if verbose; println("  unknowns dofs: $nu") end
     lam = 1.0/nincs
-    #println(lam)
+
     DU, DF  = lam*U, lam*F
     residue = 0.0
     tracking(dom) # Tracking nodes, ips, elements, etc.
@@ -107,7 +122,7 @@ function solve!(dom::Domain; nincs::Int=1, scheme::String="FE", precision::Float
         if verbose; println("  increment $inc:") end
         DU, DF = lam*U, lam*F
         R      = copy(DF) # residual
-        #println(R)
+
         DFa    = zeros(ndofs)
         DUa    = zeros(ndofs)
         nbigger= 0
@@ -135,9 +150,8 @@ function solve!(dom::Domain; nincs::Int=1, scheme::String="FE", precision::Float
 
             if residue > lastres; nbigger+=1 end
             if residue<precision; converged = true ; break end
-            if nbigger>10;         converged = false; break end
+            if nbigger>10;        converged = false; break end
             if isnan(residue);    converged = false; break end
-            #if it==2  converged=false; break end##
         end
 
         tracking(dom) # Tracking nodes, ips, elements, etc.
@@ -166,7 +180,6 @@ function solve!(dom::Domain; nincs::Int=1, scheme::String="FE", precision::Float
     return true
 
 end
-
 
 function solve_inc(dom::Domain, DU::Vect, DF::Vect, umap::Array{Int,1}, pmap::Array{Int,1}, verbose::Bool)
     #  [  K11   K12 ]  [ U1? ]    [ F1  ]
@@ -205,9 +218,8 @@ function solve_inc(dom::Domain, DU::Vect, DF::Vect, umap::Array{Int,1}, pmap::Ar
     end
 
     # Completing vectors
-    #umap and pmap are not needed...
-    DU[umap] = U1
-    DF[pmap] = F2
+    DU[1:nu] = U1
+    DF[nu+1:end] = F2
 end
 
 
@@ -230,3 +242,6 @@ function update!(elems::Array{Element,1}, dofs::Array{Dof,1}, DU::Array{Float64,
 
 end
 
+if VERSION >= v"0.4.0-dev+6521" 
+    precompile(solve!,(Domain,))
+end

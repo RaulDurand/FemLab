@@ -81,7 +81,7 @@ function getindex(ips::Array{Ip,1}, cond::Expr)
     return result
 end
 
-getindex(ips::Array{Ip,1}, cond::String) = getindex(ips, parse(cond))
+getindex(ips::Array{Ip,1}, cond::AbstractString) = getindex(ips, parse(cond))
 
 
 
@@ -91,7 +91,6 @@ getindex(ips::Array{Ip,1}, cond::String) = getindex(ips, parse(cond))
 abstract Material
 
 
-
 # Type Element
 # ============
 
@@ -99,7 +98,7 @@ type Element
     shape ::ShapeType
     nodes ::Array{Node,1}
     ndim  ::Int
-    tag   ::String
+    tag   ::AbstractString
     id    ::Int
     ips   ::Array{Ip,1}
     active::Bool
@@ -172,7 +171,7 @@ function getindex(elems::Array{Element,1}, cond::Expr)
     return result
 end
 
-function getindex(elems::Array{Element,1}, cond::String) 
+function getindex(elems::Array{Element,1}, cond::AbstractString) 
     if typeof(parse(cond)) == Symbol
         result = Array(Element,0)
         for elem in elems
@@ -246,7 +245,7 @@ end
 
 
 # Reads material parameters from a json file
-function read_prms(filename::String)
+function read_prms(filename::AbstractString)
 
     # read file
     file = open(filename, "r")
@@ -254,7 +253,7 @@ function read_prms(filename::String)
     close(file)
 
     # parse materials
-    mats_prms = Dict{String, Any}()
+    mats_prms = Dict{AbstractString, Any}()
     for d in data
         name = d["name"]
         keys = d["prms"]
