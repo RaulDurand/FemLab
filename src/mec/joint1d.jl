@@ -96,8 +96,9 @@ end
 function stress_update(mat::Joint1D, ipd::Joint1DIpData, deps)
     D = mountD(mat, ipd)
     dsig     = D*deps
-    ipd.eps += deps
-    ipd.sig += dsig
+
+    ipd.eps[1:ipd.ndim] += deps
+    ipd.sig[1:ipd.ndim] += dsig
     return dsig
 end
 
@@ -108,7 +109,6 @@ function mount_T(J::Matx)
     L1   = vec(J/nJ)
 
     if ndim==2
-        println("Hi")
         L2 = [ -L1[2],  L1[1] ]
         return [L1 L2]
     end
