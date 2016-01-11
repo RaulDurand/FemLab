@@ -22,6 +22,23 @@ export Domain
 export track
 export get_node
 
+"""
+`Domain(mesh, [filekey="out"])`
+
+Creates an `Domain` object based on a Mesh object `mesh` and represents the geometric domain to be analysed by the finite element analysis.
+
+**Important fields are**
+
+`nodes`: An array of nodes
+`elems`: An array of finite elements
+`faces`: An array of `Face` objects containing the boundary faces
+`edges`: An array of `Edge` objects containing all the boundary faces
+`node_bcs`: An array of `NodeBC` objects containing all nodal boundary conditions
+`face_bcs`: An array of `FaceBC` objects conditions all face boundary conditions
+`edge_bcs`: An array of `EdgeBC` objects conditions all edge boundary conditions
+`filekey` : An string object that is used as part of the filename of resulting analyses files
+
+"""
 type Domain
     ndim ::Int
     nodes::Array{Node,1}
@@ -464,7 +481,7 @@ function save(dom::Domain, filename::AbstractString; verbose=true, save_ips=fals
     f = open(filename, "w")
 
     println(f, "# vtk DataFile Version 3.0")
-    println(f, "pyfem output ")
+    println(f, "FemLab output ")
     println(f, "ASCII")
     println(f, "DATASET UNSTRUCTURED_GRID")
     println(f, "")

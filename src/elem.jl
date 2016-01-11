@@ -35,6 +35,12 @@ abstract IpData
 #  Ip
 # ====
 
+"""
+`Ip(R, w)`
+
+Creates an `Ip` object that represents an Integration Point in finite element analyses.
+`R` is a vector with the integration point local coordinates and `w` is the corresponding integration weight.
+"""
 type Ip
     R    ::Array{Float64,1}
     w    ::Float64
@@ -94,6 +100,12 @@ abstract Material
 # Type Element
 # ============
 
+"""
+`Element(shape, nodes, ndim, [tag="",])`
+
+Creates an 'Element' object for finite element analyses based on a
+`shape`, an array of `nodes` and the space dimension `ndim`.
+"""
 type Element
     shape ::ShapeType
     nodes ::Array{Node,1}
@@ -203,6 +215,11 @@ config_dofs(elem::Element) = config_dofs(elem.mat, elem)
 
 
 # Define material properties for an element
+"""
+`set_mat(elem, mat, [nips=0])`
+
+Especifies the material model `mat` to be used to represent the behavior of an `Element` object `elem`.
+"""
 function set_mat(elem::Element, mm::Material; nips::Int64=0)
     ipc =  get_ip_coords(elem.shape, nips)
     nips = size(ipc,1)
@@ -237,6 +254,11 @@ end
 
 
 # Define material properties for a collection of elements
+"""
+`set_mat(elems, mat, [nips=0])`
+
+Especifies the material model `mat` to be used to represent the behavior of a set of `Element` objects `elems`.
+"""
 function set_mat(elems::Array{Element,1}, mm::Material; nips::Int64=0)
     for elem in elems
         set_mat(elem, mm, nips=nips)

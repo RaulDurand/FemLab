@@ -33,6 +33,12 @@ export @get_nodes
 # Dof
 # ===
 
+"""
+`Dof()` 
+
+Creates an object that represents a Degree of Freedom in a finite element analysis.
+`Node` objects include a field called `dofs` which is an array of `Dof` objects.
+"""
 type Dof
     sU    ::Symbol  # essential bc name
     sF    ::Symbol  # natural bc name
@@ -57,6 +63,17 @@ end
 # Node
 # ====
 
+"""
+`Node(X)` 
+
+Creates an object that represents a Node in a finite element analysis. The `X` parameter is a 
+vector that represents the node coordinates.
+
+**Important fields are**
+`X`   : A vector of coordinates
+`tag` : A string tag
+`dofs`: An array of `Dof` objects
+"""
 type Node
     X       ::Array{Float64,1}
     tag     ::AbstractString
@@ -124,6 +141,18 @@ end
 
 
 # Define boundary conditions for a node
+"""
+`set_bc(node, bcs...)` 
+
+Sets one or several boundary conditions `bcs` to a `node` object.
+In a mechanical analysis, essential and natural boundary conditions can be set using this function.
+For example:
+```
+node = Node([1.0, 1.0, 1.0])
+set_bc(node, fx=10.0, uy=0.01)
+
+```
+"""
 function set_bc(node::Node; args...)
     for (key,val) in args
         #@show (key,val)
@@ -140,6 +169,11 @@ end
 
 
 # Clear all boundary conditions in a node
+"""
+`clear_bc(node)`
+
+Clears all boundary conditions previously set in a Node object.
+"""
 function clear_bc(node::Node)
     for dof in node.dofs
         dof.bryU   = 0.0
@@ -185,6 +219,11 @@ end
 
 
 # Define boundary conditions for a collection of nodes
+"""
+`set_bc(nodes, bcs...)` 
+
+Sets one or several boundary conditions `bcs` to a set of Node objects `nodes`.
+"""
 function set_bc(nodes::Array{Node,1}; args...) 
     if length(nodes)==0
         pcolor(:red, "Warning, applying boundary conditions to empty array of nodes\n")

@@ -20,6 +20,20 @@
 
 VERSION >= v"0.4.0-dev+6521" && __precompile__()
 
+"""
+**FemLab.jl**
+
+FemLab module implements functions and types to perform finite element analyses.
+
+**Important data types**
+
+Node, Element, Domain, Dof, Ip, NodeBC, FaceBC
+
+**Important functions** 
+
+set_mat, set_bc, clear_bc, solve!, save
+
+"""
 module FemLab
 
 # Alias to print with color
