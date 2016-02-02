@@ -20,7 +20,7 @@
 
 abstract BC
 
-export NodeBC, FaceBC
+export NodeBC, FaceBC, EdgeBC
 
 type NodeBC <: BC
     expr ::Expr
@@ -74,4 +74,27 @@ type FaceBC <: BC
     end
 end
 
-EdgeBC = FaceBC
+type EdgeBC <: BC
+    expr ::Expr
+    conds::Array
+    edges::Array{Edge,1}
+
+    function EdgeBC(expr::Expr; conds::Array...)
+        this = new()
+        this.expr = expr
+        this.conds = conds
+        return this
+    end
+
+    function EdgeBC(edges::Array{Edge,1}; conds::Any...)
+        this = new()
+        this.expr = :()
+        this.edges = edges
+        this.conds = conds
+        return this
+    end
+
+    function EdgeBC(edge::Edge; conds::Any...)
+        return EdgeBC( [edge]; conds... )
+    end
+end

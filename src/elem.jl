@@ -205,7 +205,6 @@ function getcoords(elem::Element)
 end
 
 function getconns(elem::Element)
-    nnodes = length(elem.nodes)
     return [ node.id for node in elem.nodes ]
 end
 

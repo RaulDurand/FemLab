@@ -27,15 +27,22 @@ export get_node
 
 Creates an `Domain` object based on a Mesh object `mesh` and represents the geometric domain to be analysed by the finite element analysis.
 
-**Important fields are**
+**Fields**
 
-`nodes`: An array of nodes
+`nodes`: An array of nodes 
+
 `elems`: An array of finite elements
+
 `faces`: An array of `Face` objects containing the boundary faces
+
 `edges`: An array of `Edge` objects containing all the boundary faces
+
 `node_bcs`: An array of `NodeBC` objects containing all nodal boundary conditions
+
 `face_bcs`: An array of `FaceBC` objects conditions all face boundary conditions
+
 `edge_bcs`: An array of `EdgeBC` objects conditions all edge boundary conditions
+
 `filekey` : An string object that is used as part of the filename of resulting analyses files
 
 """
@@ -108,7 +115,6 @@ function Domain(mesh::Mesh; filekey::AbstractString="out")
     # Setting embeddeds
     edict = Dict{UInt64, Element}()
     for elem in dom.elems
-        #hs = hash(getcoords(elem))
         hs = hash(getconns(elem))
         edict[hs] = elem
     end
@@ -211,17 +217,19 @@ end
 
 function set_bc(dom::Domain, bc::FaceBC) 
     if bc.expr != :()
+        @show bc.expr
         bc.faces = dom.faces[bc.expr]
+        @show length(bc.faces)
     end
     push!(dom.face_bcs, bc)
 end
 
-#function set_bc(dom::Domain, bc::EdgeBC) 
-    #if bc.expr != :()
-        #bc.edges = dom.edges[bc.expr]
-    #end
-    #push!(dom.edge_bcs, bc)
-#end
+function set_bc(dom::Domain, bc::EdgeBC) 
+    if bc.expr != :()
+        bc.edges = dom.edges[bc.expr]
+    end
+    push!(dom.edge_bcs, bc)
+end
 
 function set_bc(dom::Domain, bcs::BC...)
     dom.node_bcs = []
