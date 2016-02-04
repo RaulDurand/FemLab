@@ -25,24 +25,27 @@ type CEBJoint1DIpData<:IpData
     ndim::Int
     σ  ::Array{Float64,1}
     ε  ::Array{Float64,1}
-    ωpa::Float64
-    Δγ ::Float64
-    σc ::Float64 #not used
+    τy ::Float64
+    unload::Bool
+    σc::Float64
     function CEBJoint1DIpData(ndim=3)
         this = new(ndim)
         this.σ = zeros(3)
         this.ε = zeros(3)
-        this.ωpa = 0.0
-        this.Δγ  = 0.0
+        this.τy     = 0.0
+        this.unload = true
         return this
     end
 end
 
 type CEBJoint1D<:AbsJoint1D
-    Tau::Array{Float64,2}
     h ::Float64
     ks::Float64
     kn::Float64
+    s1::Float64
+    s2::Float64
+    s3::Float64
+    τres::Float64
 
     new_ipdata::DataType
 
@@ -50,9 +53,15 @@ type CEBJoint1D<:AbsJoint1D
         return  CEBJoint1D(;prms...)
     end
 
-    #function CEBJoint1D(;τmax=NaN, τres=NaN, s1=NaN, s2=NaN, s3=NaN, kn=NaN, h=NaN, kn=Nan, A=NaN, dm=NaN)
-    function CEBJoint1D(;tau=[], h=NaN, kn=NaN, A=NaN, dm=NaN)
-        @assert length(tau)>0
+    function CEBJoint1D(;ks=NaN, kn=NaN, TauR=NaN, s1=NaN, s2=NaN, s3=NaN, h=NaN, A=NaN, dm=NaN)
+        @assert ks>=0
+        @assert ks*s1>TauR
+        @assert s2>s1
+        @assert s3>s2
+
+        if isnan(kn) 
+            kn = ks
+        end
         @assert kn>=0
 
         if isnan(h) 
@@ -64,36 +73,47 @@ type CEBJoint1D<:AbsJoint1D
         end
         @assert h>0
 
-        ks = (tau[2,2] - tau[1,2])/(tau[2,1] - tau[1,1])
-
-        this = new(tau, h, ks, kn)
+        this = new(h, ks, kn, s1, s2, s3, TauR)
         this.new_ipdata = CEBJoint1DIpData
         return this
     end
 end
 
-function interpolate(M::Array{Float64,2}, val::Float64)
-    #@show val
-    #@show M
-    @assert val>=M[1,1] && val<=M[end,1]
-    for i=2:size(M,1)
-        if val<=M[i,1]
-            return M[i-1,2] + (M[i,2]-M[i-1,2])/(M[i,1]-M[i-1,1])*(val - M[i-1,1])
-        end
+function Tau(mat::CEBJoint1D, s::Float64)
+    ss = abs(s)
+    #@assert s>=0
+    if ss<mat.s1
+        return mat.ks*s
+    elseif ss<mat.s2
+        return mat.ks*mat.s1*sign(s)
+    elseif ss<mat.s3
+        τmax = mat.ks*mat.s1
+        #return (mat.τres-τmax)/(mat.s3-mat.s2)*(mat.s3-ss)*sign(s)
+        return (mat.τres + (mat.τres-τmax)/(mat.s3-mat.s2)*(ss-mat.s3))*sign(s)
+        
+    else
+        return mat.τres*sign(s)
     end
-    #@show "Whatt"
-    return NaN
 end
 
-function deriv(M::Array{Float64,2}, val::Float64)
-    @assert val>=M[1,1] && val<=M[end,1]
-    for i=2:size(M,1)
-        if val<=M[i,1]
-            return (M[i,2]-M[i-1,2])/(M[i,1]-M[i-1,1])
-        end
+function deriv(mat::CEBJoint1D, ipd::CEBJoint1DIpData, s::Float64)
+    ss = abs(s)
+    
+    #check for unloading... !
+    #τ = ipd.σ[1]
+    #f = yield_func(mat, ipd, τ, ss)
+
+
+    if ss<mat.s1
+        return mat.ks
+    elseif ss<mat.s2
+        return 0.0
+    elseif ss<mat.s3
+        τmax = mat.ks*mat.s1
+        return (mat.τres-τmax)/(mat.s3-mat.s2)
+    else
+        return 0.0
     end
-    #@show "Whatt2"
-    return NaN
 end
 
 function set_state(ipd::CEBJoint1DIpData, sig=zeros(0), eps=zeros(0))
@@ -110,11 +130,17 @@ function set_state(ipd::CEBJoint1DIpData, sig=zeros(0), eps=zeros(0))
 end
 
 function mountD(mat::CEBJoint1D, ipd::CEBJoint1DIpData)
-    ω  = abs(ipd.ε[1])
-    kh = deriv(mat.Tau, ω)
-    #@show ω
-    #@show kh
-    ks = ipd.Δγ==0.0? mat.ks : mat.ks*kh/(mat.ks + kh)
+
+    # inital value for ipd.τy
+    if ipd.τy==0.0
+        ipd.τy = mat.ks*mat.s1
+    end
+
+    s  = abs(ipd.ε[1])
+    kh = deriv(mat, ipd, s)
+
+    ks = ipd.unload? mat.ks : mat.ks*kh/(mat.ks + kh)
+
     kn = mat.kn
     if ipd.ndim==2
         return [  ks  0.0 
@@ -126,66 +152,34 @@ function mountD(mat::CEBJoint1D, ipd::CEBJoint1DIpData)
     end
 end
 
-function yield_func(mat::CEBJoint1D, ipd::CEBJoint1DIpData, τ::Float64, ω::Float64)
-    #ω = abs(ipd.ε[1])
-    #@show ω
-    #@show interpolate(mat.Tau, ω) 
-    return f = abs(τ) - interpolate(mat.Tau, ω) 
-end
-
-function bisection(f::Function, a, b)
-    if f(a) == 0.0
-        return a
-    end
-
-    while f(a)*f(b) >= 0
-        b *= 2.0
-    end
-
-    eps = 1e-8
-    n = floor(Int, log(2, (b-a)/eps) + 1)
-    x = 0.0
-
-    for i=1:n
-        x = (a+b)/2
-        if f(a)*f(x) < 0
-            b = x
-        else
-            a = x
-        end
-    end
-
-    return x
+function yield_func(mat::CEBJoint1D, ipd::CEBJoint1DIpData, τ::Float64, s::Float64)
+    return abs(τ) - ipd.τy
 end
 
 function stress_update(mat::CEBJoint1D, ipd::CEBJoint1DIpData, Δε::Vect)
     ks = mat.ks
     kn = mat.kn
-    Δω = Δε[1] # relative displacement
-    τini = ipd.σ[1]
-    τtr  = τini + ks*Δω
-    ftr  = yield_func(mat, ipd, τtr, ipd.ωpa+abs(Δω) )
-    #@show τtr
-    #@show ftr
+    Δs = Δε[1]      # relative displacement
+    τini = ipd.σ[1] # initial shear stress
+    τtr  = τini + ks*Δs # elastic trial
+    s    = ipd.ε[1]
+
+    ftr  = yield_func(mat, ipd, τtr, abs(s+Δs) )
 
     if ftr<0.0
-        ipd.Δγ = 0.0
         τ = τtr 
+        ipd.unload = true
+        ftr  = yield_func(mat, ipd, τtr, abs(s+Δs) )
     else
-        f(Δγ) = abs(τtr) - ks*Δγ - interpolate(mat.Tau, ipd.ωpa +Δγ)
-        ipd.Δγ  = bisection(f, 0.0, 1.0)
-        #@show Δγ
-        #@show f(Δγ)
-        Δωp = ipd.Δγ*sign(τtr)
-        τ   = τtr - ks*Δωp # correcting first term
-        ipd.ωpa += ipd.Δγ
-        #@show ipd.ωpa
-        #@show yield_func(mat, ipd, τ, ipd.ωpa )
+        τ   = Tau(mat, s+Δs)
+        Δτ  = τ - τini
+        Δse  = Δτ/ks
+        Δsp  = abs(Δs - Δse)
+        ipd.τy = min(ipd.τy, abs(Tau(mat, s+Δs)))
+        ipd.unload = abs(ipd.ε[1]+Δs) - abs(s) >= 0.0
     end
-    #@show τ
 
     # update ε
-    #@show Δε
     ipd.ε += Δε
 
     # calculate Δσ
@@ -196,20 +190,14 @@ function stress_update(mat::CEBJoint1D, ipd::CEBJoint1DIpData, Δε::Vect)
     # update Δσ
     ipd.σ += Δσ
 
-    #@show ipd.ε[1]
-    #@show ipd.σ[1]
-
     return Δσ
 end
 
 function getvals(mat::CEBJoint1D, ipd::CEBJoint1DIpData)
-    τmax = mat.c + abs(ipd.σc)*mat.μ
     return [ 
       :ur   => ipd.ε[1] ,
       :tau  => ipd.σ[1] ,
-      :sigc => ipd.σc   ,
-      :taumax => τmax   ,
-      :w_pa   => ipd.ωpa
+      #:w_pa   => ipd.ωpa
       ]
 end
 

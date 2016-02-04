@@ -232,7 +232,7 @@ function mountB(mat::AbsJoint1D, elem::Element, R, Ch, Ct, B)
     end
     MM = hvcat(nbnodes, stack...)
 
-    B[:] = T*[ NN*MM  -NN ]
+    B[:] = -T*[ NN*MM  -NN ]
     detJ = norm(J)
     return detJ
 end
