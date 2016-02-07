@@ -21,6 +21,7 @@
 import Base.reset
 export Element, Dof
 export set_mat, get_nodes, get_ips, set_state, reset, getcoords
+export min, max, sort
 export getvals
 export read_prms
 export @get_elems
@@ -89,9 +90,27 @@ end
 
 getindex(ips::Array{Ip,1}, cond::AbstractString) = getindex(ips, parse(cond))
 
+# Get the maximum value of a given coordinate for the whole collection of ips
+function max(ips::Array{Ip,1}, dir::Symbol) 
+    idx = findfisrt((:x, :y, :z), dir)
+    maximum([ip.X[idx] for ip in ips])
+end
+
+function min(ips::Array{Ip,1}, dir::Symbol) 
+    idx = findfisrt((:x, :y, :z), dir)
+    minimum([ip.X[idx] for ip in ips])
+end
+
+# Sort a collection of ips in a given direction
+function sort(ips::Array{Ip,1}, dir::Symbol=:x, rev::Bool=false) 
+    idx  = findfirst((:x, :y, :z), dir)
+    idxs = sortperm([ip.X[idx] for ip in ips], rev=rev)
+    return ips[idxs]
+end
 
 
-# Abstract tyep for material
+
+# Abstract type for material
 # ==========================
 
 abstract Material

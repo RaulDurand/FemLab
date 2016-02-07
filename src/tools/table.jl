@@ -164,8 +164,39 @@ function save(book::DBook, filename::AbstractString; verbose=true, format="dat")
     end
 
     if format=="dat" # saves only the last table
-        save(book.tables[end], filename, verbose=false)
-        if verbose  pcolor(:green, "  file $filename written (DBook)\n") end
+        #save(book.tables[end], filename, verbose=false)
+        #if verbose  pcolor(:green, "  file $filename written (DBook)\n") end
+
+        f  = open(filename, "w")
+
+        basename, ext = splitext(filename)
+        if format==""
+            format = (ext == "")? "dat" : ext[2:end]
+        end
+
+        for table in book.tables
+            nc = length(table.header)   # number of fields (columns)
+            nr = length(table.data[1])  # number of rows
+
+            # print header
+            for i=1:nc
+                @printf(f, "%18s", table.header[i])
+                print(f, i!=nc? "\t" : "\n")
+            end
+
+            # print values
+            for i=1:nr
+                for j=1:nc
+                    @printf(f, "%18.10e", table.data[j][i])
+                    print(f, j!=nc? "\t" : "\n")
+                end
+            end
+            print(f, "\n")
+        end
+
+        close(f)
+        if verbose  pcolor(:green, "  file $filename written\n") end
+
         return
     end
 
