@@ -23,7 +23,7 @@ bc3 = FaceBC( :(z==1), tz=-10 )
 set_bc(dom, bc1, bc2, bc3)
 
 solve!(dom, nincs=1, verbose=verbose)
-save(dom, "viga.vtk")
+#save(dom, "viga.vtk")
 
 facts("\nTest Reinforced Beam") do
     @fact 1 --> 1

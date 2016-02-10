@@ -16,5 +16,5 @@ set_bc(dom, base_bc, top_bc)
 
 solve!(dom, nincs=1, verbose=verbose)
 
-save(dom, "out.vtk")
+#save(dom, "out.vtk")
 

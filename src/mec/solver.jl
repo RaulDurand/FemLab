@@ -49,7 +49,7 @@ function mount_RHS(dom::Domain, ndofs::Int64, Δt::Float64)
     return RHS
 end
 
-function solve!(dom::Domain; nincs::Int=1, scheme::AbstractString="FE", precision::Float64=0.01, reset_bc::Bool=true, verbose::Bool=true, autosave::Bool=false)
+function solve!(dom::Domain; nincs::Int=1, scheme::AbstractString="FE", precision::Float64=0.01, reset_bc::Bool=true, verbose::Bool=true, autosave::Bool=false, save_ips::Bool=false)
 
     if verbose; pbcolor(:cyan,"FEM analysis:\n") end
 
@@ -103,8 +103,6 @@ function solve!(dom::Domain; nincs::Int=1, scheme::AbstractString="FE", precisio
     F  = [ dof.bryF for dof in dofs] # nodal and face boundary conditions
     F += RHS
 
-    #@show F
-
     # Solving process
     nu  = length(udofs)
     if verbose; println("  unknowns dofs: $nu") end
@@ -112,14 +110,15 @@ function solve!(dom::Domain; nincs::Int=1, scheme::AbstractString="FE", precisio
 
     DU, DF  = lam*U, lam*F
     residue = 0.0
+    remountK  = true
     tracking(dom) # Tracking nodes, ips, elements, etc.
 
     if autosave
-        save(dom, dom.filekey * "-0" * ".vtk", verbose=false, save_ips=true)
+        save(dom, dom.filekey * "-0" * ".vtk", verbose=false, save_ips=save_ips)
     end
 
     for inc=1:nincs
-        if verbose; println("  increment $inc:") end
+        if verbose; println("  increment $inc/$nincs:") end
         DU, DF = lam*U, lam*F
         R      = copy(DF) # residual
 
@@ -131,7 +130,7 @@ function solve!(dom::Domain; nincs::Int=1, scheme::AbstractString="FE", precisio
         converged = false
         for it=1:maxits
             if it>1; DU = zeros(ndofs) end
-            solve_inc(dom, DU, R, umap, pmap, verbose)   # Changes DU and R
+            solve_inc(dom, DU, R, umap, pmap, remountK, verbose)   # Changes DU and R
             if verbose; print("    updating... \r") end
             DUa += DU
             DFin = update!(dom.elems, dofs, DU) # Internal forces (DU+DUaccum?)
@@ -148,6 +147,7 @@ function solve!(dom::Domain; nincs::Int=1, scheme::AbstractString="FE", precisio
                 println()
             end
 
+            if residue < 1e-10;   remountK = false end
             if residue > lastres; nbigger+=1 end
             if residue<precision; converged = true ; break end
             if nbigger>10;        converged = false; break end
@@ -155,7 +155,7 @@ function solve!(dom::Domain; nincs::Int=1, scheme::AbstractString="FE", precisio
         end
 
         tracking(dom) # Tracking nodes, ips, elements, etc.
-        autosave && save(dom, dom.filekey * "-$inc" * ".vtk", verbose=false, save_ips=true)
+        autosave && save(dom, dom.filekey * "-$inc" * ".vtk", verbose=false, save_ips=save_ips)
 
         if !converged
             pcolor(:red, "solve!: solver did not converge\n",)
@@ -181,7 +181,12 @@ function solve!(dom::Domain; nincs::Int=1, scheme::AbstractString="FE", precisio
 
 end
 
-function solve_inc(dom::Domain, DU::Vect, DF::Vect, umap::Array{Int,1}, pmap::Array{Int,1}, verbose::Bool)
+# function solve_inc with static variables
+let
+    global solve_inc
+    local  LUfact, K, K11, K12, K21, K22
+
+function solve_inc(dom::Domain, DU::Vect, DF::Vect, umap::Array{Int,1}, pmap::Array{Int,1}, remountK::Bool, verbose::Bool)
     #  [  K11   K12 ]  [ U1? ]    [ F1  ]
     #  |            |  |     | =  |     |
     #  [  K21   K22 ]  [ U2  ]    [ F2? ]
@@ -195,14 +200,16 @@ function solve_inc(dom::Domain, DU::Vect, DF::Vect, umap::Array{Int,1}, pmap::Ar
 
     if verbose; print("    assembling... \r") end
 
-    K = mount_K(dom, ndofs)
-    if nu>0
-        nu1 = nu+1
-        K11 = K[1:nu, 1:nu]
-        K12 = K[1:nu, nu1:end]
-        K21 = K[nu1:end, 1:nu]
+    if remountK
+        K = mount_K(dom, ndofs)
+        if nu>0
+            nu1 = nu+1
+            K11 = K[1:nu, 1:nu]
+            K12 = K[1:nu, nu1:end]
+            K21 = K[nu1:end, 1:nu]
+        end
+        K22 = K[nu+1:end, nu+1:end]
     end
-    K22 = K[nu+1:end, nu+1:end]
 
     F1  = DF[1:nu]
     U2  = DU[nu+1:end]
@@ -213,14 +220,20 @@ function solve_inc(dom::Domain, DU::Vect, DF::Vect, umap::Array{Int,1}, pmap::Ar
     U1 = zeros(0)
     if nu>0
         RHS = F1 - K12*U2
-        U1  = K11\RHS
+        if remountK
+            LUfact = lufact(K11)
+        end
+        #U1  = K11\RHS
+        U1 = LUfact\RHS
         F2 += K21*U1
     end
 
     # Completing vectors
-    DU[1:nu] = U1
+    DU[1:nu]     = U1
     DF[nu+1:end] = F2
 end
+
+end # let
 
 
 function update!(elems::Array{Element,1}, dofs::Array{Dof,1}, DU::Array{Float64,1})

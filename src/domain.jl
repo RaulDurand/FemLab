@@ -19,7 +19,7 @@
 ##############################################################################
 
 export Domain
-export track
+export track, set_trackers
 export get_node
 
 """
@@ -29,7 +29,7 @@ Creates an `Domain` object based on a Mesh object `mesh` and represents the geom
 
 **Fields**
 
-`nodes`: An array of nodes 
+`nodes`: An array of nodes
 
 `elems`: An array of finite elements
 
@@ -57,10 +57,7 @@ type Domain
     edge_bcs::Array{BC, 1}
     filekey::AbstractString
 
-    trk_nodes     ::Array{Tuple{Node, DTable}, 1}
-    trk_ips       ::Array{Tuple{Ip  , DTable}, 1}
-    trk_list_nodes::Array{Tuple{Array{Node,1}, DBook}, 1}
-    trk_list_ips  ::Array{Tuple{Array{Ip  ,1}, DBook}, 1}
+    trackers::Array{Tracker,1}
 
     function Domain(;filekey::AbstractString="out")
         this = new()
@@ -70,13 +67,11 @@ type Domain
         this.edge_bcs = []
         this.filekey = filekey
 
-        this.trk_nodes = []
-        this.trk_ips   = []
-        this.trk_list_nodes = []
-        this.trk_list_ips   = []
+        this.trackers = []
         return this
     end
 end
+
 
 function Domain(mesh::Mesh; filekey::AbstractString="out")
     dom = Domain(filekey=filekey)
@@ -130,8 +125,8 @@ function Domain(mesh::Mesh; filekey::AbstractString="out")
     end
 
     return dom
-    
 end
+
 
 function dom_load_json(filename::AbstractString)
     mesh = Mesh(filename)
@@ -194,6 +189,7 @@ function dom_load_json(filename::AbstractString)
     return dom
 end
 
+
 function Domain(filename::AbstractString; filekey::AbstractString="out")
     ext  = splitext(filename)[2]
 
@@ -208,37 +204,31 @@ function Domain(filename::AbstractString; filekey::AbstractString="out")
 
 end
 
-function set_bc(dom::Domain, bc::NodeBC)
-    if bc.expr != :()
-        bc.nodes = dom.nodes[bc.expr]
-    end
-    push!(dom.node_bcs, bc)
-end
-
-function set_bc(dom::Domain, bc::FaceBC) 
-    if bc.expr != :()
-        @show bc.expr
-        bc.faces = dom.faces[bc.expr]
-        @show length(bc.faces)
-    end
-    push!(dom.face_bcs, bc)
-end
-
-function set_bc(dom::Domain, bc::EdgeBC) 
-    if bc.expr != :()
-        bc.edges = dom.edges[bc.expr]
-    end
-    push!(dom.edge_bcs, bc)
-end
 
 function set_bc(dom::Domain, bcs::BC...)
     dom.node_bcs = []
     dom.face_bcs = []
     dom.edge_bcs = []
     for bc in bcs
-        set_bc(dom, bc)
+        ty = typeof(bc)
+
+        if ty == NodeBC
+            if bc.expr != :()  bc.nodes = dom.nodes[bc.expr] end
+            push!(dom.node_bcs, bc)
+        end
+
+        if ty == FaceBC
+            if bc.expr != :()  bc.faces = dom.faces[bc.expr] end
+            push!(dom.face_bcs, bc)
+        end
+
+        if ty == EdgeBC
+            if bc.expr != :()  bc.edges = dom.edges[bc.expr] end
+            push!(dom.edge_bcs, bc)
+        end
     end
 end
+
 
 function calc_nodal_vals(dom::Domain)
     # Get incidence matrix (shares) (fast)
@@ -258,6 +248,7 @@ function calc_nodal_vals(dom::Domain)
     #end
 end
 
+
 function make_backup(elems::Array{Element,1})
     for elem in elems
         for ip in elem.ips
@@ -265,6 +256,7 @@ function make_backup(elems::Array{Element,1})
         end
     end
 end
+
 
 function node_and_elem_vals(nodes::Array{Node,1}, elems::Array{Element,1})
 
@@ -397,6 +389,7 @@ function node_and_elem_vals2(nodes::Array{Node,1}, elems::Array{Element,1})
     return Node_vals, node_keys, Elem_vals, elem_keys
 end
 
+
 function get_node(dom::Domain, coord::Array{Float64,1})
     X = [ coord, 0.0 ][1:3]
     tol     = 1.0e-8
@@ -408,69 +401,80 @@ function get_node(dom::Domain, coord::Array{Float64,1})
     return nothing
 end
 
+#function get_ips(dom::Domain)
+    #return get_ips(dom.elems)
+#end
+
+function set_trackers(dom::Domain, ts::Tracker...)
+    for t in ts
+        push!(dom.trackers, t)
+    end
+end
+
+
+function tracking(dom::Domain)
+    for trk in dom.trackers
+        ty = typeof(trk)
+
+        if ty == NodeTracker
+            vals = getvals(trk.node)
+            push!(trk.table, vals)
+        elseif ty == NodesTracker
+            table = DTable()
+            for node in trk.nodes
+                vals = getvals(node)
+                push!(table, vals)
+            end
+            push!(trk.book, table)
+        elseif ty == IpTracker
+            vals = getvals(trk.ip.owner.mat, trk.ip.data)
+            push!(trk.table, vals)
+        elseif ty == IpsTracker
+            table = DTable()
+            for ip in trk.ips
+                vals = getvals(ip)
+                push!(table, vals)
+            end
+            push!(trk.book, table)
+        end
+
+    end
+end
+
+
 function track(dom::Domain, node::Node)
-    new_table = DTable()
-    push!(dom.trk_nodes, (node, new_table))
-    return new_table
+    println("Warning: track function is deprecated. Use NodeTrack and set_tracks functions")
+    t = NodeTracker(node)
+    push!(dom.trackers, t)
+    return t
 end
 
 function track(dom::Domain, ip::Ip)
-    new_table = DTable()
-    push!(dom.trk_ips, (ip, new_table))
-    return new_table
+    println("Warning: track function is deprecated. Use IpTrack and set_tracks functions")
+    t = IpTracker(ip)
+    push!(dom.trackers, t)
+    return t
 end
 
 function track(dom::Domain, elem::Element)
-    new_table = DTable()
-    push!(dom.trk_ips, (elem.ips[1], new_table))
-    return new_table
+    println("Warning: track function is deprecated. Use IpTrack and set_tracks functions")
+    t = IpTracker(elem.ips[1])
+    push!(dom.trackers, t)
+    return t
 end
 
-function track(dom::Domain, node_list::Array{Node,1})
-    new_book = DBook()
-    push!(dom.trk_list_nodes, (node_list, new_book))
-    return new_book
+function track(dom::Domain, nodes::Array{Node,1})
+    println("Warning: track function is deprecated. Use NodesTrack and set_tracks functions")
+    t = NodesTracker(nodes)
+    push!(dom.trackers, t)
+    return t
 end
 
-function track(dom::Domain, ip_list::Array{Ip,1})
-    new_book = DBook()
-    push!(dom.trk_list_ips, (ip_list, new_book))
-    return new_book
-end
-
-function tracking(dom::Domain)
-    # tracking nodes
-    for (node, table) in dom.trk_nodes
-        vals = getvals(node)
-        push!(table, vals)
-    end
-
-    # tracking ips
-    for (ip, table) in dom.trk_ips
-        vals = getvals(ip.owner.mat, ip.data)
-        push!(table, vals)
-    end
-
-    # tracking list of nodes
-    for (nodes, book) in dom.trk_list_nodes
-        table = DTable()
-        for node in nodes
-            vals = getvals(node)
-            push!(table, vals)
-        end
-        push!(book, table)
-    end
-
-    # tracking list of ips
-    for (ips, book) in dom.trk_list_ips
-        table = DTable()
-
-        for ip in ips
-            vals = getvals(ip)
-            push!(table, vals)
-        end
-        push!(book, table)
-    end
+function track(dom::Domain, ips::Array{Ip,1})
+    println("Warning: track function is deprecated. Use IpTrack and set_tracks function")
+    t = IpTracker(ips)
+    push!(dom.trackers, t)
+    return t
 end
 
 
@@ -556,7 +560,6 @@ function save(dom::Domain, filename::AbstractString; verbose=true, save_ips=fals
         println(f, )
     end
 
-
     # Write element data
     println(f, "CELL_DATA ", nelems)
     for i=1:necomps
@@ -588,12 +591,11 @@ function save(dom::Domain, filename::AbstractString; verbose=true, save_ips=fals
         basename, ext = splitext(filename)
         save_dom_ips(dom, basename*"-ip"*ext, verbose)
     end
-
 end
 
 
+# Saves ips information from domain as a vtk file
 function save_dom_ips(dom::Domain, filename::AbstractString, verbose=true)
-    # Saves ips information from domain as a vtk file
 
     # Get all ips
     ips = Ip[]
@@ -749,7 +751,6 @@ function save2(dom::Domain, filename::AbstractString; verbose=true)
     end
     println(f)
 
-
     if has_data
         # Get node and elem values
         node_vals, node_labels, elem_vals, elem_labels = node_and_elem_vals(dom.nodes, dom.elems)
@@ -813,7 +814,6 @@ function save2(dom::Domain, filename::AbstractString; verbose=true)
         println(f, )
     end
 
-
     # Write element data
     println(f, "CELL_DATA ", ncells)
     for i=1:necomps
@@ -842,7 +842,6 @@ function save2(dom::Domain, filename::AbstractString; verbose=true)
     if verbose
         pcolor(:green, "  file $filename written (Domain)\n")
     end
-
 end
 
 
@@ -869,6 +868,7 @@ function save(nodes::Array{Node,1}, filename::AbstractString; dir::Symbol=:nodir
 
     save(table, filename, verbose)
 end
+
 
 function save(ips::Array{Ip,1}, filename::AbstractString; offset::Float64=0.0, dir::Symbol=:nodir, rev::Bool=false, verbose=true)
     # sort ips
@@ -973,6 +973,5 @@ function save(ips::Array{Ip,1}, filename::AbstractString; offset::Float64=0.0, d
         if verbose
             println("  file $filename written (Domain)")
         end
-        
     end
 end

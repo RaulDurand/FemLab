@@ -26,7 +26,7 @@ import Base.sort
 import Base.show
 
 export Node
-export set_bc, max, min, sort, reset
+export max, min, sort, reset
 export @get_nodes
 
 
@@ -140,50 +140,6 @@ function getvals(node::Node)
 end
 
 
-# Define boundary conditions for a node
-"""
-`set_bc(node, bcs...)` 
-
-Sets one or several boundary conditions `bcs` to a `node` object.
-In a mechanical analysis, essential and natural boundary conditions can be set using this function.
-For example:
-```
-node = Node([1.0, 1.0, 1.0])
-set_bc(node, fx=10.0, uy=0.01)
-
-```
-"""
-function set_bc(node::Node; args...)
-    for (key,val) in args
-        #@show (key,val)
-        if !haskey(node.dofdict, key); error("key ($key) not found in node ($(node.id)).") end
-        dof = node.dofdict[key]
-        if key==dof.sU
-            dof.prescU = true
-            dof.bryU  = val
-        else
-            dof.bryF += val
-        end
-    end
-end
-
-
-# Clear all boundary conditions in a node
-"""
-`clear_bc(node)`
-
-Clears all boundary conditions previously set in a Node object.
-"""
-function clear_bc(node::Node)
-    for dof in node.dofs
-        dof.bryU   = 0.0
-        dof.bryF   = 0.0
-        dof.prescU = false
-        dof.eq_id  = -1
-    end
-end
-
-
 # Node collection
 # ===============
 
@@ -205,6 +161,11 @@ function getindex(nodes::Array{Node,1}, cond::Expr)
             push!(result, node)
         end
     end
+
+    if length(result) == 0
+        pcolor(:red, "Warning: No nodes found that match: $cond\n")
+    end
+
     return result
 end
 
@@ -218,33 +179,16 @@ function getcoords(nodes::Array{Node,1}, ndim=3)
 end
 
 
-# Define boundary conditions for a collection of nodes
-"""
-`set_bc(nodes, bcs...)` 
-
-Sets one or several boundary conditions `bcs` to a set of Node objects `nodes`.
-"""
-function set_bc(nodes::Array{Node,1}; args...) 
-    if length(nodes)==0
-        pcolor(:red, "Warning, applying boundary conditions to empty array of nodes\n")
-    end
-
-    for node in nodes
-        set_bc(node; args...)
-    end
-end
-
-
 # Get the maximum value of a given coordinate for the whole collection of nodes
 function max(nodes::Array{Node,1}, dir::Symbol) 
     idx = findfisrt((:x, :y, :z), dir)
-    max([node.x[idx] for node in nodes]...)
+    maximum([node.X[idx] for node in nodes])
 end
 
 
 function min(nodes::Array{Node,1}, dir::Symbol) 
     idx = findfisrt((:x, :y, :z), dir)
-    min([node.x[idx] for node in nodes]...)
+    minimum([node.X[idx] for node in nodes])
 end
 
 
@@ -254,6 +198,7 @@ function sort(nodes::Array{Node,1}, dir::Symbol=:x, rev::Bool=false)
     idxs = sortperm([node.X[idx] for node in nodes], rev=rev)
     return nodes[idxs]
 end
+
 
 # Macro to filter nodes using a condition expression
 macro get_nodes(dom, expr)

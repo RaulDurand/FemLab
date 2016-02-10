@@ -31,13 +31,12 @@ type DTable
     dict  ::Dict{Symbol,Array{Float64,1}} # Data index
     function DTable()
         this = new()
-        this.header = Array(Symbol,0)
-        #this.dict   = []
+        this.header = []
         return this
     end
-    function DTable(header::Array{Symbol}, matrix::Array{Float64}=Float64[])
+    function DTable(header::Array{Symbol,1}, matrix::Array{Float64}=Float64[])
         this = new()
-        this.header = copy(vec(header))
+        this.header = copy(header)
         if length(matrix)==0
             this.data = [ [] for s in header]
         else
@@ -50,6 +49,7 @@ type DTable
         return this
     end
 end
+
 
 type DBook
     tables::Array{DTable, 1}
@@ -70,6 +70,7 @@ end
 function push!(book::DBook, table::DTable)
     push!(book.tables, table)
 end
+
 
 function push!(table::DTable, dict::Dict{Symbol,Float64})
     if length(table.header)==0
@@ -107,6 +108,7 @@ end
 function getindex(book::DBook, index::Int64)
     return book.tables[index]
 end
+
 
 function save(table::DTable, filename::AbstractString; verbose=true, format="")
     f  = open(filename, "w")
@@ -148,6 +150,7 @@ function save(table::DTable, filename::AbstractString; verbose=true, format="")
         return
     end
 end
+
 
 function save(book::DBook, filename::AbstractString; verbose=true, format="dat")
     f  = open(filename, "w") 

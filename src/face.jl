@@ -60,27 +60,15 @@ function getindex(faces::Array{Face,1}, cond::Expr)
             push!(result, face) 
         end
     end
+
+    if length(result) == 0
+        pcolor(:red, "Warning: No faces found that match: $cond\n")
+    end
+
     return result
 end
 
 getindex(faces::Array{Face,1}, cond::AbstractString) = getindex(faces, parse(cond))
-
-function set_bc(face::Face; args...)
-    oelem = face.oelem # owner element
-    if oelem==nothing; error("Face with no owner element") end
-
-    for (key,val) in args
-        #@show (key,val)
-        set_facet_bc(oelem.mat, oelem, face, key, float(val))
-    end
-end
-
-function set_bc(faces::Array{Face,1}; args...)
-    if length(faces)==0; pcolor(:red, "Warning, applying boundary conditions to empty array of faces\n") end
-    for face in faces
-        set_bc(face; args...)
-    end
-end
 
 # Macro to filter faces using a condition expression
 macro get_faces(dom, expr)
