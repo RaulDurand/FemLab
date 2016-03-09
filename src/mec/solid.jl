@@ -96,7 +96,7 @@ function getvals(mat::ElasticSolid, ipd::ElasticSolidIpData)
     sr2  = 2.0^0.5
 
     if ndim==2;
-        return [
+        return Dict(
           :sxx => σ[1],
           :syy => σ[2],
           :szz => σ[3],
@@ -105,9 +105,9 @@ function getvals(mat::ElasticSolid, ipd::ElasticSolidIpData)
           :eyy => ε[2],
           :ezz => ε[3],
           :exy => ε[4]/sr2,
-          :s_m => sum(σ[1:3])/3.0 ]
+          :s_m => sum(σ[1:3])/3.0 )
       else
-        return [
+        return Dict(
           :sxx => σ[1],
           :syy => σ[2],
           :szz => σ[3],
@@ -120,6 +120,6 @@ function getvals(mat::ElasticSolid, ipd::ElasticSolidIpData)
           :exy => ε[4]/sr2,
           :eyz => ε[5]/sr2,
           :exz => ε[6]/sr2,
-          :s_m => sum(σ[1:3])/3.0 ]
+          :s_m => sum(σ[1:3])/3.0 )
       end
 end

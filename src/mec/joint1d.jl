@@ -290,15 +290,15 @@ function update!(mat::AbsJoint1D, elem::Element, DU::Array{Float64,1}, DF::Array
 end
 
 function getvals(ipd::Joint1DIpData)
-    return [ 
+    return Dict(
       :ur   => ipd.eps[1] ,
-      :tau  => ipd.sig[1] ]
+      :tau  => ipd.sig[1] )
 end
 
 function getvals(mat::Joint1D, ipd::Joint1DIpData)
-    return [ 
+    return Dict(
       :ur   => ipd.eps[1] ,
-      :tau  => ipd.sig[1] ]
+      :tau  => ipd.sig[1] )
 end
 
 function node_and_elem_vals(mat::AbsJoint1D, elem::Element)

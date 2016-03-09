@@ -165,7 +165,7 @@ function getvals(mat::DruckerPrager, ipd::DruckerPragerIpData)
     #pl_r  = srj2d/j1
 
     if ndim==2;
-        return [
+        return Dict(
           :sxx => σ[1],
           :syy => σ[2],
           :szz => σ[3],
@@ -174,9 +174,9 @@ function getvals(mat::DruckerPrager, ipd::DruckerPragerIpData)
           :eyy => ε[2],
           :ezz => ε[3],
           :exy => ε[4]/sr2,
-          :p   => sum(σ[1:3])/3.0 ]
+          :p   => sum(σ[1:3])/3.0 )
       else
-        return [
+        return Dict(
           :sxx => σ[1],
           :syy => σ[2],
           :szz => σ[3],
@@ -196,6 +196,6 @@ function getvals(mat::DruckerPrager, ipd::DruckerPragerIpData)
           :srj2d => srj2d,
           :p   => trace(σ)/3.0
           #:pl_r=> pl_r
-          ]
+          )
       end
 end

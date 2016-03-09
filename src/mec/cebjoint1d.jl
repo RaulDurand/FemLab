@@ -194,10 +194,9 @@ function stress_update(mat::CEBJoint1D, ipd::CEBJoint1DIpData, Δε::Vect)
 end
 
 function getvals(mat::CEBJoint1D, ipd::CEBJoint1DIpData)
-    return [ 
+    return Dict(
       :ur   => ipd.ε[1] ,
       :tau  => ipd.σ[1] ,
-      #:w_pa   => ipd.ωpa
-      ]
+      )
 end
 

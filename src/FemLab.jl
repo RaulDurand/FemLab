@@ -84,6 +84,7 @@ end
 
 @reexport using FemMesh
 import FemMesh.save # to be extended
+import FemMesh.update! # to be extended
 
 using JSON
 

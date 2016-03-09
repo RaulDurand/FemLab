@@ -93,20 +93,20 @@ function stress_update(mat::PPTruss, ipd::PPTrussIpData, Δε::Float64)
 end
 
 function getvals(ipd::PPTrussIpData)
-    return [ 
+    return Dict(
       :sa => ipd.σ,
       :ea => ipd.ε,
-      :epa_ppt => ipd.εpa]
+      :epa_ppt => ipd.εpa )
       #:Fa => ipd.σ*mat.A,
       #:A  => mat.A ]
 end
 
 function getvals(mat::PPTruss, ipd::PPTrussIpData)
-    return [ 
+    return Dict(
       :sa => ipd.σ,
       :ea => ipd.ε,
       :epa_ppt => ipd.εpa,
       :Fa => ipd.σ*mat.A,
-      :A  => mat.A ]
+      :A  => mat.A )
 end
 

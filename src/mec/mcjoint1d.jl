@@ -151,12 +151,12 @@ end
 
 function getvals(mat::MCJoint1D, ipd::MCJoint1DIpData)
     τmax = mat.c + abs(ipd.σc)*mat.μ
-    return [ 
+    return Dict(
       :ur   => ipd.ε[1] ,
       :tau  => ipd.σ[1] ,
       :sigc => ipd.σc   ,
       :taumax => τmax   ,
       :w_pa   => ipd.ωpa
-      ]
+      )
 end
 
