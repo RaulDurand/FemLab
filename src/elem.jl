@@ -165,6 +165,10 @@ function getindex(elems::Array{Element,1}, s::Symbol)
         cr = [ is_line(elem.shape) for elem in elems]
         return elems[cr]
     end
+    if s == :joints1D
+        cr = [ is_joint1D(elem.shape) for elem in elems]
+        return elems[cr]
+    end
     if s == :joints
         cr = [ is_joint(elem.shape) for elem in elems]
         return elems[cr]
@@ -256,11 +260,20 @@ function set_mat(elem::Element, mm::Material; nips::Int64=0)
     # finding ips global coordinates
     C     = getcoords(elem)
     shape = elem.shape
-    if is_joint(shape)
+
+    # fix for link elements
+    if is_joint1D(shape)
         C     = getcoords(elem.extra[:bar])
         shape = elem.extra[:bar].shape
     end
 
+    # fix for joint elements
+    if is_joint(shape)
+        C     = C[1:div(end,2),:]
+        shape = get_basic_shape(shape)
+    end
+
+    # interpolation
     for ip in elem.ips
         N = shape_func(shape, ip.R)
         ip.X = C'*N

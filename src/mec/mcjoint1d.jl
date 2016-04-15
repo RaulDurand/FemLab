@@ -95,7 +95,7 @@ function set_state(ipd::MCJoint1DIpData, sig=zeros(0), eps=zeros(0))
     end
 end
 
-function mountD(mat::MCJoint1D, ipd::MCJoint1DIpData)
+function calcD(mat::MCJoint1D, ipd::MCJoint1DIpData)
     ks = ipd.Δγ==0.0? mat.ks : mat.ks*mat.kh/(mat.ks + mat.kh)
     kn = mat.kn
     if ipd.ndim==2

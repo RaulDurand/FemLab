@@ -1,7 +1,6 @@
 using FemLab
 using FactCheck
-
-verbose=true
+verbose = isdefined(:verbose) ? verbose : true
 
 coord = [ 0.0 0.0 0.0; 0.0 1.0 0.0; 0.0 1.0 1.0]   # matriz de coordenadas
 conn  = [ 1 3; 1 2;2 3]  # matriz de conectividades

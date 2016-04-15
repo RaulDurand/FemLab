@@ -49,7 +49,7 @@ function mount_RHS(dom::Domain, ndofs::Int64, Δt::Float64)
     return RHS
 end
 
-function solve!(dom::Domain; nincs::Int=1, scheme::AbstractString="FE", precision::Float64=0.01, reset_bc::Bool=true, verbose::Bool=true, autosave::Bool=false, save_ips::Bool=false)
+function solve!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::AbstractString="FE", precision::Float64=0.01, reset_bc::Bool=true, verbose::Bool=true, autosave::Bool=false, save_ips::Bool=false)
 
     if verbose; pbcolor(:cyan,"FEM analysis:\n") end
 
@@ -126,7 +126,6 @@ function solve!(dom::Domain; nincs::Int=1, scheme::AbstractString="FE", precisio
         DUa    = zeros(ndofs)
         nbigger= 0
 
-        maxits    = 50
         converged = false
         for it=1:maxits
             if it>1; DU = zeros(ndofs) end

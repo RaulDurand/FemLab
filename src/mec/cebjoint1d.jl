@@ -129,7 +129,7 @@ function set_state(ipd::CEBJoint1DIpData, sig=zeros(0), eps=zeros(0))
     end
 end
 
-function mountD(mat::CEBJoint1D, ipd::CEBJoint1DIpData)
+function calcD(mat::CEBJoint1D, ipd::CEBJoint1DIpData)
 
     # inital value for ipd.τy
     if ipd.τy==0.0

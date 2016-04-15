@@ -14,7 +14,7 @@ type NodeTracker <: Tracker
         return new(DTable(), nodes[1])
     end
 
-    function NodeTracker(domain, expr::Expr)
+    function NodeTracker(domain, expr::Expr) # TODO: verify if this syntax is convenient
         nodes = domain.nodes[expr]
         @assert length(nodes)==1
         return new(DTable(), nodes[1])

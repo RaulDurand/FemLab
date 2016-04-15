@@ -57,8 +57,9 @@ type DruckerPrager<:Mechanical
         @assert kappa>0.0
         @assert H>=0.0
 
-        this     = new(E, nu, alpha, kappa, H)
-        this.De  = mount_De(E,nu) # elastic tensor
+        this    = new(E, nu, alpha, kappa, H)
+        this.De = zeros(6,6)
+        setDe(E, nu, this.De)
         this.new_ipdata = DruckerPragerIpData
         return this 
     end
@@ -91,11 +92,11 @@ function yield_func(mat::DruckerPrager, ipd::DruckerPragerIpData, σ::Tensor2)
     return α*j1 + √j2d - κ - H*εpa
 end
 
-function mount_D(mat::DruckerPrager, ipd::DruckerPragerIpData)
+function calcD(mat::DruckerPrager, ipd::DruckerPragerIpData)
     α   = mat.α
     H   = mat.H
+    De  = mat.De
 
-    De = mat.De
     if ipd.Δγ==0.0
         return De
     end
@@ -113,7 +114,6 @@ function mount_D(mat::DruckerPrager, ipd::DruckerPragerIpData)
     end
 
     return De - inner(De,Nu) ⊗ inner(V,De) / (inner(V,De,Nu) + H)
-
 end
 
 function stress_update(mat::DruckerPrager, ipd::DruckerPragerIpData, Δε::Array{Float64,1})

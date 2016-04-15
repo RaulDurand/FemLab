@@ -1,5 +1,5 @@
 
-function subs_equal_by_approx(expr::Expr)
+function subs_equal_by_approx(expr::Expr) # deprecated
     mexpr = copy(expr) # expression to be modified
     for (i,arg) in enumerate(mexpr.args)
         if typeof(arg)!=Expr; continue end
@@ -17,6 +17,7 @@ function subs_equal_by_approx(expr::Expr)
     return mexpr
 end
 
+# Fixes comparisons expressions using a tolerance
 function fix_comparison_scalar(expr::Expr)
     mexpr = copy(expr) # expression to be modified
     tol = 1e-6
@@ -58,6 +59,7 @@ function fix_comparison_scalar(expr::Expr)
     return mexpr
 end
 
+# Fixes comparisons in array expressions using a tolerance
 function fix_comparison_arrays(expr::Expr)
     mexpr = copy(expr) # expression to be modified
     tol = 1e-6

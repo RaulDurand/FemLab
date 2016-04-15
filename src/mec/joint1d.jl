@@ -80,7 +80,7 @@ function set_state(ipd::Joint1DIpData, sig=zeros(0), eps=zeros(0))
     end
 end
 
-function mountD(mat::Joint1D, ipd::Joint1DIpData)
+function calcD(mat::Joint1D, ipd::Joint1DIpData)
     ks = mat.ks
     kn = mat.kn
     if ipd.ndim==2
@@ -94,7 +94,7 @@ function mountD(mat::Joint1D, ipd::Joint1DIpData)
 end
 
 function stress_update(mat::Joint1D, ipd::Joint1DIpData, deps)
-    D = mountD(mat, ipd)
+    D = calcD(mat, ipd)
     dsig     = D*deps
 
     ipd.eps[1:ipd.ndim] += deps
@@ -110,7 +110,7 @@ function mount_T(J::Matx)
 
     if ndim==2
         L2 = [ -L1[2],  L1[1] ]
-        return [L1 L2]
+        return [L1 L2] # TODO: check if it needs transpose
     end
 
     # Finding second vector
@@ -245,15 +245,17 @@ function elem_jacobian(mat::AbsJoint1D, elem::Element)
     Ch = getcoords(hook)
     Ct = getcoords(bar)
 
-    K = zeros(nnodes*ndim, nnodes*ndim)
-    B = zeros(ndim, nnodes*ndim)
+    K  = zeros(nnodes*ndim, nnodes*ndim)
+    B  = zeros(ndim, nnodes*ndim)
+    DB = zeros(ndim, nnodes*ndim)
 
     for ip in elem.ips
-        detJ = mountB(elem.mat, elem, ip.R, Ch, Ct, B)
-        D    = mountD(elem.mat, ip.data)
+        detJ = mountB(elem.mat, elem, ip.R, Ch, Ct, B) #TODO: include B matrix construction here
+        D    = calcD(elem.mat, ip.data)
         D[1,1]*=mat.h
         coef = detJ*ip.w
-        K   += B'*D*B*coef
+        @gemm DB = D*B
+        @gemm K += coef*B'*DB
     end
     return K
 end
@@ -274,26 +276,26 @@ function update!(mat::AbsJoint1D, elem::Element, DU::Array{Float64,1}, DF::Array
     Ch   = getcoords(hook)
     for ip in elem.ips
         detJ = mountB(elem.mat, elem, ip.R, Ch, Ct, B)
-        D    = mountD(mat, ip.data)
+        D    = calcD(mat, ip.data)
         deps = B*dU
         if !isa(ip.data, Joint1DIpData)
             ip.data.σc = calc_σc(elem, ip.R, Ch, Ct) # TODO: pass as argument to stress_update
         end
         dsig = stress_update(mat, ip.data, deps)
         coef = detJ*ip.w
-        dsig[1] *= mat.h
-        dF  += B'*dsig*coef
+        dsig[1]  *= mat.h
+        @gemv dF += coef*B'*dsig
     end
 
     # Update global vector
     DF[map] += dF
 end
 
-function getvals(ipd::Joint1DIpData)
-    return Dict(
-      :ur   => ipd.eps[1] ,
-      :tau  => ipd.sig[1] )
-end
+#function getvals(ipd::Joint1DIpData)
+    #return Dict(
+      #:ur   => ipd.eps[1] ,
+      #:tau  => ipd.sig[1] )
+#end
 
 function getvals(mat::Joint1D, ipd::Joint1DIpData)
     return Dict(
