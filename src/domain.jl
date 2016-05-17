@@ -107,7 +107,7 @@ function Domain(mesh::Mesh; filekey::AbstractString="out")
         push!(dom.edges, edge)
     end
 
-    # Setting embeddeds
+    # Setting 1D joints
     edict = Dict{UInt64, Element}()
     for elem in dom.elems
         hs = hash(getconns(elem))
@@ -123,6 +123,8 @@ function Domain(mesh::Mesh; filekey::AbstractString="out")
             elem.extra[:bar ] = edict[hs_truss]
         end
     end
+
+    # Setting 2D joints
 
     return dom
 end

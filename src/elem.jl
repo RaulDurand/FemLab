@@ -135,6 +135,7 @@ type Element
     active::Bool
     mat::Material
     extra::Dict{Symbol,Any}
+    K0::Array{Float64, 2} # deleteme
 
     function Element(shape, nodes, ndim, tag="")
         this     = new(shape, nodes, ndim, tag)

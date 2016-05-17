@@ -10,7 +10,7 @@ type NodeTracker <: Tracker
         return new(DTable(), node )
     end
 
-    function NodesTracker(nodes::Array{Node,1})
+    function NodeTracker(nodes::Array{Node,1})
         return new(DTable(), nodes[1])
     end
 

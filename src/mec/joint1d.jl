@@ -155,9 +155,9 @@ function calc_σc(elem, R, Ch, Ct)
             l0*l0      m0*m0      n0*n0    sq2*l0*m0    sq2*m0*n0    sq2*n0*l0     
             l1*l1      m1*m1      n1*n1    sq2*l1*m1    sq2*m1*n1    sq2*n1*l1     
             l2*l2      m2*m2      n2*n2    sq2*l2*m2    sq2*m2*n2    sq2*n2*l2     
-        sq2*l0*l1  sq2*m0*n1  sq2*n0*n1  l0*m1+l1*m0  m0*n1+m1*n0  l0*n1+l1*n0     
-        sq2*l1*l2  sq2*m1*n2  sq2*n1*n2  l1*m2+l2*m1  m1*n2+m2*n1  l1*n2+l2*n1     
-        sq2*l2*l0  sq2*m2*n0  sq2*n2*n0  l2*m0+l0*m2  m2*n0+m0*n2  l2*n0+l0*n2 ]
+        sq2*l0*l1  sq2*m0*m1  sq2*n0*n1  l0*m1+l1*m0  m0*n1+m1*n0  l0*n1+l1*n0     
+        sq2*l1*l2  sq2*m1*m2  sq2*n1*n2  l1*m2+l2*m1  m1*n2+m2*n1  l1*n2+l2*n1     
+        sq2*l2*l0  sq2*m2*m0  sq2*n2*n0  l2*m0+l0*m2  m2*n0+m0*n2  l2*n0+l0*n2 ]
 
     # Mounting M vector
     N   = shape_func(bar.shape, R)

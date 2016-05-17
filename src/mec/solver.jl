@@ -110,7 +110,7 @@ function solve!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::AbstractStrin
 
     DU, DF  = lam*U, lam*F
     residue = 0.0
-    remountK  = true
+    remountK = true
     tracking(dom) # Tracking nodes, ips, elements, etc.
 
     if autosave
@@ -125,6 +125,7 @@ function solve!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::AbstractStrin
         DFa    = zeros(ndofs)
         DUa    = zeros(ndofs)
         nbigger= 0
+        remountK = true
 
         converged = false
         for it=1:maxits
@@ -146,10 +147,13 @@ function solve!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::AbstractStrin
                 println()
             end
 
-            if residue < 1e-10;   remountK = false end
+            # Warning: use of remountK is bug prone
+            #if residue < 1e-10 && it==1; remountK = false end
+            #if it>1; remountK=true end
+
             if residue > lastres; nbigger+=1 end
             if residue<precision; converged = true ; break end
-            if nbigger>10;        converged = false; break end
+            if nbigger>15;        converged = false; break end
             if isnan(residue);    converged = false; break end
         end
 

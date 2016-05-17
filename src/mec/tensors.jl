@@ -66,8 +66,24 @@ function principal(T::Tensor2)
           T[4]/sr2  T[2]      T[5]/sr2 ;
           T[6]/sr2  T[5]/sr2  T[3]     ]
     L, V = eig(F)
-    idxs = sortperm(L, rev=true)
-    return L[idxs], V[:,idxs]
+
+    # force a clockwise system
+    if norm( cross(V[:,2], V[:,3]) - V[:,1] ) > 1e-5
+        L[2], L[3] = L[3], L[2]
+        V[:,2], V[:,3] = V[:,3], V[:,2]
+    end
+
+    # find max value
+    val, idx = findmax(L)
+    if idx==2
+        L = circshift(L, 2)
+        V = circshift(V, [0,2])
+    end
+    if idx==3
+        L = circshift(L, 1)
+        V = circshift(V, [0,1])
+    end
+    return L, V
 end
 
 
@@ -107,16 +123,16 @@ end
 ∷ = inner
 
 function rotation4(V::Array{Float64,2}, T::Tensor4)
-    l1, l2, l3 = V[:,1]
-    m1, m2, m3 = V[:,2]
-    n1, n2, n3 = V[:,3]
+    l1, m1, n1 = V[:,1]
+    l2, m2, n2 = V[:,2]
+    l3, m3, n3 = V[:,3]
 
     sq2 = √2.0
 
     T[1,1] =     l1*l1;  T[1,2] =     m1*m1;  T[1,3] =     n1*n1;  T[1,4] =   sq2*l1*m1;  T[1,5] =   sq2*m1*n1;  T[1,6] =   sq2*n1*l1     
     T[2,1] =     l2*l2;  T[2,2] =     m2*m2;  T[2,3] =     n2*n2;  T[2,4] =   sq2*l2*m2;  T[2,5] =   sq2*m2*n2;  T[2,6] =   sq2*n2*l2     
     T[3,1] =     l3*l3;  T[3,2] =     m3*m3;  T[3,3] =     n3*n3;  T[3,4] =   sq2*l3*m3;  T[3,5] =   sq2*m3*n3;  T[3,6] =   sq2*n3*l3     
-    T[4,1] = sq2*l1*l2;  T[4,2] = sq2*m1*n2;  T[4,3] = sq2*n1*n2;  T[4,4] = l1*m2+l2*m1;  T[4,5] = m1*n2+m2*n1;  T[4,6] = l1*n2+l2*n1     
-    T[5,1] = sq2*l2*l3;  T[5,2] = sq2*m2*n3;  T[5,3] = sq2*n2*n3;  T[5,4] = l2*m3+l3*m2;  T[5,5] = m2*n3+m3*n2;  T[5,6] = l2*n3+l3*n2     
-    T[6,1] = sq2*l3*l1;  T[6,2] = sq2*m3*n1;  T[6,3] = sq2*n3*n1;  T[6,4] = l3*m1+l1*m3;  T[6,5] = m3*n1+m1*n3;  T[6,6] = l3*n1+l1*n3 
+    T[4,1] = sq2*l1*l2;  T[4,2] = sq2*m1*m2;  T[4,3] = sq2*n1*n2;  T[4,4] = l1*m2+l2*m1;  T[4,5] = m1*n2+m2*n1;  T[4,6] = l1*n2+l2*n1     
+    T[5,1] = sq2*l2*l3;  T[5,2] = sq2*m2*m3;  T[5,3] = sq2*n2*n3;  T[5,4] = l2*m3+l3*m2;  T[5,5] = m2*n3+m3*n2;  T[5,6] = l2*n3+l3*n2     
+    T[6,1] = sq2*l3*l1;  T[6,2] = sq2*m3*m1;  T[6,3] = sq2*n3*n1;  T[6,4] = l3*m1+l1*m3;  T[6,5] = m3*n1+m1*n3;  T[6,6] = l3*n1+l1*n3 
 end

@@ -25,9 +25,8 @@ type CEBJoint1DIpData<:IpData
     ndim::Int
     σ  ::Array{Float64,1}
     ε  ::Array{Float64,1}
-    τy ::Float64
+    τy ::Float64           # shear strength
     unload::Bool
-    σc::Float64
     function CEBJoint1DIpData(ndim=3)
         this = new(ndim)
         this.σ = zeros(3)
@@ -81,14 +80,12 @@ end
 
 function Tau(mat::CEBJoint1D, s::Float64)
     ss = abs(s)
-    #@assert s>=0
     if ss<mat.s1
         return mat.ks*s
     elseif ss<mat.s2
         return mat.ks*mat.s1*sign(s)
     elseif ss<mat.s3
         τmax = mat.ks*mat.s1
-        #return (mat.τres-τmax)/(mat.s3-mat.s2)*(mat.s3-ss)*sign(s)
         return (mat.τres + (mat.τres-τmax)/(mat.s3-mat.s2)*(ss-mat.s3))*sign(s)
         
     else
@@ -102,7 +99,6 @@ function deriv(mat::CEBJoint1D, ipd::CEBJoint1DIpData, s::Float64)
     #check for unloading... !
     #τ = ipd.σ[1]
     #f = yield_func(mat, ipd, τ, ss)
-
 
     if ss<mat.s1
         return mat.ks

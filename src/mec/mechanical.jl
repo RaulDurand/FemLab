@@ -180,6 +180,7 @@ function elem_jacobian(::Mechanical, elem::Element)
         @gemm DB = D*B
         @gemm K += coef*B'*DB
     end
+    elem.K0 = copy(K)
     return K
 end
 
@@ -237,18 +238,29 @@ function update!(::Mechanical, elem::Element, DU::Array{Float64,1}, DF::Array{Fl
     # Update global vector
     DF[map] += dF
 
+    #DD = (elem.K0*dU - dF)'
+
+    #dF2 = elem.K0*dU
+    #@show round(dF, 1)
+    #@show round(dF2, 1)
+    #println()
+
+end
+
+function elem_vals(mat::Mechanical, elem::Element)
+    return Dict{Symbol, Float64}()
 end
 
 function node_and_elem_vals(mat::Mechanical, elem::Element)
     ndim = elem.ndim
     node_vals = Dict{Symbol, Array{Float64,1}}()
-    elem_vals = Dict{Symbol, Float64}()
+    e_vals = Dict{Symbol, Float64}()
 
     for key in (:ux, :uy, :uz)[1:ndim]
         node_vals[key] = [node.dofdict[key].U for node in elem.nodes]
     end
 
-    # Elem vals
+    # values from integration points
     all_ip_vals = [ getvals(mat, ip.data) for ip in elem.ips ]
     labels      = keys(all_ip_vals[1])
     nips        = length(elem.ips) 
@@ -256,6 +268,7 @@ function node_and_elem_vals(mat::Mechanical, elem::Element)
     # matrix with all ip values (nip x nvals)
     IP = vcat([ [values(all_ip_vals[i])...]' for i=1:nips]...)
 
+    # extrapolate values to nodes
     E = extrapolator(elem.shape, nips)
     N = E*IP # (nnodes x nvals)
 
@@ -263,10 +276,11 @@ function node_and_elem_vals(mat::Mechanical, elem::Element)
     # Filling nodal and elem vals
     for (i,key) in enumerate(labels)
         node_vals[key] = N[:,i]
-        #elem_vals[key] = mean(IP[:,i])
     end
 
-    return node_vals, elem_vals
+    e_vals = elem_vals(mat, elem)
+
+    return node_vals, e_vals
 
 end
 
@@ -279,7 +293,7 @@ include("joint1d.jl")
 include("mcjoint1d.jl")
 include("cebjoint1d.jl")
 
+include("kotsovos.jl")
+
 include("dp.jl")
-include("dpcap.jl")
-include("dpconc.jl")
 
