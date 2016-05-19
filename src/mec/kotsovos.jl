@@ -69,7 +69,7 @@ type Kotsovos<:Mechanical
         this     = new(E, nu, beta, fc, ft)
         this.new_ipdata = KotsovosIpData
         this.De  = zeros(6,6)
-        setDe(E,nu,this.De) # elastic tensor
+        setDe(E, nu, this.De) # elastic tensor
         return this 
     end
 end
