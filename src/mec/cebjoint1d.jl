@@ -27,7 +27,6 @@ type CEBJoint1DIpData<:IpData
     ε  ::Array{Float64,1}
     τy ::Float64           # shear strength
     unload::Bool
-    σc :: Float64          # vestigial term from MCJoint1D - do not delete
     function CEBJoint1DIpData(ndim=3)
         this = new(ndim)
         this.σ = zeros(3)

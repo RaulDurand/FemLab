@@ -19,54 +19,65 @@
 ##############################################################################
 
 
-export NgoScordelis
+export Hordijk
 
-type NgoScordelisIpData<:IpData
+# Integration point data
+type HordijkIpData<:IpData
     ndim::Int
-    sig ::Array{Float64,1}
-    eps ::Array{Float64,1}
-    function NgoScordelisIpData(ndim=3)
+    sig ::Array{Float64,1} # stress vector (τx', τy', σn)
+    eps ::Array{Float64,1} # relative displacement (sx', sy', w)
+    h   ::Float64          # surrouding element size h=(V1+V2)/(2A)
+    function HordijkIpData(ndim=3)
         this = new(ndim)
         this.sig = zeros(3)
         this.eps = zeros(3)
+        this.h = 0.0
         return this
     end
 end
 
-type NgoScordelis<:AbsJoint
-    ks::Float64
-    kn::Float64
+# Material
+type Hordijk<:AbsJoint
+    ks::Float64  # joint shear stiffness
+    E ::Float64  # surrounding material Young's modulus
+    ft::Float64  # surrounding material tensile strength
+    wc::Float64  # critical crack opennig (e.g. 160 μm for concrete)
     new_ipdata::DataType
 
-    function NgoScordelis(prms::Dict{Symbol,Float64})
-        return  NgoScordelis(;prms...)
+    function Hordijk(prms::Dict{Symbol,Float64})
+        return  Hordijk(;prms...)
     end
 
-    function NgoScordelis(;ks=NaN, kn=NaN, ft=0.0)
+    function Hordijk(;ks=NaN, E=NaN, fc=NaN, ft=NaN, wc=NaN)
         @assert ks>=0
-        @assert kn>=0
-        @assert ft>=0
 
-        this = new(ks, kn)
-        this.new_ipdata = NgoScordelisIpData
+        if fc>0.0
+            #ft = funcao... TODO
+        end
+        @assert E>=0
+        @assert ft>=0
+        @assert wc>0
+
+        this = new(ks, E, ft, wc)
+        this.new_ipdata = HordijkIpData
         return this
     end
 end
 
-function set_state(ipd::NgoScordelisIpData, sig=zeros(0), eps=zeros(0))
+function set_state(ipd::HordijkIpData, sig=zeros(0), eps=zeros(0))
     if length(sig)==3
         ipd.sig[:] = sig
     else
-        if length(sig)!=0; error("NgoScordelis: Wrong size for stress array: $sig") end
+        if length(sig)!=0; error("Hordijk: Wrong size for stress array: $sig") end
     end
     if length(eps)==3
         ipd.eps[:] = eps
     else
-        if length(eps)!=0; error("NgoScordelis: Wrong size for strain array: $eps") end
+        if length(eps)!=0; error("Hordijk: Wrong size for strain array: $eps") end
     end
 end
 
-function Tau(mat::NgoScordelis, s::Float64)
+function Tau(mat::Hordijk, s::Float64)
     ss = abs(s)
     #if ss<mat.s1
         #return mat.ks*s
@@ -81,7 +92,7 @@ function Tau(mat::NgoScordelis, s::Float64)
     #end
 end
 
-function Tau_deriv(mat::NgoScordelis, ipd::CEBJoint1DIpData, s::Float64)
+function Tau_deriv(mat::Hordijk, ipd::CEBJoint1DIpData, s::Float64)
     ss = abs(s)
     
     #if ss<mat.s1
@@ -96,35 +107,55 @@ function Tau_deriv(mat::NgoScordelis, ipd::CEBJoint1DIpData, s::Float64)
     #end
 end
 
-function Sig(mat::NgoScordelis, w::Float64)
-    ww = abs(w)
-end
-
-function Sig_deriv(mat::NgoScordelis, w::Float64)
-    ww = abs(w)
-end
-
-function mountD(mat::NgoScordelis, ipd::NgoScordelisIpData)
-
-
-    s  = abs(ipd.ε[1])
-    kh = deriv(mat, ipd, s)
-    ks = ipd.unload? mat.ks : mat.ks*kh/(mat.ks + kh)
-
-    kn = mat.kn
-    if ipd.ndim==2
-        return [  ks  0.0 
-                 0.0   kn ]
+function Sig(mat::Hordijk, ipd::HordijkIpData, w::Float64)
+    wt = 2.0*ipd.h*mat.ft/(100.0*mat.E)
+    if w<wt
+        kn0 = mat.ft/wt
+        return kn0*w
+    elseif w<mat.wc
+        ρ = (w-wt)/(mat.wc-wt) # varies from 0 to 1
+        z = (1.0+27.0*ρ^3.0)*exp(-7.0*ρ) - 28.0*ρ*exp(-7.0)
+        return z*mat.ft
     else
-        return  [  ks  0.0  0.0
-                  0.0   kn  0.0
-                  0.0  0.0   kn ]
+        return 0.0
+    end
+end
+
+function Sig_deriv(mat::Hordijk, ipd::HordijkIpData, w::Float64)
+    wt = 2.0*ipd.h*mat.ft/(100.0*mat.E)
+    if w<wt
+        kn0 = mat.ft/wt
+        return kn0
+    elseif w<mat.wc
+        # dσ/dw = dz/dw*ft
+        # dz/dw = dz/dρ*dρ/dw
+        dρdw = 1.0/(mat.wc - wt)
+        ρ    = (w-wt)/(mat.wc-wt) # varies from 0 to 1
+        dzdρ = 81.0*ρ^2.0*exp(-7.0*ρ) - 7*exp(-7.0*ρ) - 189.0*(ρ^3)*exp(-7.0*ρ) - 28.0*exp(-7.0)
+        dzdw = dzdρ*dρdw
+        return dzdw*mat.ft
+    else
+        return 0.0
+    end
+end
+
+function mountD(mat::Hordijk, ipd::HordijkIpData)
+
+    wt = 2.0*ipd.h*mat.ft/(100.0*mat.E)
+    ks = mat.ks
+    w  = ipd.eps[3]
+
+    kn0 = mat.ft/wt
+    kn  = Sig_deriv(mat, ipd, w)
+
+    if w>wt
+        kn = kn0*kn/(kn0+kn)
     end
 
+    #@show ipd.h
+    #@show ks
+    #@show kn
 
-
-    ks = mat.ks
-    kn = mat.kn
     if ipd.ndim==2
         return [  ks  0.0 
                  0.0   kn ]
@@ -135,16 +166,41 @@ function mountD(mat::NgoScordelis, ipd::NgoScordelisIpData)
     end
 end
 
-function stress_update(mat::NgoScordelis, ipd::NgoScordelisIpData, Δu)
-    D  = mountD(mat, ipd)
-    Δσ = D*Δu
+function stress_update(mat::Hordijk, ipd::HordijkIpData, Δu)
+    wt  = 2.0*ipd.h*mat.ft/(100.0*mat.E)
+    kn0 = mat.ft/wt
+    ks  = mat.ks
 
+    # relative displacements
+    s1 = Δu[1]
+    s2 = Δu[2]
+    Δw = Δu[3]
+
+    # increment of relative displacements
+    Δσ = zeros(3)
+
+    # relative displacements at end of increment
+    wf = ipd.eps[3] + Δw
+
+    # normal stress increment
+    if wf<wt
+        Δσ[3] = kn0*Δw
+    else
+        σn = Sig(mat, ipd, wf)
+        Δσ[3] = σn - ipd.sig[3]
+    end
+
+    # shear stress increments
+    Δσ[1] = ks*Δu[1]
+    Δσ[2] = ks*Δu[2]
+
+    # update of relative displacements and stresses
     ipd.eps[1:ipd.ndim] += Δu
     ipd.sig[1:ipd.ndim] += Δσ
     return Δσ
 end
 
-function getvals(mat::NgoScordelis, ipd::NgoScordelisIpData)
+function getvals(mat::Hordijk, ipd::HordijkIpData)
     if ipd.ndim == 2
         return Dict(
           :s11  => ipd.sig[1] ,
@@ -157,7 +213,7 @@ function getvals(mat::NgoScordelis, ipd::NgoScordelisIpData)
     end
 end
 
-function node_and_elem_vals(mat::NgoScordelis, elem::Element)
+function node_and_elem_vals(mat::Hordijk, elem::Element)
     ndim = elem.ndim
     node_vals = Dict{Symbol, Array{Float64,1}}()
     elem_vals = Dict{Symbol, Float64}()

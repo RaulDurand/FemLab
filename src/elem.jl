@@ -134,13 +134,12 @@ type Element
     ips   ::Array{Ip,1}
     active::Bool
     mat::Material
-    extra::Dict{Symbol,Any}
-    K0::Array{Float64, 2} # deleteme
+    linked_elems::Array{Element,1}
 
     function Element(shape, nodes, ndim, tag="")
         this     = new(shape, nodes, ndim, tag)
         this.ips = []
-        this.extra = Dict{Symbol,Any}()
+        this.linked_elems = []
         this
     end
 end
@@ -243,18 +242,18 @@ config_dofs(elem::Element) = config_dofs(elem.mat, elem)
 
 Especifies the material model `mat` to be used to represent the behavior of an `Element` object `elem`.
 """
-function set_mat(elem::Element, mm::Material; nips::Int64=0)
+function set_mat(elem::Element, mat::Material; nips::Int64=0)
     ipc =  get_ip_coords(elem.shape, nips)
     nips = size(ipc,1)
 
     resize!(elem.ips, nips)
-    elem.mat = mm
+    elem.mat = mat
     for i=1:nips
         R = ipc[i,1:3]
         w = ipc[i,4]
         elem.ips[i] = Ip(R, w)
         elem.ips[i].id = i
-        elem.ips[i].data = mm.new_ipdata(elem.ndim)
+        elem.ips[i].data = mat.new_ipdata(elem.ndim)
         elem.ips[i].owner = elem
     end
 
@@ -264,15 +263,16 @@ function set_mat(elem::Element, mm::Material; nips::Int64=0)
 
     # fix for link elements
     if is_joint1D(shape)
-        C     = getcoords(elem.extra[:bar])
-        shape = elem.extra[:bar].shape
+        bar   = elem.linked_elems[2]
+        C     = getcoords(bar)
+        shape = bar.shape
     end
 
     # fix for joint elements
     if is_joint(shape)
         C     = C[1:div(end,2),:]
         shape = get_basic_shape(shape)
-    end
+    end 
 
     # interpolation
     for ip in elem.ips
@@ -282,6 +282,9 @@ function set_mat(elem::Element, mm::Material; nips::Int64=0)
 
     # configure degrees of freedom
     config_dofs(elem)
+
+    # initialize element
+    init_elem(elem, mat)
 end
 
 

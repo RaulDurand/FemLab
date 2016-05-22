@@ -95,6 +95,101 @@ function set_state(ipd::MCJoint1DIpData, sig=zeros(0), eps=zeros(0))
     end
 end
 
+
+function mount_T(J::Matx)
+    ndim = length(J)
+    nJ   = norm(J)
+    L1   = vec(J/nJ)
+
+    if ndim==2
+        L1 = vcat(L1, 0.0)
+        L2 = [ -L1[2],  L1[1], 0.0 ]
+        return hcat(L1, L2, [0.0, 0.0, 1.0]) # TODO: check
+    end
+
+    # Finding second vector
+    if     abs(L1[1]) == 1.0; L2 = [0.0, 1.0, 0.0]
+    elseif abs(L1[2]) == 1.0; L2 = [0.0, 0.0, 1.0]
+    elseif abs(L1[3]) == 1.0; L2 = [1.0, 0.0, 0.0]
+    else
+        # Auxiliar vector L which must be different from L1 
+        L = [1.0, 0.0, 0.0]
+        if norm(L-L1) < 1.0e-4; L = [0.0, 1.0, 0.0] end
+        # Performing cross product to obtain a second vector
+        L2  = cross(L1, L)
+        L2 /= norm(L2)
+    end
+
+    # Finding third vector
+    L3 = cross(L1, L2)
+    L3 /= norm(L3)
+    return hcat(L1, L2, L3) # TODO: check
+end
+
+function calc_σc(elem, R, Ch, Ct)
+    # Mounting Ts matrix
+    hook = elem.linked_elems[1]
+    bar  = elem.linked_elems[2]
+    D = deriv_func(bar.shape, R)
+    J = D*Ct
+    T = mount_T(J)
+    Ts = zeros(6,6)
+    rotation4(T, Ts)
+
+    # Mounting M vector
+    N   = shape_func(bar.shape, R)
+    Xip = vec(N'*Ct)
+    R = inverse_map(hook.shape, Ch, Xip)
+    M = shape_func (hook.shape, R)
+
+    # Mounting E matrix
+    hook_nips = length(hook.ips)
+    E = extrapolator(hook.shape, hook_nips)
+
+    #Mounting Sig matrix
+    Sig = hcat( [ip.data.σ for ip in hook.ips]... )
+
+    # Calculating stresses at current link ip
+    sig = Ts*(M'*E*Sig')' # stress vector at link ip
+
+    # Calculating average confinement stress
+    #σc = 1/3.*(sig[1]+sig[2]+sig[3])
+    σc = 0.5*(sig[2]+sig[3])
+
+    return σc
+
+end
+
+function update!(mat::MCJoint1D, elem::Element, DU::Array{Float64,1}, DF::Array{Float64,1})
+    ndim   = elem.ndim
+    nnodes = length(elem.nodes)
+    mat    = elem.mat
+    map    = get_map(elem)
+
+    dF = zeros(nnodes*ndim)
+    dU = DU[map]
+    B  = zeros(ndim, nnodes*ndim)
+
+    hook = elem.linked_elems[1]
+    bar  = elem.linked_elems[2]
+    Ct   = getcoords(bar)
+    Ch   = getcoords(hook)
+    for ip in elem.ips
+        detJ = mountB(elem.mat, elem, ip.R, Ch, Ct, B)
+        D    = calcD(mat, ip.data)
+        deps = B*dU
+        ip.data.σc = calc_σc(elem, ip.R, Ch, Ct) # This line is particular to MCJoint1D
+        dsig = stress_update(mat, ip.data, deps)
+        coef = detJ*ip.w
+        dsig[1]  *= mat.h
+        @gemv dF += coef*B'*dsig
+    end
+
+    # Update global vector
+    DF[map] += dF
+end
+
+
 function calcD(mat::MCJoint1D, ipd::MCJoint1DIpData)
     ks = ipd.Δγ==0.0? mat.ks : mat.ks*mat.kh/(mat.ks + mat.kh)
     kn = mat.kn

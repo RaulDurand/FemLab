@@ -89,6 +89,14 @@ function Domain(mesh::Mesh; filekey::AbstractString="out")
         push!(dom.elems, elem)
     end
 
+    # Setting linked cells
+    for (i,cell) in enumerate(mesh.cells)
+        for lcell in cell.linked_cells
+            id = lcell.id
+            push!(dom.elems[i].linked_elems, dom.elems[id])
+        end
+    end
+
     # Setting faces
     dom.faces = Array(Face,0)
     for cell in mesh.faces
@@ -108,23 +116,21 @@ function Domain(mesh::Mesh; filekey::AbstractString="out")
     end
 
     # Setting 1D joints
-    edict = Dict{UInt64, Element}()
-    for elem in dom.elems
-        hs = hash(getconns(elem))
-        edict[hs] = elem
-    end
-    for elem in dom.elems
-        if elem.shape in (LINK2, LINK3)
-            nbnodes = elem.shape==LINK2? 2 : 3
-            conns = getconns(elem)
-            hs_hook  = hash(conns[1:end-nbnodes])
-            hs_truss = hash(conns[end-nbnodes+1:end])
-            elem.extra[:hook] = edict[hs_hook]
-            elem.extra[:bar ] = edict[hs_truss]
-        end
-    end
-
-    # Setting 2D joints
+    #edict = Dict{UInt64, Element}()
+    #for elem in dom.elems
+        #hs = hash(getconns(elem))
+        #edict[hs] = elem
+    #end
+    #for elem in dom.elems
+        #if elem.shape in (LINK2, LINK3)
+            #nbnodes = elem.shape==LINK2? 2 : 3
+            #conns = getconns(elem)
+            #hs_hook  = hash(conns[1:end-nbnodes])
+            #hs_truss = hash(conns[end-nbnodes+1:end])
+            #elem.extra[:hook] = edict[hs_hook]
+            #elem.extra[:bar ] = edict[hs_truss]
+        #end
+    #end
 
     return dom
 end

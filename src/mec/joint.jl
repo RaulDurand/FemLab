@@ -26,10 +26,12 @@ type JointIpData<:IpData
     ndim::Int
     sig ::Array{Float64,1}
     eps ::Array{Float64,1}
+    h   ::Float64
     function JointIpData(ndim=3)
         this = new(ndim)
         this.sig = zeros(3)
         this.eps = zeros(3)
+        this.h = 0.0
         return this
     end
 end
@@ -64,6 +66,56 @@ function set_state(ipd::JointIpData, sig=zeros(0), eps=zeros(0))
     else
         if length(eps)!=0; error("Joint: Wrong size for strain array: $eps") end
     end
+end
+
+function init_elem(elem::Element, mat::AbsJoint)
+
+    # Get linked elements
+    e1 = elem.linked_elems[1]
+    e2 = elem.linked_elems[2]
+
+    # Volume from first linked element
+    V1 = 0.0
+    C1 = getcoords(e1)
+    for ip in e1.ips
+        dNdR = deriv_func(e1.shape, ip.R)
+        J    = dNdR*C1
+        detJ = det(J)
+        V1  += detJ*ip.w
+    end
+
+    # Volume from second linked element
+    V2 = 0.0
+    C2 = getcoords(e2)
+    for ip in e2.ips
+        dNdR = deriv_func(e2.shape, ip.R)
+        J    = dNdR*C2
+        detJ = det(J)
+        V2  += detJ*ip.w
+    end
+
+    # Area of joint element
+    A = 0.0
+    C = getcoords(elem)
+    n = div(length(elem.nodes), 2)
+    C = C[1:n, :]
+    bshape = get_basic_shape(elem.shape)
+    for ip in elem.ips
+        # compute shape Jacobian
+        dNdR = deriv_func(bshape, ip.R)
+        J    = dNdR*C
+        detJ = norm2(J)
+
+        # compute K
+        A += detJ*ip.w
+    end
+
+    # Calculate and save h at join element's integration points
+    h = (V1+V2)/(2.0*A)
+    for ip in elem.ips
+        ip.data.h = h
+    end
+
 end
 
 function mountD(mat::Joint, ipd::JointIpData)
@@ -105,6 +157,12 @@ function matrixT(J::Matrix{Float64})
 end
 
 function elem_jacobian(mat::AbsJoint, elem::Element)
+    
+    # calculate h and set at integration points
+    #if elem.ips[1].data.h == 0.0
+        #set_h(elem)
+    #end
+
     ndim   = elem.ndim
     nnodes = length(elem.nodes)
     hnodes = div(nnodes, 2) # half the number of total nodes

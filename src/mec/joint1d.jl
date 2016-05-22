@@ -37,7 +37,7 @@ end
 type Joint1D<:AbsJoint1D
     ks::Float64
     kn::Float64
-    h ::Float64
+    h ::Float64    # section perimeter
     new_ipdata::DataType
 
     function Joint1D(prms::Dict{Symbol,Float64})
@@ -93,6 +93,7 @@ function calcD(mat::Joint1D, ipd::Joint1DIpData)
     end
 end
 
+
 function stress_update(mat::Joint1D, ipd::Joint1DIpData, deps)
     D = calcD(mat, ipd)
     dsig     = D*deps
@@ -102,86 +103,6 @@ function stress_update(mat::Joint1D, ipd::Joint1DIpData, deps)
     return dsig
 end
 
-
-function mount_T(J::Matx)
-    ndim = length(J)
-    nJ   = norm(J)
-    L1   = vec(J/nJ)
-
-    if ndim==2
-        L2 = [ -L1[2],  L1[1] ]
-        return [L1 L2] # TODO: check if it needs transpose
-    end
-
-    # Finding second vector
-    if     abs(L1[1]) == 1.0; L2 = [0.0, 1.0, 0.0]
-    elseif abs(L1[2]) == 1.0; L2 = [0.0, 0.0, 1.0]
-    elseif abs(L1[3]) == 1.0; L2 = [1.0, 0.0, 0.0]
-    else
-        # Auxiliar vector L which must be different from L1 
-        L = [1.0, 0.0, 0.0]
-        if norm(L-L1) < 1.0e-4; L = [0.0, 1.0, 0.0] end
-        # Performing cross product to obtain a second vector
-        L2  = cross(L1, L)
-        L2 /= norm(L2)
-    end
-
-    # Finding third vector
-    L3 = cross(L1, L2)
-    L3 /= norm(L3)
-    return [L1 L2 L3]'
-end
-
-function calc_σc(elem, R, Ch, Ct)
-    # Mounting Ts matrix
-    hook = elem.extra[:hook]
-    bar = elem.extra[:bar]
-    D = deriv_func(bar.shape, R)
-    J = D*Ct
-    T = mount_T(J)
-    if elem.ndim==2
-        l0,  m0 = T[1,:]
-        l1,  m1 = T[2,:]
-        l2 = m2 = 0.0
-        n0 = n1 = n2 = 0.0
-    else
-        l0, m0, n0 = T[1,:]
-        l1, m1, n1 = T[2,:]
-        l2, m2, n2 = T[3,:]
-    end
-    sq2 = 2.0^0.5
-
-    Ts = [
-            l0*l0      m0*m0      n0*n0    sq2*l0*m0    sq2*m0*n0    sq2*n0*l0     
-            l1*l1      m1*m1      n1*n1    sq2*l1*m1    sq2*m1*n1    sq2*n1*l1     
-            l2*l2      m2*m2      n2*n2    sq2*l2*m2    sq2*m2*n2    sq2*n2*l2     
-        sq2*l0*l1  sq2*m0*m1  sq2*n0*n1  l0*m1+l1*m0  m0*n1+m1*n0  l0*n1+l1*n0     
-        sq2*l1*l2  sq2*m1*m2  sq2*n1*n2  l1*m2+l2*m1  m1*n2+m2*n1  l1*n2+l2*n1     
-        sq2*l2*l0  sq2*m2*m0  sq2*n2*n0  l2*m0+l0*m2  m2*n0+m0*n2  l2*n0+l0*n2 ]
-
-    # Mounting M vector
-    N   = shape_func(bar.shape, R)
-    Xip = vec(N'*Ct)
-    R = inverse_map(hook.shape, Ch, Xip)
-    M = shape_func (hook.shape, R)
-
-    # Mounting E matrix
-    hook_nips = length(hook.ips)
-    E = extrapolator(hook.shape, hook_nips)
-
-    #Mounting Sig matrix
-    Sig = hcat( [ip.data.σ for ip in hook.ips]... )
-
-    # Calculating stresses at current link ip
-    sig = Ts*(M'*E*Sig')' # stress vector at link ip
-
-    # Calculating average confinement stress
-    #σc = 1/3.*(sig[1]+sig[2]+sig[3])
-    σc = 0.5*(sig[2]+sig[3])
-
-    return σc
-
-end
 
 function mountB(mat::AbsJoint1D, elem::Element, R, Ch, Ct, B)
     # Calculates the matrix that relates nodal displacements with relative displacements
@@ -207,8 +128,8 @@ function mountB(mat::AbsJoint1D, elem::Element, R, Ch, Ct, B)
 
 
     ndim = elem.ndim
-    bar  = elem.extra[:bar]
-    hook = elem.extra[:hook ]
+    hook = elem.linked_elems[1]
+    bar  = elem.linked_elems[2]
     nnodes  = length(elem.nodes)
     ntnodes = length(bar.nodes)
     nbnodes = length(hook.nodes)
@@ -240,8 +161,8 @@ end
 function elem_jacobian(mat::AbsJoint1D, elem::Element)
     ndim   = elem.ndim
     nnodes = length(elem.nodes)
-    bar    = elem.extra[:bar]
-    hook   = elem.extra[:hook]
+    hook = elem.linked_elems[1]
+    bar  = elem.linked_elems[2]
     Ch = getcoords(hook)
     Ct = getcoords(bar)
 
@@ -270,17 +191,14 @@ function update!(mat::AbsJoint1D, elem::Element, DU::Array{Float64,1}, DF::Array
     dU = DU[map]
     B  = zeros(ndim, nnodes*ndim)
 
-    bar  = elem.extra[:bar]
-    hook = elem.extra[:hook ]
+    hook = elem.linked_elems[1]
+    bar  = elem.linked_elems[2]
     Ct   = getcoords(bar)
     Ch   = getcoords(hook)
     for ip in elem.ips
         detJ = mountB(elem.mat, elem, ip.R, Ch, Ct, B)
         D    = calcD(mat, ip.data)
         deps = B*dU
-        if !isa(ip.data, Joint1DIpData)
-            ip.data.σc = calc_σc(elem, ip.R, Ch, Ct) # TODO: pass as argument to stress_update
-        end
         dsig = stress_update(mat, ip.data, deps)
         coef = detJ*ip.w
         dsig[1]  *= mat.h
@@ -320,17 +238,18 @@ function node_and_elem_vals(mat::AbsJoint1D, elem::Element)
     # matrix with all ip values (nip x nvals)
     IP = vcat([ [values(all_ip_vals[i])...]' for i=1:nips]...)
 
-    E = extrapolator(elem.extra[:bar].shape, nips)
+    hook = elem.linked_elems[1]
+    bar  = elem.linked_elems[2]
+
+    E = extrapolator(bar.shape, nips)
     N = E*IP # (nnodes x nvals)
 
-    nhnodes = length(elem.extra[:hook].nodes)
-    #N = [ zeros(nhnodes, length(labels)), N ]
+    nhnodes = length(hook.nodes)
     N = vcat( zeros(nhnodes, length(labels)), N )
 
     # Filling nodal and elem vals
     for (i,key) in enumerate(labels)
         node_vals[key] = N[:,i]
-        #elem_vals[key] = mean(IP[:,i])
     end
 
     return node_vals, elem_vals

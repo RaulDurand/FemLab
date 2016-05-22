@@ -111,6 +111,9 @@ function set_facet_bc(mat::Mechanical, oelem::Element, face::Face, key::Symbol, 
     end
 end
 
+function init_elem(elem::Element, mat::Mechanical)
+    # empty, called by set_mat(...)
+end
 
 function setB(ndim::Int, dNdX::Matx, detJ::Float64, B::Matx)
     nnodes = size(dNdX,2)
@@ -180,7 +183,6 @@ function elem_jacobian(::Mechanical, elem::Element)
         @gemm DB = D*B
         @gemm K += coef*B'*DB
     end
-    elem.K0 = copy(K)
     return K
 end
 
@@ -292,6 +294,7 @@ include("joint.jl")
 include("joint1d.jl")
 include("mcjoint1d.jl")
 include("cebjoint1d.jl")
+include("hordijk.jl")
 
 include("kotsovos.jl")
 
