@@ -36,6 +36,21 @@ type NodesTracker <: Tracker
     end
 end
 
+type FacesTracker <: Tracker
+    table::DTable
+    nodes::Array{Node,1} # nodes from all selected faces
+
+    function FacesTracker(faces::Array{Face,1})
+        return new(DTable(), faces[:nodes])
+    end
+
+    function FacesTracker(domain, expr::Expr)
+        faces = domain.faces[expr]
+        @assert length(faces)>0
+        return new(DTable(), faces[:nodes])
+    end
+end
+
 type IpTracker <: Tracker
     table::DTable
     ip   ::Ip

@@ -70,6 +70,26 @@ end
 
 getindex(faces::Array{Face,1}, cond::AbstractString) = getindex(faces, parse(cond))
 
+
+# Get all nodes from a collection of faces
+function get_nodes(faces::Array{Face,1})
+    nodes = Set{Node}()
+    for face in faces
+        for node in face.nodes
+            push!(nodes, node)
+        end
+    end
+    return [node for node in nodes]
+end
+
+# Index operator for a collection of faces
+function getindex(faces::Array{Face,1}, s::Symbol)
+    if s == :nodes
+        return get_nodes(faces)
+    end
+    error("Face getindex: Invalid symbol $s")
+end
+
 # Macro to filter faces using a condition expression
 macro get_faces(dom, expr)
 

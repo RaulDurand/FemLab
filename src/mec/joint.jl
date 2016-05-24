@@ -256,13 +256,14 @@ end
 function getvals(mat::Joint, ipd::JointIpData)
     if ipd.ndim == 2
         return Dict(
-          :s11  => ipd.sig[1] ,
-          :s12  => ipd.sig[2] )
+          :s1  => ipd.sig[1] ,
+          :s2  => ipd.sig[2] )
     else
         return Dict(
-          :s11  => ipd.sig[1] ,
-          :s12  => ipd.sig[2] ,
-          :s13  => ipd.sig[3] )
+          :s1  => ipd.sig[1] ,
+          :s2  => ipd.sig[2] ,
+          :sn  => ipd.sig[3] ,
+          :en  => ipd.sig[3] )
     end
 end
 

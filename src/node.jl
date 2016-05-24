@@ -81,7 +81,7 @@ type Node
     dofs    ::Array{Dof,1}
     dofdict ::Dict{Symbol,Dof}
     n_shares::Int
-    #domain::AbstractDomain
+ 
     function Node(X::Array{Float64,1}; tag="", id=-1)
         this = new(X, tag, id)
         this.dofs = []

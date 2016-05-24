@@ -19,7 +19,8 @@
 ##############################################################################
 
 export Domain
-export track, set_trackers
+#export track
+export set_trackers
 export get_node
 
 """
@@ -409,16 +410,11 @@ function get_node(dom::Domain, coord::Array{Float64,1})
     return nothing
 end
 
-#function get_ips(dom::Domain)
-    #return get_ips(dom.elems)
-#end
-
 function set_trackers(dom::Domain, ts::Tracker...)
     for t in ts
         push!(dom.trackers, t)
     end
 end
-
 
 function tracking(dom::Domain)
     for trk in dom.trackers
@@ -434,6 +430,20 @@ function tracking(dom::Domain)
                 push!(table, vals)
             end
             push!(trk.book, table)
+        elseif ty == FacesTracker
+            tableU = DTable()
+            tableF = DTable()
+            for node in trk.nodes
+                valsU  = [ dof.sU => dof.U for dof in node.dofs]
+                valsF  = [ dof.sF => dof.F for dof in node.dofs]
+                push!(tableF, valsF)
+                push!(tableU, valsU)
+            end
+
+            valsU = [ key => mean(table[key]) for key in keys(table) ] # gets the average of essential values
+            valsF = [ key => sum(table[key])  for key in keys(table) ] # gets the sum for each component
+            vals  = merge(valsU, valsF)
+            push!(trk.table, vals)
         elseif ty == IpTracker
             vals = getvals(trk.ip.owner.mat, trk.ip.data)
             push!(trk.table, vals)
@@ -450,40 +460,40 @@ function tracking(dom::Domain)
 end
 
 
-function track(dom::Domain, node::Node)
-    println("Warning: track function is deprecated. Use NodeTrack and set_tracks functions")
-    t = NodeTracker(node)
-    push!(dom.trackers, t)
-    return t
-end
+#function track(dom::Domain, node::Node)
+    #println("Warning: track function is deprecated. Use NodeTrack and set_tracks functions")
+    #t = NodeTracker(node)
+    #push!(dom.trackers, t)
+    #return t
+#end
 
-function track(dom::Domain, ip::Ip)
-    println("Warning: track function is deprecated. Use IpTrack and set_tracks functions")
-    t = IpTracker(ip)
-    push!(dom.trackers, t)
-    return t
-end
+#function track(dom::Domain, ip::Ip)
+    #println("Warning: track function is deprecated. Use IpTrack and set_tracks functions")
+    #t = IpTracker(ip)
+    #push!(dom.trackers, t)
+    #return t
+#end
 
-function track(dom::Domain, elem::Element)
-    println("Warning: track function is deprecated. Use IpTrack and set_tracks functions")
-    t = IpTracker(elem.ips[1])
-    push!(dom.trackers, t)
-    return t
-end
+#function track(dom::Domain, elem::Element)
+    #println("Warning: track function is deprecated. Use IpTrack and set_tracks functions")
+    #t = IpTracker(elem.ips[1])
+    #push!(dom.trackers, t)
+    #return t
+#end
 
-function track(dom::Domain, nodes::Array{Node,1})
-    println("Warning: track function is deprecated. Use NodesTrack and set_tracks functions")
-    t = NodesTracker(nodes)
-    push!(dom.trackers, t)
-    return t
-end
+#function track(dom::Domain, nodes::Array{Node,1})
+    #println("Warning: track function is deprecated. Use NodesTrack and set_tracks functions")
+    #t = NodesTracker(nodes)
+    #push!(dom.trackers, t)
+    #return t
+#end
 
-function track(dom::Domain, ips::Array{Ip,1})
-    println("Warning: track function is deprecated. Use IpTrack and set_tracks function")
-    t = IpTracker(ips)
-    push!(dom.trackers, t)
-    return t
-end
+#function track(dom::Domain, ips::Array{Ip,1})
+    #println("Warning: track function is deprecated. Use IpTrack and set_tracks function")
+    #t = IpTracker(ips)
+    #push!(dom.trackers, t)
+    #return t
+#end
 
 
 function save(dom::Domain, filename::AbstractString; verbose=true, save_ips=false)
@@ -663,7 +673,7 @@ function save_dom_ips(dom::Domain, filename::AbstractString, verbose=true)
     println(f, "POINT_DATA ", nips)
 
     # Write ip scalar data TODO
-    for field in table.header
+    for field in keys(table)
         println(f, "SCALARS ", field, " float64 1")
         println(f, "LOOKUP_TABLE default")
         field_data = table.dict[field]
@@ -809,7 +819,7 @@ function save2(dom::Domain, filename::AbstractString; verbose=true)
     end
 
     # Write ip scalar data TODO
-    for field in table.header
+    for field in keys(table)
         println(f, "SCALARS ", field, " float64 1")
         println(f, "LOOKUP_TABLE default")
         for elem in dom.elems
@@ -955,7 +965,7 @@ function save(ips::Array{Ip,1}, filename::AbstractString; offset::Float64=0.0, d
         println(f, "POINT_DATA ", nips)
 
         # Write ip scalar data
-        for field in table.header
+        for field in keys(table)
             println(f, "SCALARS ", field, " float64 1")
             println(f, "LOOKUP_TABLE default")
             field_data = table.dict[field]

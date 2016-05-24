@@ -152,10 +152,6 @@ function mountD(mat::Hordijk, ipd::HordijkIpData)
         kn = kn0*kn/(kn0+kn)
     end
 
-    #@show ipd.h
-    #@show ks
-    #@show kn
-
     if ipd.ndim==2
         return [  ks  0.0 
                  0.0   kn ]
@@ -203,13 +199,15 @@ end
 function getvals(mat::Hordijk, ipd::HordijkIpData)
     if ipd.ndim == 2
         return Dict(
-          :s11  => ipd.sig[1] ,
-          :s12  => ipd.sig[2] )
+          :s1  => ipd.sig[1] ,
+          :s2  => ipd.sig[2] )
     else
         return Dict(
-          :s11  => ipd.sig[1] ,
-          :s12  => ipd.sig[2] ,
-          :s13  => ipd.sig[3] )
+          :s1  => ipd.sig[1] ,
+          :s2  => ipd.sig[2] ,
+          :s_n  => ipd.sig[3] ,
+          :w    => ipd.eps[3] ,
+          )
     end
 end
 

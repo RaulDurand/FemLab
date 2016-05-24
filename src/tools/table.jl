@@ -20,23 +20,22 @@
 ##############################################################################
 
 import Base.getindex
-export DTable, DBook, push!, getindex, save, loadtable
+import Base.keys
+export DTable, DBook, push!, keys, getindex, save, loadtable
 
 
 # DTable object
 
 type DTable
-    header::Array{Symbol,1}
     data  ::Array{Array{Float64,1},1}
     dict  ::Dict{Symbol,Array{Float64,1}} # Data index
     function DTable()
         this = new()
-        this.header = []
+        this.dict = Dict{Symbol,Array{Float64,1}}() 
         return this
     end
     function DTable(header::Array{Symbol,1}, matrix::Array{Float64}=Float64[])
         this = new()
-        this.header = copy(header)
         if length(matrix)==0
             this.data = [ [] for s in header]
         else
@@ -71,25 +70,26 @@ function push!(book::DBook, table::DTable)
     push!(book.tables, table)
 end
 
+function keys(table::DTable)
+    return keys(table.dict)
+end
 
 function push!(table::DTable, dict::Dict{Symbol,Float64})
-    if length(table.header)==0
-        table.header = [ k for k in keys(dict)]
+    if length(table.dict)==0
         table.data   = [ [v] for (k,v) in dict ]
-        table.dict   = [ k=>v for (k,v) in zip(table.header, table.data) ]
+        table.dict   = [ k=>v for (k,v) in zip(keys(dict), table.data) ]
     else
         nrows = length(table.data[1])
         for (k,v) in dict
             # Add data
-            if k in table.header
+            if haskey(table.dict, k)
                 push!(table[k], v)
             else
-                # add new header
-                push!(table.header, k)
+                # add new column
                 new_arr = zeros(nrows)
+                push!(new_arr, v)
                 push!(table.data, new_arr)
                 table.dict[k] = new_arr
-                push!(new_arr, v)
             end
         end
         # Add zero for missing values if any
@@ -112,7 +112,7 @@ end
 
 function save(table::DTable, filename::AbstractString; verbose=true, format="")
     f  = open(filename, "w")
-    nc = length(table.header)   # number of fields (columns)
+    nc = length(table.dict)   # number of fields (columns)
     nr = length(table.data[1])  # number of rows
 
     basename, ext = splitext(filename)
@@ -121,16 +121,20 @@ function save(table::DTable, filename::AbstractString; verbose=true, format="")
     end
 
     if format=="dat"
+        # map for ordered header
+        symbols = collect(keys(table.dict))
+        dmap = [ tup[2] for tup in sort(collect(zip(symbols, 1:nc))) ]
+
         # print header
         for i=1:nc
-            @printf(f, "%18s", table.header[i])
+            @printf(f, "%18s", symbols[dmap[i]])
             print(f, i!=nc? "\t" : "\n")
         end
 
         # print values
         for i=1:nr
             for j=1:nc
-                @printf(f, "%18.10e", table.data[j][i])
+                @printf(f, "%18.10e", table.data[dmap[j]][i])
                 print(f, j!=nc? "\t" : "\n")
             end
         end
@@ -178,19 +182,23 @@ function save(book::DBook, filename::AbstractString; verbose=true, format="dat")
         end
 
         for table in book.tables
-            nc = length(table.header)   # number of fields (columns)
+            symbols = collect(keys(table.dict))
+            nc = length(table.dict)     # number of fields (columns)
             nr = length(table.data[1])  # number of rows
+
+            # map for ordered header
+            dmap = [ tup[2] for tup in sort(collect(zip(symbols, 1:nc))) ]
 
             # print header
             for i=1:nc
-                @printf(f, "%18s", table.header[i])
+                @printf(f, "%18s", symbols[dmap[i]])
                 print(f, i!=nc? "\t" : "\n")
             end
 
             # print values
             for i=1:nr
                 for j=1:nc
-                    @printf(f, "%18.10e", table.data[j][i])
+                    @printf(f, "%18.10e", table.data[dmap[j]][i])
                     print(f, j!=nc? "\t" : "\n")
                 end
             end
@@ -209,7 +217,6 @@ end
 function loadtable(filename::AbstractString)
     data, headstr = readdlm(filename, '\t',header=true)
     header = Symbol[ symbol(strip(field)) for field in headstr ]
-    @show typeof(data)
 
     table = DTable(header, data)
     return table
