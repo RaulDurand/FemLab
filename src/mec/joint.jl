@@ -119,8 +119,8 @@ function init_elem(elem::Element, mat::AbsJoint)
 end
 
 function mountD(mat::Joint, ipd::JointIpData)
-    ks = mat.ks
-    kn = mat.kn
+    ks = mat.ks/ipd.h
+    kn = mat.kn/ipd.h
     if ipd.ndim==2
         return [  ks  0.0 
                  0.0   kn ]
@@ -150,8 +150,8 @@ function matrixT(J::Matrix{Float64})
         L3 /= norm(L3)
         return [L1 L2 L3]'
     else
-        L1 /= vec(J)/norm(J)
-        L2  = [ -L1[2],  L1[1] ]
+        L1 = vec(J)/norm(J)
+        L2 = [ -L1[2],  L1[1] ]
         return [L1 L2]'
     end
 end
@@ -185,6 +185,7 @@ function elem_jacobian(mat::AbsJoint, elem::Element)
 
         # compute B matrix
         T    = matrixT(J)
+        #@show T
         NN[:,:] = 0.0  # NN = [ -N[]  N[] ]
         for i=1:hnodes
             for dof=1:ndim
@@ -224,6 +225,7 @@ function update!(mat::AbsJoint, elem::Element, DU::Array{Float64,1}, DF::Array{F
 
     C    = getcoords(elem)
 
+    #@show dU
     for ip in elem.ips
         # compute shape Jacobian
         dNdR = deriv_func(bshape, ip.R)
@@ -244,6 +246,7 @@ function update!(mat::AbsJoint, elem::Element, DU::Array{Float64,1}, DF::Array{F
 
         # internal force
         @gemv Δu = B*dU
+        #@show Δu[3]
         Δσ   = stress_update(mat, ip.data, Δu)
         coef = detJ*ip.w
         @gemv dF += coef*B'*Δσ

@@ -1,6 +1,6 @@
 abstract Tracker
 
-export NodeTracker, NodesTracker, IpTracker, IpsTracker
+export NodeTracker, NodesTracker, IpTracker, IpsTracker, FacesTracker
 
 type NodeTracker <: Tracker
     table::DTable
@@ -93,7 +93,7 @@ type IpsTracker <: Tracker
 end
 
 function save(trk::Tracker, filename::AbstractString; verbose=true, format="dat")
-    if typeof(trk) in (NodeTracker, IpTracker)
+    if typeof(trk) in (NodeTracker, IpTracker, FacesTracker)
         save(trk.table, filename, verbose=verbose, format=format)
     else
         save(trk.book , filename, verbose=verbose, format=format)

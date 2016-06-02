@@ -434,14 +434,14 @@ function tracking(dom::Domain)
             tableU = DTable()
             tableF = DTable()
             for node in trk.nodes
-                valsU  = [ dof.sU => dof.U for dof in node.dofs]
-                valsF  = [ dof.sF => dof.F for dof in node.dofs]
+                valsU  = [ dof.sU::Symbol => dof.U::Float64 for dof in node.dofs]
+                valsF  = [ dof.sF::Symbol => dof.F::Float64 for dof in node.dofs]
                 push!(tableF, valsF)
                 push!(tableU, valsU)
             end
 
-            valsU = [ key => mean(table[key]) for key in keys(table) ] # gets the average of essential values
-            valsF = [ key => sum(table[key])  for key in keys(table) ] # gets the sum for each component
+            valsU = [ key => mean(tableU[key]) for key in keys(tableU) ] # gets the average of essential values
+            valsF = [ key => sum(tableF[key])  for key in keys(tableF) ] # gets the sum for each component
             vals  = merge(valsU, valsF)
             push!(trk.table, vals)
         elseif ty == IpTracker
@@ -568,6 +568,14 @@ function save(dom::Domain, filename::AbstractString; verbose=true, save_ips=fals
     end
     println(f, )
 
+    # Write node numbers
+    println(f, "SCALARS ", "Node-ID", " int 1")
+    println(f, "LOOKUP_TABLE default")
+    for node in dom.nodes
+        @printf f "%5d" node.id
+    end
+    println(f, )
+
     # Write nodal scalar data
     for i=1:nncomps
         println(f, "SCALARS ", node_labels[i], " float64 1")
@@ -580,6 +588,16 @@ function save(dom::Domain, filename::AbstractString; verbose=true, save_ips=fals
 
     # Write element data
     println(f, "CELL_DATA ", nelems)
+
+    # Write elem numbers
+    println(f, "SCALARS ", "Elem-ID", " int 1")
+    println(f, "LOOKUP_TABLE default")
+    for elem in dom.elems  #naelems
+        @printf f "%5d" elem.id
+    end
+    println(f, )
+
+    # Write element scalar data
     for i=1:necomps
         println(f, "SCALARS ", elem_labels[i], " float64 1")
         println(f, "LOOKUP_TABLE default")

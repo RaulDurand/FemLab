@@ -133,7 +133,7 @@ type Element
     id    ::Int
     ips   ::Array{Ip,1}
     active::Bool
-    mat::Material
+    mat   ::Material
     linked_elems::Array{Element,1}
 
     function Element(shape, nodes, ndim, tag="")

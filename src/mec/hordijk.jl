@@ -42,23 +42,25 @@ type Hordijk<:AbsJoint
     E ::Float64  # surrounding material Young's modulus
     ft::Float64  # surrounding material tensile strength
     wc::Float64  # critical crack opennig (e.g. 160 μm for concrete)
+    p0::Float64  # penalty value
     new_ipdata::DataType
 
     function Hordijk(prms::Dict{Symbol,Float64})
         return  Hordijk(;prms...)
     end
 
-    function Hordijk(;ks=NaN, E=NaN, fc=NaN, ft=NaN, wc=NaN)
+    function Hordijk(;ks=NaN, E=NaN, fc=NaN, ft=NaN, wc=NaN, p0=100.0)
         @assert ks>=0
 
         if fc>0.0
             #ft = funcao... TODO
         end
-        @assert E>=0
-        @assert ft>=0
-        @assert wc>0
+        @assert E  >= 0.0
+        @assert ft >= 0.0
+        @assert wc >  0.0
+        @assert p0 >= 0.0
 
-        this = new(ks, E, ft, wc)
+        this = new(ks, E, ft, wc, p0)
         this.new_ipdata = HordijkIpData
         return this
     end
@@ -108,7 +110,7 @@ function Tau_deriv(mat::Hordijk, ipd::CEBJoint1DIpData, s::Float64)
 end
 
 function Sig(mat::Hordijk, ipd::HordijkIpData, w::Float64)
-    wt = 2.0*ipd.h*mat.ft/(100.0*mat.E)
+    wt = 2.0*ipd.h*mat.ft/(mat.p0*mat.E)
     if w<wt
         kn0 = mat.ft/wt
         return kn0*w
@@ -122,18 +124,27 @@ function Sig(mat::Hordijk, ipd::HordijkIpData, w::Float64)
 end
 
 function Sig_deriv(mat::Hordijk, ipd::HordijkIpData, w::Float64)
-    wt = 2.0*ipd.h*mat.ft/(100.0*mat.E)
+    wt = 2.0*ipd.h*mat.ft/(mat.p0*mat.E)
+    kn0 = mat.ft/wt
     if w<wt
-        kn0 = mat.ft/wt
         return kn0
     elseif w<mat.wc
         # dσ/dw = dz/dw*ft
         # dz/dw = dz/dρ*dρ/dw
         dρdw = 1.0/(mat.wc - wt)
         ρ    = (w-wt)/(mat.wc-wt) # varies from 0 to 1
-        dzdρ = 81.0*ρ^2.0*exp(-7.0*ρ) - 7*exp(-7.0*ρ) - 189.0*(ρ^3)*exp(-7.0*ρ) - 28.0*exp(-7.0)
+        dzdρ = 81.0*ρ^2.0*exp(-7.0*ρ) - 7.0*exp(-7.0*ρ) - 189.0*(ρ^3.0)*exp(-7.0*ρ) - 28.0*exp(-7.0)
         dzdw = dzdρ*dρdw
-        return dzdw*mat.ft
+        dσdw  = dzdw*mat.ft
+
+        # Tamming the derivative to avoid convergence problems for high values
+        max_dσdw = kn0/1000.0
+
+        if abs(dσdw) > max_dσdw
+            dσdw = abs(dσdw)/dσdw * max_dσdw
+        end
+
+        return dσdw
     else
         return 0.0
     end
@@ -141,7 +152,7 @@ end
 
 function mountD(mat::Hordijk, ipd::HordijkIpData)
 
-    wt = 2.0*ipd.h*mat.ft/(100.0*mat.E)
+    wt = 2.0*ipd.h*mat.ft/(mat.p0*mat.E)
     ks = mat.ks
     w  = ipd.eps[3]
 
@@ -163,13 +174,13 @@ function mountD(mat::Hordijk, ipd::HordijkIpData)
 end
 
 function stress_update(mat::Hordijk, ipd::HordijkIpData, Δu)
-    wt  = 2.0*ipd.h*mat.ft/(100.0*mat.E)
+    wt  = 2.0*ipd.h*mat.ft/(mat.p0*mat.E)
+    @assert wt < mat.wc
+
     kn0 = mat.ft/wt
     ks  = mat.ks
 
     # relative displacements
-    s1 = Δu[1]
-    s2 = Δu[2]
     Δw = Δu[3]
 
     # increment of relative displacements
@@ -192,21 +203,29 @@ function stress_update(mat::Hordijk, ipd::HordijkIpData, Δu)
 
     # update of relative displacements and stresses
     ipd.eps[1:ipd.ndim] += Δu
+
     ipd.sig[1:ipd.ndim] += Δσ
+
     return Δσ
 end
 
 function getvals(mat::Hordijk, ipd::HordijkIpData)
+    wt  = 2.0*ipd.h*mat.ft/(mat.p0*mat.E)
+
     if ipd.ndim == 2
         return Dict(
           :s1  => ipd.sig[1] ,
           :s2  => ipd.sig[2] )
     else
+        w      = ipd.eps[3]
+        ncrack = w>wt ? 1.0: 0.0
         return Dict(
           :s1  => ipd.sig[1] ,
           :s2  => ipd.sig[2] ,
           :s_n  => ipd.sig[3] ,
           :w    => ipd.eps[3] ,
+          :wt   => wt ,
+          :ncrack => ncrack
           )
     end
 end

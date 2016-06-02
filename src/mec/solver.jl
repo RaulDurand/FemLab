@@ -53,6 +53,15 @@ function solve!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::AbstractStrin
 
     if verbose; pbcolor(:cyan,"FEM analysis:\n") end
 
+    # check if all elements have material defined
+    count = 0
+    for elem in dom.elems
+        if !isdefined(elem, :mat)
+            count += 1
+        end
+    end
+    count > 0 && error("There are $count elements without material definition\n")
+
     # Set boundary conditions
     for bc in dom.node_bcs
         set_bc(bc.nodes; bc.conds...)
@@ -118,7 +127,7 @@ function solve!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::AbstractStrin
     end
 
     for inc=1:nincs
-        if verbose; println("  increment $inc/$nincs:") end
+        if verbose; pcolor(:blue, "  increment $inc/$nincs:\n") end
         DU, DF = lam*U, lam*F
         R      = copy(DF) # residual
 
@@ -131,6 +140,8 @@ function solve!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::AbstractStrin
         for it=1:maxits
             if it>1; DU = zeros(ndofs) end
             solve_inc(dom, DU, R, umap, pmap, remountK, verbose)   # Changes DU and R
+            #if it>1; DU[pmap] = 0.0 end
+
             if verbose; print("    updating... \r") end
             DUa += DU
             DFin = update!(dom.elems, dofs, DU) # Internal forces (DU+DUaccum?)
@@ -143,7 +154,8 @@ function solve!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::AbstractStrin
             residue = maxabs(R)
 
             if verbose
-                @printf("    it %s  residue: %-15.4e", it, residue)
+                pcolor(:bold, "    it $it  ")
+                @printf("residue: %-15.4e", residue)
                 println()
             end
 
@@ -157,8 +169,10 @@ function solve!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::AbstractStrin
             if isnan(residue);    converged = false; break end
         end
 
-        tracking(dom) # Tracking nodes, ips, elements, etc.
-        autosave && save(dom, dom.filekey * "-$inc" * ".vtk", verbose=false, save_ips=save_ips)
+        if converged
+            tracking(dom) # Tracking nodes, ips, elements, etc.
+            autosave && save(dom, dom.filekey * "-$inc" * ".vtk", verbose=false, save_ips=save_ips)
+        end
 
         if !converged
             pcolor(:red, "solve!: solver did not converge\n",)
@@ -225,6 +239,7 @@ function solve_inc(dom::Domain, DU::Vect, DF::Vect, umap::Array{Int,1}, pmap::Ar
         RHS = F1 - K12*U2
         if remountK
             LUfact = lufact(K11)
+            #@show cond(full(K11))
         end
         #U1  = K11\RHS
         U1 = LUfact\RHS
