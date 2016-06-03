@@ -559,7 +559,7 @@ function save(dom::Domain, filename::AbstractString; verbose=true, save_ips=fals
 
     # Write vectors
     if :ux in keys(dom.nodes[1].dofdict)
-        println(f, "VECTORS ", "|u| float64")
+        println(f, "VECTORS ", "U float64")
         for node in dom.nodes
             @printf f "%23.10e"   node.dofdict[:ux].U
             @printf f "%23.10e"   node.dofdict[:uy].U
@@ -572,7 +572,7 @@ function save(dom::Domain, filename::AbstractString; verbose=true, save_ips=fals
     println(f, "SCALARS ", "Node-ID", " int 1")
     println(f, "LOOKUP_TABLE default")
     for node in dom.nodes
-        @printf f "%5d" node.id
+        @printf f "%5d " node.id
     end
     println(f, )
 
@@ -593,7 +593,7 @@ function save(dom::Domain, filename::AbstractString; verbose=true, save_ips=fals
     println(f, "SCALARS ", "Elem-ID", " int 1")
     println(f, "LOOKUP_TABLE default")
     for elem in dom.elems  #naelems
-        @printf f "%5d" elem.id
+        @printf f "%5d " elem.id
     end
     println(f, )
 
