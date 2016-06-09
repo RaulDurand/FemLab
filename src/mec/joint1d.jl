@@ -104,6 +104,37 @@ function stress_update(mat::Joint1D, ipd::Joint1DIpData, deps)
 end
 
 
+function mount_T(J::Matx)
+    ndim = length(J)
+    nJ   = norm(J)
+    L1   = vec(J/nJ)
+
+    if ndim==2
+        L2 = [ -L1[2],  L1[1] ]
+        return hcat(L1,L2)' # TODO: check for 2D
+    end
+
+    # Finding second vector
+    if     abs(L1[1]) == 1.0; L2 = [0.0, 1.0, 0.0]
+    elseif abs(L1[2]) == 1.0; L2 = [0.0, 0.0, 1.0]
+    elseif abs(L1[3]) == 1.0; L2 = [1.0, 0.0, 0.0]
+    else
+        # Auxiliar vector L which must be different from L1
+        L = [1.0, 0.0, 0.0]
+        if norm(L-L1) < 1.0e-4; L = [0.0, 1.0, 0.0] end
+        # Performing cross product to obtain a second vector
+        L2  = cross(L1, L)
+        L2 /= norm(L2)
+    end
+
+    # Finding third vector
+    L3 = cross(L1, L2)
+    L3 /= norm(L3)
+
+    return hcat(L1, L2, L3)'
+end
+
+
 function mountB(mat::AbsJoint1D, elem::Element, R, Ch, Ct, B)
     # Calculates the matrix that relates nodal displacements with relative displacements
     # ==================================================================================
@@ -190,6 +221,7 @@ function update!(mat::AbsJoint1D, elem::Element, DU::Array{Float64,1}, DF::Array
     dF = zeros(nnodes*ndim)
     dU = DU[map]
     B  = zeros(ndim, nnodes*ndim)
+    deps = zeros(ndim)
 
     hook = elem.linked_elems[1]
     bar  = elem.linked_elems[2]
@@ -198,7 +230,7 @@ function update!(mat::AbsJoint1D, elem::Element, DU::Array{Float64,1}, DF::Array
     for ip in elem.ips
         detJ = mountB(elem.mat, elem, ip.R, Ch, Ct, B)
         D    = calcD(mat, ip.data)
-        deps = B*dU
+        @gemv deps = B*dU
         dsig = stress_update(mat, ip.data, deps)
         coef = detJ*ip.w
         dsig[1]  *= mat.h

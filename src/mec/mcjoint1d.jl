@@ -95,37 +95,6 @@ function set_state(ipd::MCJoint1DIpData, sig=zeros(0), eps=zeros(0))
     end
 end
 
-
-function mount_T(J::Matx)
-    ndim = length(J)
-    nJ   = norm(J)
-    L1   = vec(J/nJ)
-
-    if ndim==2
-        L1 = vcat(L1, 0.0)
-        L2 = [ -L1[2],  L1[1], 0.0 ]
-        return hcat(L1, L2, [0.0, 0.0, 1.0]) # TODO: check
-    end
-
-    # Finding second vector
-    if     abs(L1[1]) == 1.0; L2 = [0.0, 1.0, 0.0]
-    elseif abs(L1[2]) == 1.0; L2 = [0.0, 0.0, 1.0]
-    elseif abs(L1[3]) == 1.0; L2 = [1.0, 0.0, 0.0]
-    else
-        # Auxiliar vector L which must be different from L1 
-        L = [1.0, 0.0, 0.0]
-        if norm(L-L1) < 1.0e-4; L = [0.0, 1.0, 0.0] end
-        # Performing cross product to obtain a second vector
-        L2  = cross(L1, L)
-        L2 /= norm(L2)
-    end
-
-    # Finding third vector
-    L3 = cross(L1, L2)
-    L3 /= norm(L3)
-    return hcat(L1, L2, L3) # TODO: check
-end
-
 function calc_σc(elem, R, Ch, Ct)
     # Mounting Ts matrix
     hook = elem.linked_elems[1]
