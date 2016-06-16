@@ -135,7 +135,11 @@ function calcD(mat::CEBJoint1D, ipd::CEBJoint1DIpData)
     s  = abs(ipd.ε[1])
     kh = deriv(mat, ipd, s)
 
-    ks = ipd.unload? mat.ks : mat.ks*kh/(mat.ks + kh)
+    #ks = ipd.unload? mat.ks : mat.ks*kh/(mat.ks + kh)
+    ks = ipd.unload? mat.ks : kh
+    #@show ipd.unload
+    #@show kh
+    #@show ks
 
     kn = mat.kn
     if ipd.ndim==2
@@ -172,7 +176,13 @@ function stress_update(mat::CEBJoint1D, ipd::CEBJoint1DIpData, Δε::Vect)
         Δse  = Δτ/ks
         Δsp  = abs(Δs - Δse)
         ipd.τy = min(ipd.τy, abs(Tau(mat, s+Δs)))
-        ipd.unload = abs(ipd.ε[1]+Δs) - abs(s) >= 0.0
+        sf = s+Δs
+        if abs(s+Δs)<abs(s)
+            ipd.unload = true
+        else
+            ipd.unload = false
+        end
+        #ipd.unload = abs(ipd.ε[1]+Δs) - abs(s) >= 0.0
     end
 
     # update ε
