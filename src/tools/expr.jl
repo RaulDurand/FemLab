@@ -3,9 +3,9 @@ function subs_equal_by_approx(expr::Expr) # deprecated
     mexpr = copy(expr) # expression to be modified
     for (i,arg) in enumerate(mexpr.args)
         if typeof(arg)!=Expr; continue end
-        if arg.head == :comparison
-            if arg.args[2] == :(==)
-                a = arg.args[1]
+        if arg.head == :call
+            if arg.args[1] == :(==)
+                a = arg.args[2]
                 b = arg.args[3]
                 mexpr.args[i] = :(isapprox($a,$b,rtol= 1e-8 ))
                 continue
@@ -23,8 +23,8 @@ function fix_comparison_scalar(expr::Expr)
     tol = 1e-6
 
     fix_comp = function(expr::Expr)
-        symb = expr.args[2]
-        a = expr.args[1]
+        symb = expr.args[1]
+        a = expr.args[2]
         b = expr.args[3]
         if symb == :(==)
             return :(abs($a-$b) < $tol)
@@ -44,12 +44,12 @@ function fix_comparison_scalar(expr::Expr)
         return expr
     end
 
-    if mexpr.head == :comparison
+    if mexpr.head == :call
         return fix_comp(mexpr)
     else
         for (i,arg) in enumerate(mexpr.args)
             if typeof(arg)!=Expr; continue end
-            if arg.head == :comparison
+            if arg.head == :call
                 mexpr.args[i] = fix_comp(arg)
             else
                 mexpr.args[i] = fix_comparison_scalar(arg)
@@ -65,8 +65,8 @@ function fix_comparison_arrays(expr::Expr)
     tol = 1e-6
 
     fix_comp = function(expr::Expr)
-        symb = expr.args[2]
-        a = expr.args[1]
+        symb = expr.args[1]
+        a = expr.args[2]
         b = expr.args[3]
         if symb == :(==)
             return :(maximum(abs($a-$b)) < $tol)
@@ -86,12 +86,12 @@ function fix_comparison_arrays(expr::Expr)
         return expr
     end
 
-    if mexpr.head == :comparison
+    if mexpr.head == :call && length(mexpr.args)==3 # check comparison
         return fix_comp(mexpr)
     else
         for (i,arg) in enumerate(mexpr.args)
             if typeof(arg)!=Expr; continue end
-            if arg.head == :comparison
+            if arg.head == :call
                 mexpr.args[i] = fix_comp(arg)
             else
                 mexpr.args[i] = fix_comparison_arrays(arg)

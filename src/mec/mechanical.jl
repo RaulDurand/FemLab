@@ -232,6 +232,7 @@ function update!(::Mechanical, elem::Element, DU::Array{Float64,1}, DF::Array{Fl
         setB(ndim, dNdX, detJ, B)
 
         @gemv Δε = B*dU
+        #Δσ   = stress_update(mat, ip.data, ip.data0, Δε)
         Δσ   = stress_update(mat, ip.data, Δε)
         coef = detJ*ip.w
         @gemv dF += coef*B'*Δσ
@@ -239,13 +240,6 @@ function update!(::Mechanical, elem::Element, DU::Array{Float64,1}, DF::Array{Fl
 
     # Update global vector
     DF[map] += dF
-
-    #DD = (elem.K0*dU - dF)'
-
-    #dF2 = elem.K0*dU
-    #@show round(dF, 1)
-    #@show round(dF2, 1)
-    #println()
 
 end
 
@@ -287,16 +281,22 @@ function node_and_elem_vals(mat::Mechanical, elem::Element)
 end
 
 include("tensors.jl")
+
 include("solid.jl")
+include("dp.jl")
+include("kotsovos.jl")
+
 include("truss.jl")
 include("pptruss.jl")
+
 include("joint.jl")
+include("hordijk.jl")
+include("nljoint.jl")
+
 include("joint1d.jl")
 include("mcjoint1d.jl")
 include("cebjoint1d.jl")
-include("hordijk.jl")
 
-include("kotsovos.jl")
+include("bilinear.jl")
 
-include("dp.jl")
 

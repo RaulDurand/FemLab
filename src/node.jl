@@ -133,9 +133,9 @@ end
 
 # Get node values in a dictionary
 function getvals(node::Node)
-    coords = [ :x => node.X[1], :y => node.X[2], :z => node.X[3] ]
-    uvals  = [ dof.sU => dof.U for dof in node.dofs]
-    fvals  = [ dof.sF => dof.F for dof in node.dofs]
+    coords = Dict( :x => node.X[1], :y => node.X[2], :z => node.X[3] )
+    uvals  = Dict( dof.sU => dof.U for dof in node.dofs )
+    fvals  = Dict( dof.sF => dof.F for dof in node.dofs )
     return merge(coords, uvals, fvals)
 end
 

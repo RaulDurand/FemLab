@@ -32,7 +32,6 @@ export @get_elems
 
 abstract IpData
 
-
 #  Ip
 # ====
 
@@ -48,21 +47,22 @@ type Ip
     X    ::Array{Float64,1}
     id   ::Int
     owner::Any    # Element
-    data ::IpData
-    data0::IpData # Backup
+    data ::IpData   # Ip current state
+    data0::IpData   # Ip state at begin of increment
+    data_bk::IpData # Ip state backup
 
     function Ip(R::Array, w::Float64)
         this   = new(vec(R), w)
         this.X = Array(Float64, 3)
         this.owner = nothing
-        this
+        return this
     end
 end
 
 
 # Get ip values in a dictionary
 function getvals(ip::Ip)
-    coords = [ :x => ip.X[1], :y => ip.X[1], :z => ip.X[3] ]
+    coords = Dict( :x => ip.X[1], :y => ip.X[1], :z => ip.X[3] )
     vals   = getvals(ip.owner.mat, ip.data)
     return merge(coords, vals)
 end
@@ -254,6 +254,7 @@ function set_mat(elem::Element, mat::Material; nips::Int64=0)
         elem.ips[i] = Ip(R, w)
         elem.ips[i].id = i
         elem.ips[i].data = mat.new_ipdata(elem.ndim)
+        elem.ips[i].data0 = deepcopy(elem.ips[i].data)
         elem.ips[i].owner = elem
     end
 
@@ -315,7 +316,7 @@ function read_prms(filename::AbstractString)
         name = d["name"]
         keys = d["prms"]
         vals = d["vals"]
-        prms = (Symbol => Float64)[ symbol(k) => v for (k,v) in zip(keys, vals) ]
+        prms = Dict{Symbol, Float64}( symbol(k) => v for (k,v) in zip(keys, vals) )
         mats_prms[name] = prms
     end
 

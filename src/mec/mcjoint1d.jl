@@ -109,7 +109,7 @@ function calc_σc(elem, R, Ch, Ct)
     N   = shape_func(bar.shape, R)
     Xip = vec(N'*Ct)
     R = inverse_map(hook.shape, Ch, Xip)
-    M = shape_func (hook.shape, R)
+    M = shape_func(hook.shape, R)
 
     # Mounting E matrix
     hook_nips = length(hook.ips)

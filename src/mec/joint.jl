@@ -168,7 +168,7 @@ function elem_jacobian(mat::AbsJoint, elem::Element)
     hnodes = div(nnodes, 2) # half the number of total nodes
     bshape = get_basic_shape(elem.shape)
 
-    C = getcoords(elem)
+    C = getcoords(elem)[1:hnodes,:]
     B = zeros(ndim, nnodes*ndim)
     K = zeros(nnodes*ndim, nnodes*ndim)
 
@@ -215,15 +215,13 @@ function update!(mat::AbsJoint, elem::Element, DU::Array{Float64,1}, DF::Array{F
 
     dF = zeros(nnodes*ndim)
     dU = DU[map]
-    C = getcoords(elem)
+    C = getcoords(elem)[1:hnodes,:]
     B = zeros(ndim, nnodes*ndim)
 
     DB = zeros(ndim, nnodes*ndim)
     J  = zeros(ndim-1, ndim)
     NN = zeros(ndim, nnodes*ndim)
     Δu = zeros(3)
-
-    C    = getcoords(elem)
 
     #@show dU
     for ip in elem.ips

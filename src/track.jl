@@ -1,5 +1,6 @@
 abstract Tracker
 
+import Base.getindex
 export NodeTracker, NodesTracker, IpTracker, IpsTracker, FacesTracker
 
 type NodeTracker <: Tracker

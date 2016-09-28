@@ -47,11 +47,11 @@ function stress_update(mat::Truss, ipd::TrussIpData, Δε::Float64)
 end
 
 function getvals(mat::Truss, ipd::TrussIpData)
-    return [ 
+    return Dict(
       :sa => ipd.σ,
       :ea => ipd.ε,
       :Fa => ipd.σ*mat.A,
-      :A  => mat.A ]
+      :A  => mat.A )
 end
 
 function calcD(mat::Truss, ips::TrussIpData)

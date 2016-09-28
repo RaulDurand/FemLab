@@ -153,7 +153,7 @@ function dom_load_json(filename::AbstractString)
         delete!(dmat, "id")
         delete!(dmat, "model")
 
-        args = [ Symbol(k) => v for (k,v) in dmat ]
+        args = Dict( Symbol(k) => v for (k,v) in dmat )
         mat = model(;args...)
         push!(mats, mat)
     end
@@ -172,12 +172,12 @@ function dom_load_json(filename::AbstractString)
 
         if id>0
             delete!(bc, "id")
-            args = [ Symbol(k) => v for (k,v) in  bc]
+            args = Dict( Symbol(k) => v for (k,v) in  bc )
             set_bc(dom.nodes[id]; args...)
         else
             cond = parse(bc["cond"])
             delete!(bc, "cond")
-            args = [ Symbol(k) => v for (k,v) in  bc]
+            args = Dict( Symbol(k) => v for (k,v) in  bc )
             set_bc( dom.nodes[cond]; args...)
         end
     end
@@ -191,7 +191,7 @@ function dom_load_json(filename::AbstractString)
 
         cond = parse(bc["cond"])
         delete!(bc, "cond")
-        args = [ Symbol(k) => v for (k,v) in  bc]
+        args = Dict( Symbol(k) => v for (k,v) in  bc )
         set_bc( dom.faces[cond]; args...)
     end
 
@@ -258,10 +258,18 @@ function calc_nodal_vals(dom::Domain)
 end
 
 
-function make_backup(elems::Array{Element,1})
+function state_backup(elems::Array{Element,1})
     for elem in elems
         for ip in elem.ips
-            ip.data0 = deepcopy(ip.data)
+            ip.data_bk = deepcopy(ip.data)
+        end
+    end
+end
+
+function state_restore(elems::Array{Element,1})
+    for elem in elems
+        for ip in elem.ips
+            ip.data = deepcopy(ip.data_bk)
         end
     end
 end
@@ -283,8 +291,8 @@ function node_and_elem_vals(nodes::Array{Node,1}, elems::Array{Element,1})
         end
     end
 
-    nlabels_idx = [ key=>i for (i,key) in enumerate(nlabels) ]
-    elabels_idx = [ key=>i for (i,key) in enumerate(elabels) ]
+    nlabels_idx = Dict( key=>i for (i,key) in enumerate(nlabels) )
+    elabels_idx = Dict( key=>i for (i,key) in enumerate(elabels) )
     nncomps     = length(nlabels)
     necomps     = length(elabels)
 
@@ -348,8 +356,8 @@ function node_and_elem_vals2(nodes::Array{Node,1}, elems::Array{Element,1})
         end
     end
 
-    nlabels_idx = [ key=>i for (i,key) in enumerate(nlabels) ]
-    elabels_idx = [ key=>i for (i,key) in enumerate(elabels) ]
+    nlabels_idx = Dict( key=>i for (i,key) in enumerate(nlabels) )
+    elabels_idx = Dict( key=>i for (i,key) in enumerate(elabels) )
     nncomps     = length(nlabels)
     necomps     = length(elabels)
 
@@ -434,14 +442,14 @@ function tracking(dom::Domain)
             tableU = DTable()
             tableF = DTable()
             for node in trk.nodes
-                valsU  = [ dof.sU::Symbol => dof.U::Float64 for dof in node.dofs]
-                valsF  = [ dof.sF::Symbol => dof.F::Float64 for dof in node.dofs]
+                valsU  = Dict( dof.sU::Symbol => dof.U::Float64 for dof in node.dofs )
+                valsF  = Dict( dof.sF::Symbol => dof.F::Float64 for dof in node.dofs )
                 push!(tableF, valsF)
                 push!(tableU, valsU)
             end
 
-            valsU = [ key => mean(tableU[key]) for key in keys(tableU) ] # gets the average of essential values
-            valsF = [ key => sum(tableF[key])  for key in keys(tableF) ] # gets the sum for each component
+            valsU = Dict( key => mean(tableU[key]) for key in keys(tableU) ) # gets the average of essential values
+            valsF = Dict( key => sum(tableF[key])  for key in keys(tableF) ) # gets the sum for each component
             vals  = merge(valsU, valsF)
             push!(trk.table, vals)
         elseif ty == IpTracker

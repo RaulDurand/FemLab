@@ -58,9 +58,9 @@ pcolor = print_with_color
 function pbcolor(col::Symbol, msg::AbstractString...)
     const BOLD    = "\x1b[1m"
     const DEFAULT = "\x1b[0m"
-    @unix_only print(BOLD)
+    if is_linux() print(BOLD) end
     print_with_color(col, msg...)
-    @unix_only print(DEFAULT)
+    if is_linux() print(DEFAULT) end
 end
 
 using Base

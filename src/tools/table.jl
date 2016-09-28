@@ -44,7 +44,7 @@ type DTable
             if nh != nf; error("DTable: header and data fields do not match") end
             this.data = [ matrix[1:end,i] for i=1:nh]
         end
-        this.dict = [ k=>v for (k,v) in zip(header, this.data) ]
+        this.dict = Dict( k=>v for (k,v) in zip(header, this.data) )
         return this
     end
 end
@@ -77,7 +77,7 @@ end
 function push!(table::DTable, dict::Dict{Symbol,Float64})
     if length(table.dict)==0
         table.data   = [ [v] for (k,v) in dict ]
-        table.dict   = [ k=>v for (k,v) in zip(keys(dict), table.data) ]
+        table.dict   = Dict( k=>v for (k,v) in zip(keys(dict), table.data) )
     else
         nrows = length(table.data[1])
         for (k,v) in dict
