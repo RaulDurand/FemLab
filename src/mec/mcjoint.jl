@@ -121,21 +121,22 @@ function normβ(V::Array{Float64,1}, β::Float64)
 end
 
 function mountD(mat::MCJoint, ipd::MCJointIpData)
-    ks = mat.E*mat.α/ipd.h
+    kn = mat.E*mat.α/ipd.h
     G  = mat.E/(2.0*(1.0+mat.ν))
-    kn = G*mat.α/ipd.h
+    ks = G*mat.α/ipd.h
     De = [  kn  0.0  0.0
            0.0   ks  0.0
            0.0  0.0   ks ]
 
-    @show De
+    #@show De
 
     if ipd.Δλ==0.0 # Elastic 
         return De
     else
-        v    = yield_derivs(mat, ipd)
-        r    = potential_derivs(mat, ipd, ipd.upa)
+        v    = yield_derivs(mat, ipd, ipd.σ)
+        r    = potential_derivs(mat, ipd, ipd.σ, ipd.upa)
         y    = -mat.μ # dF/dσmax
+        a, b = calc_σmax(mat, ipd.upa)
         m    = -b   # dσmax/dupa
         Dep  = De - De*r*v'*De/(v'*De*r - y*m*normβ(r,mat.β))
         @show Dep
@@ -143,72 +144,80 @@ function mountD(mat::MCJoint, ipd::MCJointIpData)
     end
 end
 
-function stress_update2(mat::MCJoint, ipd::MCJointIpData, Δw::Vect)
-    @show Δw
+function stress_update(mat::MCJoint, ipd::MCJointIpData, Δw::Vect)
+    #@show Δw
     σini   = ipd.σ
 
     # calculate De
-    ks = mat.E*mat.α/ipd.h
+    kn = mat.E*mat.α/ipd.h
     G  = mat.E/(2.0*(1.0+mat.ν))
-    kn = G*mat.α/ipd.h
+    ks = G*mat.α/ipd.h
     De = [  kn  0.0  0.0
            0.0   ks  0.0
            0.0  0.0   ks ]
 
     σtr  = ipd.σ + De*Δw
-    @show σtr
+    #@show σtr
     Ftr  = yield_func(mat, ipd, σtr, ipd.upa)
-    @show Ftr
+    #@show Ftr
 
     if Ftr<0.0
         ipd.Δλ = 0.0
         ipd.σ  = σtr
     else
+
+    maxits = 10
+    upa0    = ipd.upa
+    for i=1:maxits
+        @show i
         # calculates Δλ
         # solving a second degree polynomial  A*Δλ^2 + B*λ + C = 0
         r = potential_derivs(mat, ipd, ipd.σ, ipd.upa)  # r_n+1 -> r_n
-        @show r
+        #@show r
         q = De*r
-        @show q
+        #@show q
         a, b = calc_σmax(mat, ipd.upa)
-        @show a, b
+        #@show a, b
         l  = mat.μ^2
         nr = normβ(r, mat.β)
-        @show nr
+        #@show nr
         A = q[2]^2 + q[3]^2 - b^2*nr^2*l + 2*b*nr*q[1]*l - q[1]^2*l
-        @show A
-        B = -2*σtr[2]*q[2] - 2*σtr[3]*q[3] + 2*a*b*nr - 2*a*q[1]*l - 2*b^2*ipd.upa*nr*l + 2*b*ipd.upa*q[1]*l - 2*b*nr*σtr[1]*l + 2*σtr[1]*q[1]*l
-        @show B
+        #@show A
+        B = -2*σtr[2]*q[2] - 2*σtr[3]*q[3] + 2*a*b*nr*l - 2*a*q[1]*l - 2*b^2*ipd.upa*nr*l + 2*b*ipd.upa*q[1]*l - 2*b*nr*σtr[1]*l + 2*σtr[1]*q[1]*l
+        #@show B
         C = yield_func2(mat, ipd, σtr, ipd.upa)
-        @show C
+        #@show C
         
         D = B^2 - 4*A*C
-        @show D
+        #@show D
         Δλ1 = (-B + D^0.5)/(2*A)
         ipd.σ   = σtr - Δλ1*De*r
         Δupa    = Δλ1*nr
-        ipd.upa += Δupa
-        @show(Δλ1)
-        @show(ipd.σ)
-        @show(ipd.upa)
+        ipd.upa = upa0 + Δupa
+        #@show(Δλ1)
+        #@show(ipd.σ)
+        #@show(ipd.upa)
         @show yield_func(mat, ipd, ipd.σ, ipd.upa) 
-        if abs( yield_func(mat, ipd, ipd.σ, ipd.upa) ) < 1e-6
+        if abs( yield_func(mat, ipd, ipd.σ, ipd.upa) ) < 1e-4
             ipd.Δλ = Δλ1
+            break
         else
             Δλ2 = (-B - D^0.5)/(2*A)
             ipd.σ   = σtr - Δλ2*De*r
             Δupa    = Δλ2*nr
-            ipd.upa += Δupa
-            @show(Δλ2)
-            @show(ipd.σ)
-            @show(ipd.upa)
+            ipd.upa = upa0 + Δupa
+            #@show(Δλ2)
+            #@show(ipd.σ)
+            #@show(ipd.upa)
             @show yield_func(mat, ipd, ipd.σ, ipd.upa)
-            if abs( yield_func(mat, ipd, ipd.σ, ipd.upa) ) < 1e-6
+            if abs( yield_func(mat, ipd, ipd.σ, ipd.upa) ) < 1e-4
                 ipd.Δλ = Δλ2
-            else
-                error("Δλ: something is wrong... ")
+                break
+            #else
+                #error("Δλ: something is wrong... ")
             end
         end
+    end
 
         #ipd.σ   = σtr - ipd.Δλ*De*r
         #Δupa    = ipd.Δλ*nr
@@ -224,14 +233,14 @@ function stress_update2(mat::MCJoint, ipd::MCJointIpData, Δw::Vect)
     return Δσ
 end
 
-function stress_update(mat::MCJoint, ipd::MCJointIpData, Δw::Vect)
+function stress_update_iter(mat::MCJoint, ipd::MCJointIpData, Δw::Vect)
     @show Δw
     σini   = ipd.σ
 
     # calculate De
-    ks = mat.E*mat.α/ipd.h
+    kn = mat.E*mat.α/ipd.h
     G  = mat.E/(2.0*(1.0+mat.ν))
-    kn = G*mat.α/ipd.h
+    ks = G*mat.α/ipd.h
     De = [  kn  0.0  0.0
            0.0   ks  0.0
            0.0  0.0   ks ]
@@ -272,13 +281,13 @@ function stress_update(mat::MCJoint, ipd::MCJointIpData, Δw::Vect)
             #@show den
             ipd.Δλ = num/den
             @show ipd.Δλ
-            ipd.σ  = σtr - ipd.Δλ*De*r
+            ipd.σ  = σtr - ipd.Δλ*q
             Δupa   = ipd.Δλ*nr
             ipd.upa = upa0 + Δupa
             #@show ipd.upa
             @show yield_func(mat, ipd, ipd.σ, ipd.upa)
 
-            if abs( yield_func(mat, ipd, ipd.σ, ipd.upa) ) < 1e-6
+            if abs( yield_func(mat, ipd, ipd.σ, ipd.upa) ) < 1e-4
                 break
             end
         end
