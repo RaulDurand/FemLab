@@ -299,4 +299,5 @@ include("cebjoint1d.jl")
 
 #include("bilinear.jl")
 include("smeared_crack.jl")
+include("mcjoint.jl")
 
