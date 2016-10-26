@@ -122,12 +122,12 @@ function mountD(mat::Joint, ipd::JointIpData)
     ks = mat.ks/ipd.h
     kn = mat.kn/ipd.h
     if ipd.ndim==2
-        return [  ks  0.0 
-                 0.0   kn ]
+        return [  kn  0.0 
+                 0.0   ks ]
     else
-        return  [  ks  0.0  0.0
+        return  [  kn  0.0  0.0
                   0.0   ks  0.0
-                  0.0  0.0   kn ]
+                  0.0  0.0   ks ]
     end
 end
 
@@ -142,16 +142,16 @@ end
 
 function matrixT(J::Matrix{Float64})
     if size(J,1)==2
-        L1 = vec(J[1,:])
-        L2 = vec(J[2,:])
-        L3 = cross(L1, L2)
+        L2 = vec(J[1,:])
+        L3 = vec(J[2,:])
+        L1 = cross(L2, L3)
         L1 /= norm(L1)
         L2 /= norm(L2)
         L3 /= norm(L3)
         return [L1 L2 L3]'
     else
-        L1 = vec(J)/norm(J)
-        L2 = [ -L1[2],  L1[1] ]
+        L1 = [ -L1[2],  L1[1] ]
+        L2 = vec(J)/norm(J)
         return [L1 L2]'
     end
 end
