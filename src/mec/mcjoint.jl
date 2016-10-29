@@ -84,13 +84,14 @@ function calc_σmax(mat::MCJoint, upa)
     else
         a = 0.0
         b = 0.0
+        b = 1e-8
     end
     return a, b
 end
 
 function yield_func(mat::MCJoint, ipd::MCJointIpData, σ::Array{Float64,1}, upa)
     a, b = calc_σmax(mat, upa)
-    σmax = a - upa*b
+    σmax = a - b*upa
     return (σ[2]^2 + σ[3]^2)^0.5 + (σ[1]-σmax)*mat.μ
 end
 
@@ -109,10 +110,13 @@ function potential_derivs(mat::MCJoint, ipd::MCJointIpData, σ::Array{Float64,1}
     a, b = calc_σmax(mat, upa)
     σmax = a - upa*b
     if σ[1]<0.0
-        return [0.0, 2*σ[2], 2*σ[3]]
+        r = [0.0, 2*σ[2], 2*σ[3]]
+        return r/norm(r)
     else
         τmax = σmax*mat.μ
-        return [2*σ[1]/σmax^2, 2*σ[2]/τmax^2, 2*σ[3]/τmax^2]
+        r = [2*σ[1]/σmax^2, 2*σ[2]/τmax^2, 2*σ[3]/τmax^2]
+        return r/norm(r)
+        #return [2*σ[1]/σmax^2, 2*σ[2]/τmax^2, 2*σ[3]/τmax^2]
     end
 end
 
@@ -139,13 +143,15 @@ function mountD(mat::MCJoint, ipd::MCJointIpData)
         a, b = calc_σmax(mat, ipd.upa)
         m    = -b   # dσmax/dupa
         Dep  = De - De*r*v'*De/(v'*De*r - y*m*normβ(r,mat.β))
-        @show Dep
+        #@show Dep
         return Dep
     end
 end
 
+    using PyPlot
 function stress_update(mat::MCJoint, ipd::MCJointIpData, Δw::Vect)
     #@show Δw
+    #@show ipd.w[1]
     σini   = ipd.σ
 
     # calculate De
@@ -157,72 +163,62 @@ function stress_update(mat::MCJoint, ipd::MCJointIpData, Δw::Vect)
            0.0  0.0   ks ]
 
     σtr  = ipd.σ + De*Δw
-    #@show σtr
     Ftr  = yield_func(mat, ipd, σtr, ipd.upa)
-    #@show Ftr
 
     if Ftr<0.0
         ipd.Δλ = 0.0
         ipd.σ  = σtr
     else
-
-    maxits = 10
-    upa0    = ipd.upa
-    for i=1:maxits
-        @show i
-        # calculates Δλ
-        # solving a second degree polynomial  A*Δλ^2 + B*λ + C = 0
-        r = potential_derivs(mat, ipd, ipd.σ, ipd.upa)  # r_n+1 -> r_n
-        #@show r
-        q = De*r
-        #@show q
-        a, b = calc_σmax(mat, ipd.upa)
-        #@show a, b
-        l  = mat.μ^2
-        nr = normβ(r, mat.β)
-        #@show nr
-        A = q[2]^2 + q[3]^2 - b^2*nr^2*l + 2*b*nr*q[1]*l - q[1]^2*l
-        #@show A
-        B = -2*σtr[2]*q[2] - 2*σtr[3]*q[3] + 2*a*b*nr*l - 2*a*q[1]*l - 2*b^2*ipd.upa*nr*l + 2*b*ipd.upa*q[1]*l - 2*b*nr*σtr[1]*l + 2*σtr[1]*q[1]*l
-        #@show B
-        C = yield_func2(mat, ipd, σtr, ipd.upa)
-        #@show C
         
-        D = B^2 - 4*A*C
-        #@show D
-        Δλ1 = (-B + D^0.5)/(2*A)
-        ipd.σ   = σtr - Δλ1*De*r
-        Δupa    = Δλ1*nr
-        ipd.upa = upa0 + Δupa
-        #@show(Δλ1)
-        #@show(ipd.σ)
-        #@show(ipd.upa)
-        @show yield_func(mat, ipd, ipd.σ, ipd.upa) 
-        if abs( yield_func(mat, ipd, ipd.σ, ipd.upa) ) < 1e-4
-            ipd.Δλ = Δλ1
-            break
-        else
-            Δλ2 = (-B - D^0.5)/(2*A)
-            ipd.σ   = σtr - Δλ2*De*r
-            Δupa    = Δλ2*nr
-            ipd.upa = upa0 + Δupa
-            #@show(Δλ2)
-            #@show(ipd.σ)
-            #@show(ipd.upa)
-            @show yield_func(mat, ipd, ipd.σ, ipd.upa)
-            if abs( yield_func(mat, ipd, ipd.σ, ipd.upa) ) < 1e-4
-                ipd.Δλ = Δλ2
-                break
-            #else
-                #error("Δλ: something is wrong... ")
-            end
-        end
-    end
+        a, b = calc_σmax(mat, ipd.upa)
+        r = potential_derivs(mat, ipd, ipd.σ, ipd.upa)  # r_n+1 -> r_n
+        nr= normβ(r, mat.β)
+        q = De*r
+        eps = 1e-4
+        err = eps + 1
+        x0  = 1.0
+        while err>eps
+            root = ( (σtr[2] - x0*q[2])^2 + (σtr[3] - x0*q[3])^2 )^0.5 
+            a, b = calc_σmax(mat, ipd.upa+x0*nr)
 
-        #ipd.σ   = σtr - ipd.Δλ*De*r
-        #Δupa    = ipd.Δλ*nr
-        #ipd.upa += Δupa
+            f = root + (σtr[1] - x0*q[1])*mat.μ - (a - b*(ipd.upa + x0*nr))*mat.μ
+            d = ( (x0*q[2] - σtr[2])*q[2] + (x0*q[3] - σtr[3])*q[3] )/root + (b*nr -q[1])*mat.μ
+            x = x0 - f/d
+            err = abs(x- x0)
+            #err = abs(f)
+            x0 = x
+        end
+        ipd.Δλ = x0
+        @assert(ipd.Δλ>0)
+
+
+        #X = linspace(-2,8,1000)
+        #Y = []
+        #F = []
+        #for x in X
+            #ipd.σ   = σtr - x*q
+            #Δupa    = x*nr
+            #y = yield_func(mat, ipd, ipd.σ, ipd.upa + Δupa) 
+            #root = ( (σtr[2] - x*q[2])^2 + (σtr[3] - x*q[3])^2 )^0.5 
+#
+            #a, b = calc_σmax(mat, ipd.upa+x*nr)
+            #f = root + (σtr[1] - x*q[1])*mat.μ - (a - b*(ipd.upa + x*nr))*mat.μ
+            #push!(Y, y)
+            #push!(F, f)
+        #end
+
+        #PyPlot.plot(X,Y, "-o")
+        #PyPlot.plot(X,F, "-^")
+        #show()
+        #exit()
+
+
+        ipd.σ   = σtr - ipd.Δλ*q
+        Δupa    = ipd.Δλ*nr
+        ipd.upa += Δupa
+        #@show yield_func(mat, ipd, ipd.σ, ipd.upa) 
     end
+    #@show ipd.upa
 
     # update w
     ipd.w += Δw
@@ -233,78 +229,6 @@ function stress_update(mat::MCJoint, ipd::MCJointIpData, Δw::Vect)
     return Δσ
 end
 
-function stress_update_iter(mat::MCJoint, ipd::MCJointIpData, Δw::Vect)
-    @show Δw
-    σini   = ipd.σ
-
-    # calculate De
-    kn = mat.E*mat.α/ipd.h
-    G  = mat.E/(2.0*(1.0+mat.ν))
-    ks = G*mat.α/ipd.h
-    De = [  kn  0.0  0.0
-           0.0   ks  0.0
-           0.0  0.0   ks ]
-
-    σtr  = ipd.σ + De*Δw
-    @show σtr
-    Ftr  = yield_func(mat, ipd, σtr, ipd.upa)
-    @show Ftr
-
-    if Ftr<0.0
-        ipd.Δλ = 0.0
-        ipd.σ  = σtr
-    else
-        # calculates Δλ
-
-        maxiter = 20
-        #ipd.Δλ = -1.0
-        ipd.Δλ = 0.0001
-
-        upa0 = ipd.upa
-
-        for i=1:maxiter
-            #ipd.Δλ += 0.001
-            @show i
-            r = potential_derivs(mat, ipd, ipd.σ, ipd.upa)  # r_n+1 -> r_n
-            #@show r
-            nr = normβ(r, mat.β)
-            q = De*r
-            a, b = calc_σmax(mat, ipd.upa)
-
-            num = ( (σtr[2] - ipd.Δλ*q[2])^2  + (σtr[3] - ipd.Δλ*q[3])^2 )^0.5  - (a - b*ipd.upa)*mat.μ + (σtr[1]-ipd.Δλ*q[1])*mat.μ
-            den = -b*nr*mat.μ
-
-            #num = ( (σtr[2] - ipd.Δλ*q[2])^2  + (σtr[3] - ipd.Δλ*q[3])^2 )^0.5  - a*mat.μ + b*ipd.upa*mat.μ + σtr[1]*mat.μ
-            #den = mat.μ*q[1] - b*nr*mat.μ
-
-            #@show num
-            #@show den
-            ipd.Δλ = num/den
-            @show ipd.Δλ
-            ipd.σ  = σtr - ipd.Δλ*q
-            Δupa   = ipd.Δλ*nr
-            ipd.upa = upa0 + Δupa
-            #@show ipd.upa
-            @show yield_func(mat, ipd, ipd.σ, ipd.upa)
-
-            if abs( yield_func(mat, ipd, ipd.σ, ipd.upa) ) < 1e-4
-                break
-            end
-        end
-
-        #ipd.σ   = σtr - ipd.Δλ*De*r
-        #Δupa    = ipd.Δλ*nr
-        #ipd.upa += Δupa
-    end
-
-    # update w
-    ipd.w += Δw
-
-    # calculate Δσ
-    Δσ = ipd.σ - σini
-
-    return Δσ
-end
 
 function getvals(mat::MCJoint, ipd::MCJointIpData)
     return Dict(
