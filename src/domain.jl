@@ -627,7 +627,7 @@ function save(dom::Domain, filename::AbstractString; verbose=true, save_ips=fals
     close(f)
 
     if verbose
-        pcolor(:green, "  file $filename written (Domain)\n")
+        printcolor(:green, "  file $filename written (Domain)\n")
     end
 
     # save ip information as vtk
@@ -712,7 +712,7 @@ function save_dom_ips(dom::Domain, filename::AbstractString, verbose=true)
     close(f)
 
     if verbose
-        pcolor(:green, "  file $filename written (Domain)\n")
+        printcolor(:green, "  file $filename written (Domain)\n")
     end
 end
 
@@ -884,7 +884,7 @@ function save2(dom::Domain, filename::AbstractString; verbose=true)
     close(f)
 
     if verbose
-        pcolor(:green, "  file $filename written (Domain)\n")
+        printcolor(:green, "  file $filename written (Domain)\n")
     end
 end
 

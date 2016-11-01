@@ -289,7 +289,7 @@ function stress_update(mat::MCJoint, ipd::MCJointIpData, Δw::Vect)
 
         #@assert(ipd.Δλ>0)
         #if ipd.Δλ < 0.0
-            #pcolor(:red, "Warning: ipd.Δλ<0 ($(ipd.Δλ)) \n")
+            #printcolor(:red, "Warning: ipd.Δλ<0 ($(ipd.Δλ)) \n")
         #end
 
 
@@ -363,11 +363,11 @@ function stress_update(mat::MCJoint, ipd::MCJointIpData, Δw::Vect)
         ipd.upa += Δupa
         #if ipd.upa<0.0
             #ipd.upa = 0.0
-            #pcolor(:red, "Warning: ipd.upa<0 ($(ipd.upa))  σmax=$(a-b*ipd.upa)\n")
+            #printcolor(:red, "Warning: ipd.upa<0 ($(ipd.upa))  σmax=$(a-b*ipd.upa)\n")
         #end
         #f = yield_func(mat, ipd, ipd.σ, ipd.upa) 
         #if abs(f)>10
-            #pcolor(:red, "Warning: yield function f=$f\n")
+            #printcolor(:red, "Warning: yield function f=$f\n")
         #end
     end
     #@show ipd.upa

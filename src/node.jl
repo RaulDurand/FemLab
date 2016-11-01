@@ -163,7 +163,7 @@ function getindex(nodes::Array{Node,1}, cond::Expr)
     end
 
     if length(result) == 0
-        pcolor(:red, "Warning: No nodes found that match: $cond\n")
+        printcolor(:red, "Warning: No nodes found that match: $cond\n")
     end
 
     return result

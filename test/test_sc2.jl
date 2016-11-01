@@ -23,6 +23,8 @@ set_bc(dom, bc1, bc2)
 solve!(dom, nincs=40, verbose=verbose, autosave=true)
 save(node_dat, "node.dat")
 
-using PyPlot
-plot(node_dat.table[:ux], node_dat.table[:fx], marker="o")
-show()
+if verbose
+    using PyPlot
+    plot(node_dat.table[:ux], node_dat.table[:fx], marker="o")
+    show()
+end

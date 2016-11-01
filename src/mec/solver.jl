@@ -138,7 +138,7 @@ function solve!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::AbstractStrin
 
     # Incremental analysis
     for inc=1:nincs
-        if verbose; pcolor(:blue, "  increment $inc/$nincs:\n") end
+        if verbose; printcolor(:blue, "  increment $inc/$nincs:\n") end
         DU, DF = lam*U, lam*F   # increment vectors
         R      = copy(DF)       # residual
         local DFin, DUa
@@ -175,7 +175,7 @@ function solve!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::AbstractStrin
             residue = maxabs(R)
 
             if verbose
-                pcolor(:bold, "    it $it  ")
+                printcolor(:bold, "    it $it  ")
                 @printf("residue: %-15.4e", residue)
                 println()
             end
@@ -203,13 +203,13 @@ function solve!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::AbstractStrin
         end
 
         if !converged
-            pcolor(:red, "solve!: solver did not converge\n",)
+            printcolor(:red, "solve!: solver did not converge\n",)
             return false
         end
     end
 
     if verbose && autosave
-        pcolor(:green, "  $(dom.filekey)..vtk files written (Domain)\n")
+        printcolor(:green, "  $(dom.filekey)..vtk files written (Domain)\n")
     end
 
 
@@ -242,7 +242,7 @@ function solve_inc(dom::Domain, DU::Vect, DF::Vect, umap::Array{Int,1}, pmap::Ar
     ndofs = length(DU)
     nu = length(umap)
     if nu == ndofs 
-        pcolor(:red, "solve!: Warning, no essential boundary conditions.\n")
+        printcolor(:red, "solve!: Warning, no essential boundary conditions.\n")
     end
 
     if verbose; print("    assembling... \r") end
@@ -363,7 +363,7 @@ function solve_legacy!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::Abstra
     end
 
     for inc=1:nincs
-        verbose && pcolor(:blue, "  increment $inc/$nincs:\n")
+        verbose && printcolor(:blue, "  increment $inc/$nincs:\n")
         DU, DF = lam*U, lam*F
         R      = copy(DF) # residual
 
@@ -388,7 +388,7 @@ function solve_legacy!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::Abstra
             residue = maxabs(R)
 
             if verbose
-                pcolor(:bold, "    it $it  ")
+                printcolor(:bold, "    it $it  ")
                 @printf("residue: %-15.4e", residue)
                 println()
             end
@@ -407,13 +407,13 @@ function solve_legacy!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::Abstra
         end
 
         if !converged
-            pcolor(:red, "solve!: solver did not converge\n",)
+            printcolor(:red, "solve!: solver did not converge\n",)
             return false
         end
     end
 
     if verbose && autosave
-        pcolor(:green, "  $(dom.filekey)..vtk files written (Domain)\n")
+        printcolor(:green, "  $(dom.filekey)..vtk files written (Domain)\n")
     end
 
     # Reset boundary conditions at end of stage

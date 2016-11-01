@@ -152,7 +152,7 @@ Sets one or several boundary conditions `bcs` to a set of Node objects `nodes`.
 """
 function set_bc(nodes::Array{Node,1}; args...)
     if length(nodes)==0
-        pcolor(:red, "Warning, applying boundary conditions to empty array of nodes\n")
+        printcolor(:red, "Warning, applying boundary conditions to empty array of nodes\n")
     end
 
     for node in nodes
@@ -173,7 +173,7 @@ end
 
 # Define boundary conditions for a collection of faces
 function set_bc(faces::Array{Face,1}; args...)
-    if length(faces)==0; pcolor(:red, "Warning, applying boundary conditions to empty array of faces\n") end
+    if length(faces)==0; printcolor(:red, "Warning, applying boundary conditions to empty array of faces\n") end
     for face in faces
         set_bc(face; args...)
     end

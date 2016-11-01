@@ -33,8 +33,9 @@ set_bc(dom, bc1, bc2, bc3)
 solve!(dom, nincs=10, verbose=verbose, autosave=true)
 
 #save(dom, "")
-
-using PyPlot
-#plot(-node_dat.table[:uz], 0:80, marker="o")
-plot(-node_dat.table[:uz], -node_dat.table[:fz], marker="o")
-show()
+if verbose
+    using PyPlot
+    #plot(-node_dat.table[:uz], 0:80, marker="o")
+    plot(-node_dat.table[:uz], -node_dat.table[:fz], marker="o")
+    show()
+end

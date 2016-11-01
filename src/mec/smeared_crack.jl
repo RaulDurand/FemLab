@@ -170,7 +170,7 @@ function calcDcr(mat::SmearedCrack, ipd::SmearedCrackIpData, εn)
     k4 = 2./(ξ1 + α1*ξ2 - α2*ξ1 + α2)
     εnul = k4*mat.Gf/(mat.ft*mat.h)
     #@show εn
-    @show εnul
+    #@show εnul
 
     k=0
 
@@ -225,7 +225,7 @@ function stress_update(mat::SmearedCrack, ipd::SmearedCrackIpData, Δε::Array{F
     # principal stresses
     if ipd.ncracks == 0
         Sig, EV = principal(σtr)
-        @show Sig
+        #@show Sig
         #@show EV
         #exit()
         if Sig[1] > mat.ft
@@ -258,16 +258,16 @@ function stress_update(mat::SmearedCrack, ipd::SmearedCrackIpData, Δε::Array{F
         #println()
         εn = ipd.εcr[1]
         Dcr = calcDcr(mat, ipd, εn)
-        @showm Dcr
+        #@showm Dcr
         Δεcr = inv(Dcr + T*Dco*T')*T*Dco*Δε
         εn = (ipd.εcr + Δεcr)[1]
-        @show εn
+        #@show εn
         #@show Δεcr0
         #DII = Dcr[2,2]
         #@show DII
         if false
         for i=1:maxit
-            @show i
+            #@show i
             εn = (ipd.εcr + Δεcr0)[1]
             #σn = calcσn(mat, ipd, εn)
             #Δσn = σn - (T*σini)[1]
@@ -277,9 +277,9 @@ function stress_update(mat::SmearedCrack, ipd::SmearedCrackIpData, Δε::Array{F
             #Δσ = [Δσn, Δτ2, Δτ3]
             Δσ = Dcr*Δεcr0
             
-            @show Δσ
+            #@show Δσ
 
-            @show εn
+            #@show εn
             #@show σn
             #@show Dcr
             #if DII>0
@@ -295,13 +295,13 @@ function stress_update(mat::SmearedCrack, ipd::SmearedCrackIpData, Δε::Array{F
                 #exit()
             #end
             Δεcr = inv(T*Dco*T')*( T*Dco*Δε - Δσ )
-            @show Δεcr
+            #@show Δεcr
             #@show norm(Δεcr - Δεcr0)
-            @show norm(Δεcr - Δεcr0)
+            #@show norm(Δεcr - Δεcr0)
             if norm(Δεcr - Δεcr0)< 1e-6 break end
             Δεcr0 .= Δεcr  # TODO: check
 
-            @show Δεcr0
+            #@show Δεcr0
         end
         end
 

@@ -50,8 +50,8 @@ COLORS = Dict(
     )
 
 # Alias to print with color
-pcolor = print_with_color
-#function pcolor(col::Symbol, msg::AbstractString...)
+printcolor = print_with_color
+#function printcolor(col::Symbol, msg::AbstractString...)
     #print(COLORS[col], msg..., COLORS[:normal])
 #end
 

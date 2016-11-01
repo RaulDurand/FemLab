@@ -140,7 +140,7 @@ function save(table::DTable, filename::AbstractString; verbose=true, format="")
         end
         close(f)
 
-        if verbose  pcolor(:green, "  file $filename written\n") end
+        if verbose  printcolor(:green, "  file $filename written\n") end
         return
     end
 
@@ -150,7 +150,7 @@ function save(table::DTable, filename::AbstractString; verbose=true, format="")
         print(f, str)
         close(f)
 
-        if verbose  pcolor(:green, "  file $filename written (DTable)\n") end
+        if verbose  printcolor(:green, "  file $filename written (DTable)\n") end
         return
     end
 end
@@ -166,13 +166,13 @@ function save(book::DBook, filename::AbstractString; verbose=true, format="dat")
         print(f, str)
         close(f)
 
-        if verbose  pcolor(:green, "  file $filename written (DBook)\n") end
+        if verbose  printcolor(:green, "  file $filename written (DBook)\n") end
         return
     end
 
     if format=="dat" # saves only the last table
         #save(book.tables[end], filename, verbose=false)
-        #if verbose  pcolor(:green, "  file $filename written (DBook)\n") end
+        #if verbose  printcolor(:green, "  file $filename written (DBook)\n") end
 
         f  = open(filename, "w")
 
@@ -206,7 +206,7 @@ function save(book::DBook, filename::AbstractString; verbose=true, format="dat")
         end
 
         close(f)
-        if verbose  pcolor(:green, "  file $filename written\n") end
+        if verbose  printcolor(:green, "  file $filename written\n") end
 
         return
     end
