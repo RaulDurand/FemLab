@@ -34,6 +34,7 @@ type MCJointIpData<:IpData
         this.w = zeros(3)
         this.upa = 0.0
         this.Δλ  = 0.0
+        this.h  = 0.0
         return this
     end
 end
@@ -84,7 +85,7 @@ function calc_σmax(mat::MCJoint, upa)
     else
         a = 0.0
         b = 0.0
-        b = 1e-8
+        b = 1e-5
     end
     return a, b
 end
@@ -126,6 +127,10 @@ end
 
 function mountD(mat::MCJoint, ipd::MCJointIpData)
     kn = mat.E*mat.α/ipd.h
+    #if ipd.w[1]<0.0
+        #kn = mat.E*mat.α/ipd.h*10.0
+    #end
+
     G  = mat.E/(2.0*(1.0+mat.ν))
     ks = G*mat.α/ipd.h
     De = [  kn  0.0  0.0
@@ -156,6 +161,7 @@ function stress_update(mat::MCJoint, ipd::MCJointIpData, Δw::Vect)
 
     # calculate De
     kn = mat.E*mat.α/ipd.h
+    #@show kn*mat.ws
     G  = mat.E/(2.0*(1.0+mat.ν))
     ks = G*mat.α/ipd.h
     De = [  kn  0.0  0.0
@@ -169,54 +175,200 @@ function stress_update(mat::MCJoint, ipd::MCJointIpData, Δw::Vect)
         ipd.Δλ = 0.0
         ipd.σ  = σtr
     else
+        local a, b, r, nr, q
         
-        a, b = calc_σmax(mat, ipd.upa)
-        r = potential_derivs(mat, ipd, ipd.σ, ipd.upa)  # r_n+1 -> r_n
-        nr= normβ(r, mat.β)
-        q = De*r
-        eps = 1e-4
+        eps = 1e-7
         err = eps + 1
         x0  = 1.0
-        while err>eps
-            root = ( (σtr[2] - x0*q[2])^2 + (σtr[3] - x0*q[3])^2 )^0.5 
-            a, b = calc_σmax(mat, ipd.upa+x0*nr)
+        nmaxits = 40
+        f = 0
+        i=0
+        x0 = ipd.upa
 
+        function func(x)
+            # at n
+            r = potential_derivs(mat, ipd, ipd.σ, ipd.upa)  # r_n
+            nr= normβ(r, mat.β)
+            Δupa = x*nr
+            q = De*r
+            s   = σtr - x*q
+
+            # at n+1
+            r = potential_derivs(mat, ipd, s, ipd.upa+Δupa)  # r_n+1 
+            nr= normβ(r, mat.β)
+            Δupa = x*nr
+            q = De*r
+            s   = σtr - x*q
+
+            # at n+1
+            r = potential_derivs(mat, ipd, s, ipd.upa+Δupa)  # r_n+1 
+            nr= normβ(r, mat.β)
+            Δupa = x*nr
+            q = De*r
+            s   = σtr - x*q
+
+            a, b = calc_σmax(mat, ipd.upa+x*nr)
+            root = ( (σtr[2] - x*q[2])^2 + (σtr[3] - x*q[3])^2 )^0.5 
+            f = root + (σtr[1] - x*q[1])*mat.μ - (a - b*(ipd.upa + x*nr))*mat.μ
+            d = ( (x*q[2] - σtr[2])*q[2] + (x*q[3] - σtr[3])*q[3] )/root + (b*nr -q[1])*mat.μ
+            return f, d, r, nr, q, a, b
+        end
+
+
+        change_deriv_sgn = false
+        xx = 0.0
+        for i=1:40
+
+            #if false
+            # at n
+            r = potential_derivs(mat, ipd, ipd.σ, ipd.upa)  # r_n
+            nr= normβ(r, mat.β)
+            Δupa = x0*nr
+            q = De*r
+            s   = σtr - x0*q
+
+            # at n+1
+            r = potential_derivs(mat, ipd, s, ipd.upa+Δupa)  # r_n+1 
+            nr= normβ(r, mat.β)
+            Δupa = x0*nr
+            q = De*r
+            s   = σtr - x0*q
+
+            # at n+1
+            r = potential_derivs(mat, ipd, s, ipd.upa+Δupa)  # r_n+1 
+            nr= normβ(r, mat.β)
+            Δupa = x0*nr
+            q = De*r
+            s   = σtr - x0*q
+
+
+            a, b = calc_σmax(mat, ipd.upa+x0*nr)
+            root = ( (σtr[2] - x0*q[2])^2 + (σtr[3] - x0*q[3])^2 )^0.5 
             f = root + (σtr[1] - x0*q[1])*mat.μ - (a - b*(ipd.upa + x0*nr))*mat.μ
             d = ( (x0*q[2] - σtr[2])*q[2] + (x0*q[3] - σtr[3])*q[3] )/root + (b*nr -q[1])*mat.μ
+            #end
+
+
+            #f, d, r, nr, q, a, b = func(x0)
+
+            if change_deriv_sgn
+                if d>0 && a>0
+                    d = -d*10
+                end
+                #else
+                #d = -abs(d)*10.0
+            end
+
             x = x0 - f/d
+
             err = abs(x- x0)
-            #err = abs(f)
+
             x0 = x
+            if err<eps 
+                break
+                if x0>0.0 break end
+                #@show i,x0
+                xx = x
+                x0 = 0.0
+                #@show i,x0
+                change_deriv_sgn = true
+            end
         end
+
+        if x0<0.0
+            x0 = 1e-10
+            f, d, r, nr, q, a, b = func(x0)
+        end
+
         ipd.Δλ = x0
-        @assert(ipd.Δλ>0)
 
-
-        #X = linspace(-2,8,1000)
-        #Y = []
-        #F = []
-        #for x in X
-            #ipd.σ   = σtr - x*q
-            #Δupa    = x*nr
-            #y = yield_func(mat, ipd, ipd.σ, ipd.upa + Δupa) 
-            #root = ( (σtr[2] - x*q[2])^2 + (σtr[3] - x*q[3])^2 )^0.5 
-#
-            #a, b = calc_σmax(mat, ipd.upa+x*nr)
-            #f = root + (σtr[1] - x*q[1])*mat.μ - (a - b*(ipd.upa + x*nr))*mat.μ
-            #push!(Y, y)
-            #push!(F, f)
+        #if i==40 && xx!=0.0
+            #ipd.Δλ = xx
         #end
 
-        #PyPlot.plot(X,Y, "-o")
-        #PyPlot.plot(X,F, "-^")
-        #show()
-        #exit()
+
+        #@assert(ipd.Δλ>0)
+        #if ipd.Δλ < 0.0
+            #pcolor(:red, "Warning: ipd.Δλ<0 ($(ipd.Δλ)) \n")
+        #end
+
+
+        if false
+        if ipd.Δλ<0 || i== 40
+            @show i
+            @show yield_func(mat, ipd, σini, ipd.upa) 
+            @show r
+            @show ipd.Δλ
+            @show σini
+            @show σtr
+            @show Δw
+            @show a,b
+            @show ipd.upa + x0*nr
+            @show err
+            @show yield_func(mat, ipd, σtr - x0*q, ipd.upa + x0*nr) 
+            X = linspace(-0.001,0.001,1000)
+            Y = []
+            F = []
+
+
+            for x in X
+                #s    = σtr - x*q
+                r = potential_derivs(mat, ipd, ipd.σ, ipd.upa)  # r_n+1 -> r_n
+                nr= normβ(r, mat.β)
+                Δupa = x*nr
+                q = De*r
+                s   = σtr - x*q
+
+                r = potential_derivs(mat, ipd, s, ipd.upa+Δupa)  # r_n+1 -> r_n
+                nr= normβ(r, mat.β)
+                Δupa = x*nr
+                q = De*r
+                s   = σtr - x*q
+
+                r = potential_derivs(mat, ipd, s, ipd.upa+Δupa)  # r_n+1 -> r_n
+                nr= normβ(r, mat.β)
+                Δupa = x*nr
+                q = De*r
+                s   = σtr - x*q
+
+                r = potential_derivs(mat, ipd, s, ipd.upa+Δupa)  # r_n+1 -> r_n
+                nr= normβ(r, mat.β)
+                Δupa = x*nr
+                q = De*r
+                s   = σtr - x*q
+
+                y = yield_func(mat, ipd, s, ipd.upa + Δupa) 
+                root = ( (σtr[2] - x*q[2])^2 + (σtr[3] - x*q[3])^2 )^0.5 
+                a, b = calc_σmax(mat, ipd.upa+Δupa)
+                #@show σini
+                #@show a,b
+                #@show r
+                #@show s
+                f = root + (σtr[1] - x*q[1])*mat.μ - (a - b*(ipd.upa + x*nr))*mat.μ
+                push!(Y, y)
+                push!(F, f)
+            end
+
+            PyPlot.plot([-0.001,0.001],[0,0], "-")
+            PyPlot.plot(X,Y, "-o")
+            PyPlot.plot(X,F, "-^")
+            show()
+            exit()
+        end
+        end
 
 
         ipd.σ   = σtr - ipd.Δλ*q
         Δupa    = ipd.Δλ*nr
         ipd.upa += Δupa
-        #@show yield_func(mat, ipd, ipd.σ, ipd.upa) 
+        #if ipd.upa<0.0
+            #ipd.upa = 0.0
+            #pcolor(:red, "Warning: ipd.upa<0 ($(ipd.upa))  σmax=$(a-b*ipd.upa)\n")
+        #end
+        #f = yield_func(mat, ipd, ipd.σ, ipd.upa) 
+        #if abs(f)>10
+            #pcolor(:red, "Warning: yield function f=$f\n")
+        #end
     end
     #@show ipd.upa
 

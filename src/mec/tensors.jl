@@ -65,7 +65,7 @@ function principal(T::Tensor2)
     F = [ T[1]      T[4]/sr2  T[6]/sr2 ;
           T[4]/sr2  T[2]      T[5]/sr2 ;
           T[6]/sr2  T[5]/sr2  T[3]     ]
-    L, V = eig(F)
+    L, V = eig(F, permute=false, scale=false)
 
     # force a clockwise system
     if norm( cross(V[:,2], V[:,3]) - V[:,1] ) > 1e-5
@@ -75,14 +75,9 @@ function principal(T::Tensor2)
 
     # find max value
     val, idx = findmax(L)
-    if idx==2
-        L = circshift(L, 2)
-        V = circshift(V, [0,2])
-    end
-    if idx==3
-        L = circshift(L, 1)
-        V = circshift(V, [0,1])
-    end
+    shift = 1 - idx
+    L = circshift(L, shift)
+    V = circshift(V, (0,shift))
     return L, V
 end
 

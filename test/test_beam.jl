@@ -1,14 +1,16 @@
 using FemLab
-using FactCheck
+#using FactCheck
 
 verbose = isdefined(:verbose) ? verbose : true
 
+# Mesh generation
 bl  = Block3D( [0 0 0; 1.0 6.0 1.0], nx=1, ny=10, nz=1)
 bl1 = BlockInset( [0.2 0.2 0.2; 0.2 5.8 0.2] , curvetype="polyline")
 bl2 = move( copy(bl1), x=0.6)
 
-mesh = generate_mesh(bl, bl1, bl2, verbose=verbose)
+mesh = Mesh(bl, bl1, bl2, verbose=verbose)
 
+# FEM analysis
 dom = Domain(mesh)
 
 set_mat(dom.elems[:solids], ElasticSolid(E=1.e4, nu=0.) )
@@ -23,6 +25,13 @@ set_bc(dom, bc1, bc2, bc3)
 
 solve!(dom, nincs=1, verbose=verbose)
 
-facts("\nTest Reinforced Beam") do
-    @fact 1 --> 1
-end
+save(dom, "dom.vtk")
+
+#facts("\nTest Reinforced Beam") do
+    #@fact 1 --> 1
+#end
+
+
+
+
+

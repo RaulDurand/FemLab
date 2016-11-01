@@ -5,7 +5,7 @@ verbose = isdefined(:verbose) ? verbose : true
 bl  = Block3D( [0 0 0; 1.0 6.0 1.0], nx=1, ny=10, nz=1)
 bli = BlockInset( [0.5 2 0.5; 0.5 6.0 0.5], curvetype="polyline")
 
-mesh = generate_mesh(bl, bli, verbose=false)
+mesh = Mesh(bl, bli, verbose=false)
 
 dom = Domain(mesh)
 

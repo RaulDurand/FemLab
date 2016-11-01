@@ -4,7 +4,7 @@ verbose = isdefined(:verbose) ? verbose : true
 
 # mesh 
 bl = Block3D( [0 0 0; 1 1 0.5], nx=2, ny=2, nz=2)
-mesh = generate_mesh(bl, verbose=false)
+mesh = Mesh(bl, verbose=false)
 
 # fem domain
 dom = Domain(mesh)

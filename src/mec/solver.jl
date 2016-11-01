@@ -19,6 +19,8 @@
 ##############################################################################
 
 export solve!
+export solve_legacy!
+
 
 function mount_K(dom::Domain, ndofs::Int64)
     R, C, V = Int64[], Int64[], Float64[]
@@ -39,6 +41,7 @@ function mount_K(dom::Domain, ndofs::Int64)
     return sparse(R, C, V, ndofs, ndofs)
 end
 
+
 function mount_RHS(dom::Domain, ndofs::Int64, Δt::Float64)
     RHS = zeros(ndofs)
     for elem in dom.elems
@@ -49,8 +52,9 @@ function mount_RHS(dom::Domain, ndofs::Int64, Δt::Float64)
     return RHS
 end
 
+
 function solve!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::AbstractString="FE", precision::Float64=0.01, reset_bc::Bool=true, verbose::Bool=true, autosave::Bool=false, save_ips::Bool=false)
-
+    
     if verbose; pbcolor(:cyan,"FEM analysis:\n") end
 
     # check if all elements have material defined
@@ -62,20 +66,22 @@ function solve!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::AbstractStrin
     end
     count > 0 && error("There are $count elements without material definition\n")
 
-    # Set boundary conditions
+    # Set boundary conditions at nodes
     for bc in dom.node_bcs
         set_bc(bc.nodes; bc.conds...)
     end
 
+    # Boundary conditions at faces
     for bc in dom.face_bcs
         set_bc(bc.faces; bc.conds...)
     end
 
+    # Boundary conditions at edges
     for bc in dom.edge_bcs
         set_bc(bc.edges; bc.conds...)
     end
 
-    # Fill array of dofs
+    # Fill arrays of prescribed dofs and unknown dofs
     udofs = Array(Dof, 0)
     pdofs = Array(Dof, 0)
 
@@ -89,217 +95,82 @@ function solve!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::AbstractStrin
         end
     end
 
+    # Get array with all dofs
     dofs  = vcat(udofs, pdofs)
     ndofs = length(dofs)
 
-    # Set equation id
+    # Set equation id for each dof
     for (i,dof) in enumerate(dofs)
         dof.eq_id = i
     end
     
     # Fill arrays of prescribed dofs and unknown dofs
-    presc = [ dof.prescU for dof in dofs ]
-    pdofs = dofs[ presc]
-    udofs = dofs[!presc]
     umap  = [dof.eq_id for dof in udofs]
     pmap  = [dof.eq_id for dof in pdofs]
+
+    # Get array with all integration points
+    ips = [ ip for elem in dom.elems for ip in elem.ips ]
 
     # Global RHS vector 
     RHS = mount_RHS(dom::Domain, ndofs::Int64, 0.0)
 
-    # Global U F vectors
+    # Global U and F vectors
     U  = [ dof.bryU for dof in dofs]
     F  = [ dof.bryF for dof in dofs] # nodal and face boundary conditions
     F += RHS
 
     # Solving process
-    nu  = length(udofs)
+    nu  = length(udofs)  # number of unknowns
     if verbose; println("  unknowns dofs: $nu") end
     lam = 1.0/nincs
 
-    DU, DF  = lam*U, lam*F
-    residue = 0.0
-    remountK = true
-    tracking(dom) # Tracking nodes, ips, elements, etc.
+    DU, DF   = lam*U, lam*F
+    residue  = 0.0
+    remountK = true  # Warning: remountK is bug prone
+    tracking(dom)    # Tracking nodes, ips, elements, etc.
 
-    if autosave
-        save(dom, dom.filekey * "-0" * ".vtk", verbose=false, save_ips=save_ips)
+    autosave && save(dom, dom.filekey * "-0" * ".vtk", verbose=false, save_ips=save_ips)
+
+    # Set the converged state at ips
+    for ip in ips
+        ip.data0 = deepcopy(ip.data)
     end
 
+    # Incremental analysis
     for inc=1:nincs
         if verbose; pcolor(:blue, "  increment $inc/$nincs:\n") end
-        DU, DF = lam*U, lam*F
-        R      = copy(DF) # residual
+        DU, DF = lam*U, lam*F   # increment vectors
+        R      = copy(DF)       # residual
+        local DFin, DUa
 
-        DFa    = zeros(ndofs)
-        DUa    = zeros(ndofs)
-        nbigger= 0
+        DUa    = zeros(ndofs)   # accumulated essential values (e.g. displacements)
+        DUi    = copy(DU)       # values at iteration i
+        nbigger  = 0            # counter to test non convergence
         remountK = true
 
+        # Interations
         converged = false
         for it=1:maxits
-            if it>1; DU = zeros(ndofs) end
-            solve_inc(dom, DU, R, umap, pmap, remountK, verbose)   # Changes DU and R
-            #if it>1; DU[pmap] = 0.0 end
+            if it>1; DUi = zeros(ndofs) end
+            solve_inc(dom, DUi, R, umap, pmap, remountK, verbose)   # Changes DUi and R
 
             if verbose; print("    updating... \r") end
-            DUa += DU
-            DFin = update!(dom.elems, dofs, DU) # Internal forces (DU+DUaccum?)
+            DUa += DUi
 
-            R    = R - DFin
-            DFa += DFin
-        
-            #residue = norm(R)
-            lastres = residue
-            residue = maxabs(R)
-
-            if verbose
-                pcolor(:bold, "    it $it  ")
-                @printf("residue: %-15.4e", residue)
-                println()
+            # Restore to last converged state
+            for ip in ips
+                ip.data = deepcopy(ip.data0)
             end
 
-            # Warning: use of remountK is bug prone!
-            #if residue < 1e-10; remountK = false end
-            #if residue < 1e-10 && it==1; remountK = false end
-            #if it>1; remountK=true end
-
-            if residue > lastres; nbigger+=1 end
-            if residue<precision; converged = true ; break end
-            if nbigger>15;        converged = false; break end
-            if isnan(residue);    converged = false; break end
-        end
-
-        if converged
-            tracking(dom) # Tracking nodes, ips, elements, etc.
-            autosave && save(dom, dom.filekey * "-$inc" * ".vtk", verbose=false, save_ips=save_ips)
-        end
-
-        if !converged
-            pcolor(:red, "solve!: solver did not converge\n",)
-            return false
-        end
-    end
-
-    if verbose && autosave
-        pcolor(:green, "  $(dom.filekey)..vtk files written (Domain)\n")
-    end
-
-    if reset_bc
-        for node in dom.nodes
-            for dof in node.dofs
-                dof.bryU = 0.0
-                dof.bryF = 0.0
-                dof.prescU = false
+            # Get internal forces and update data at integration points
+            DFin  = zeros(ndofs)
+            for elem in dom.elems
+                update!(elem, DUa, DFin) # updates DFin
             end
-        end
-    end
-
-    return true
-
-end
-
-function solve2!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::AbstractString="FE", precision::Float64=0.01, reset_bc::Bool=true, verbose::Bool=true, autosave::Bool=false, save_ips::Bool=false)
-    
-    if verbose; pbcolor(:cyan,"FEM analysis:\n") end
-
-    # check if all elements have material defined
-    count = 0
-    for elem in dom.elems
-        if !isdefined(elem, :mat)
-            count += 1
-        end
-    end
-    count > 0 && error("There are $count elements without material definition\n")
-
-    # Set boundary conditions
-    for bc in dom.node_bcs
-        set_bc(bc.nodes; bc.conds...)
-    end
-
-    for bc in dom.face_bcs
-        set_bc(bc.faces; bc.conds...)
-    end
-
-    for bc in dom.edge_bcs
-        set_bc(bc.edges; bc.conds...)
-    end
-
-    # Fill array of dofs
-    udofs = Array(Dof, 0)
-    pdofs = Array(Dof, 0)
-
-    for node in dom.nodes
-        for dof in node.dofs
-            if dof.prescU
-                push!(pdofs, dof) 
-            else
-                push!(udofs, dof) 
-            end
-        end
-    end
-
-    dofs  = vcat(udofs, pdofs)
-    ndofs = length(dofs)
-
-    # Set equation id
-    for (i,dof) in enumerate(dofs)
-        dof.eq_id = i
-    end
-    
-    # Fill arrays of prescribed dofs and unknown dofs
-    presc = [ dof.prescU for dof in dofs ]
-    pdofs = dofs[ presc]
-    udofs = dofs[!presc]
-    umap  = [dof.eq_id for dof in udofs]
-    pmap  = [dof.eq_id for dof in pdofs]
-
-    # Global RHS vector 
-    RHS = mount_RHS(dom::Domain, ndofs::Int64, 0.0)
-
-    # Global U F vectors
-    U  = [ dof.bryU for dof in dofs]
-    F  = [ dof.bryF for dof in dofs] # nodal and face boundary conditions
-    F += RHS
-
-    # Solving process
-    nu  = length(udofs)
-    if verbose; println("  unknowns dofs: $nu") end
-    lam = 1.0/nincs
-
-    DU, DF  = lam*U, lam*F
-    residue = 0.0
-    remountK = true
-    tracking(dom) # Tracking nodes, ips, elements, etc.
-
-    if autosave
-        save(dom, dom.filekey * "-0" * ".vtk", verbose=false, save_ips=save_ips)
-    end
-
-    for inc=1:nincs
-        if verbose; pcolor(:blue, "  increment $inc/$nincs:\n") end
-        DU, DF = lam*U, lam*F
-        R      = copy(DF) # residual
-
-        #DFa    = zeros(ndofs)
-        DUa    = zeros(ndofs)
-        nbigger= 0
-        remountK = true
-
-        converged = false
-        for it=1:maxits
-            if it>1; DU = zeros(ndofs) end
-            solve_inc(dom, DU, R, umap, pmap, remountK, verbose)   # Changes DU and R
-
-            if verbose; print("    updating... \r") end
-            DUa += DU
-            DFin = update!(dom.elems, dofs, DUa) # Internal forces (DU+DUaccum?)
 
             DF[pmap] = DFin[pmap]  # Updates reactions
             R    = DF - DFin
-            #DFa += DFin
         
-            #residue = norm(R)
             lastres = residue
             residue = maxabs(R)
 
@@ -308,11 +179,6 @@ function solve2!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::AbstractStri
                 @printf("residue: %-15.4e", residue)
                 println()
             end
-
-            # Warning: use of remountK is bug prone!
-            #if residue < 1e-10; remountK = false end
-            #if residue < 1e-10 && it==1; remountK = false end
-            #if it>1; remountK=true end
 
             if residue > lastres; nbigger+=1 end
             if residue<precision; converged = true ; break end
@@ -323,6 +189,17 @@ function solve2!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::AbstractStri
         if converged
             tracking(dom) # Tracking nodes, ips, elements, etc.
             autosave && save(dom, dom.filekey * "-$inc" * ".vtk", verbose=false, save_ips=save_ips)
+
+            # Store converged state at ips
+            for ip in ips
+                ip.data0 = deepcopy(ip.data)
+            end
+
+            # Update nodal variables at dofs
+            for (i,dof) in enumerate(dofs)
+                dof.U += DUa[i]
+                dof.F += DFin[i]
+            end
         end
 
         if !converged
@@ -335,12 +212,6 @@ function solve2!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::AbstractStri
         pcolor(:green, "  $(dom.filekey)..vtk files written (Domain)\n")
     end
 
-    # update state at ips
-    for elem in dom.elems
-        for ip in elem.ips
-            ip.data0 = deepcopy(ip.data)
-        end
-    end
 
     if reset_bc
         for node in dom.nodes
@@ -355,6 +226,7 @@ function solve2!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::AbstractStri
     return true
 
 end
+
 
 # function solve_inc with static variables
 let
@@ -370,13 +242,14 @@ function solve_inc(dom::Domain, DU::Vect, DF::Vect, umap::Array{Int,1}, pmap::Ar
     ndofs = length(DU)
     nu = length(umap)
     if nu == ndofs 
-        pcolor(:red, "solve!: Warnig, no essential boundary conditions.\n")
+        pcolor(:red, "solve!: Warning, no essential boundary conditions.\n")
     end
 
     if verbose; print("    assembling... \r") end
 
     if remountK
         K = mount_K(dom, ndofs)
+        #@show full(K)
         if nu>0
             nu1 = nu+1
             K11 = K[1:nu, 1:nu]
@@ -410,6 +283,153 @@ function solve_inc(dom::Domain, DU::Vect, DF::Vect, umap::Array{Int,1}, pmap::Ar
 end
 
 end # let
+
+
+function solve_legacy!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::AbstractString="FE", precision::Float64=0.01, reset_bc::Bool=true, verbose::Bool=true, autosave::Bool=false, save_ips::Bool=false)
+
+    if verbose; pbcolor(:cyan,"FEM analysis:\n") end
+
+    # check if all elements have material defined
+    count = 0
+    for elem in dom.elems
+        if !isdefined(elem, :mat)
+            count += 1
+        end
+    end
+    count > 0 && error("There are $count elements without material definition\n")
+
+    # Set boundary conditions
+    for bc in dom.node_bcs
+        set_bc(bc.nodes; bc.conds...)
+    end
+
+    for bc in dom.face_bcs
+        set_bc(bc.faces; bc.conds...)
+    end
+
+    for bc in dom.edge_bcs
+        set_bc(bc.edges; bc.conds...)
+    end
+
+    # Fill array of dofs
+    udofs = Array(Dof, 0)
+    pdofs = Array(Dof, 0)
+
+    for node in dom.nodes
+        for dof in node.dofs
+            if dof.prescU
+                push!(pdofs, dof) 
+            else
+                push!(udofs, dof) 
+            end
+        end
+    end
+
+    dofs  = vcat(udofs, pdofs)
+    ndofs = length(dofs)
+
+    # Set equation id
+    for (i,dof) in enumerate(dofs)
+        dof.eq_id = i
+    end
+    
+    # Fill arrays of prescribed dofs and unknown dofs
+    presc = [ dof.prescU for dof in dofs ]
+    pdofs = dofs[ presc]
+    udofs = dofs[!presc]
+    umap  = [dof.eq_id for dof in udofs]
+    pmap  = [dof.eq_id for dof in pdofs]
+
+    # Global RHS vector 
+    RHS = mount_RHS(dom::Domain, ndofs::Int64, 0.0)
+
+    # Global U F vectors
+    U  = [ dof.bryU for dof in dofs]
+    F  = [ dof.bryF for dof in dofs] # nodal and face boundary conditions
+    F += RHS
+
+    # Solving process
+    nu  = length(udofs)
+    verbose && println("  unknowns dofs: $nu")
+    lam = 1.0/nincs
+
+    DU, DF  = lam*U, lam*F
+    residue = 0.0
+    remountK = true   # Warning: use of remountK is bug prone!
+    tracking(dom) # Tracking nodes, ips, elements, etc.
+
+    if autosave
+        save(dom, dom.filekey * "-0" * ".vtk", verbose=false, save_ips=save_ips)
+    end
+
+    for inc=1:nincs
+        verbose && pcolor(:blue, "  increment $inc/$nincs:\n")
+        DU, DF = lam*U, lam*F
+        R      = copy(DF) # residual
+
+        DFa    = zeros(ndofs)
+        DUa    = zeros(ndofs)
+        nbigger= 0
+        remountK = true
+
+        converged = false
+        for it=1:maxits
+            if it>1; DU = zeros(ndofs) end
+            solve_inc(dom, DU, R, umap, pmap, remountK, verbose)   # Changes DU and R
+
+            verbose && print("    updating... \r")
+            DUa += DU
+            DFin = update!(dom.elems, dofs, DU) # Internal forces (DU+DUaccum?)
+
+            R    = R - DFin
+            DFa += DFin
+        
+            lastres = residue
+            residue = maxabs(R)
+
+            if verbose
+                pcolor(:bold, "    it $it  ")
+                @printf("residue: %-15.4e", residue)
+                println()
+            end
+
+            # Check for convergence
+            if residue > lastres; nbigger+=1 end
+            if residue<precision; converged = true ; break end
+            if nbigger>15;        converged = false; break end
+            if isnan(residue);    converged = false; break end
+        end
+
+        # Tracking
+        if converged
+            tracking(dom) # Tracking nodes, ips, elements, etc.
+            autosave && save(dom, dom.filekey * "-$inc" * ".vtk", verbose=false, save_ips=save_ips)
+        end
+
+        if !converged
+            pcolor(:red, "solve!: solver did not converge\n",)
+            return false
+        end
+    end
+
+    if verbose && autosave
+        pcolor(:green, "  $(dom.filekey)..vtk files written (Domain)\n")
+    end
+
+    # Reset boundary conditions at end of stage
+    if reset_bc
+        for node in dom.nodes
+            for dof in node.dofs
+                dof.bryU = 0.0
+                dof.bryF = 0.0
+                dof.prescU = false
+            end
+        end
+    end
+
+    return true
+
+end
 
 
 function update!(elems::Array{Element,1}, dofs::Array{Dof,1}, DU::Array{Float64,1})

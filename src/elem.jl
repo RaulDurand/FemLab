@@ -24,6 +24,8 @@ export set_mat, get_nodes, get_ips, set_state, reset, getcoords
 export min, max, sort
 export getvals
 export read_prms
+import Base.copy!
+export copy!
 export @get_elems
 
 
@@ -47,9 +49,9 @@ type Ip
     X    ::Array{Float64,1}
     id   ::Int
     owner::Any    # Element
-    data ::IpData   # Ip current state
-    data0::IpData   # Ip state at begin of increment
-    data_bk::IpData # Ip state backup
+    data ::IpData  # Ip current state
+    data0::IpData  # Ip state at begin of increment
+    dataK::IpData  # Ip state backup
 
     function Ip(R::Array, w::Float64)
         this   = new(vec(R), w)
@@ -114,6 +116,23 @@ end
 # ==========================
 
 abstract Material
+
+function copy!(target::Material, source::Material)
+    @show("Hi")
+    # source and target must be of the same type
+    T = typeof(source)
+    for fld in fieldnames(source)
+        if filedtype(T, fld) <: Array
+            if isdefined(target,fld)
+                getfield(target, fld)[:] = getfield(source, fld)[:]
+            else
+                setfield!(target, fld, copy(getfield(source, fld)))
+            end
+        else
+            setfield!(target, fld, getfield(source, fld))
+        end
+    end
+end
 
 
 # Type Element
@@ -254,7 +273,6 @@ function set_mat(elem::Element, mat::Material; nips::Int64=0)
         elem.ips[i] = Ip(R, w)
         elem.ips[i].id = i
         elem.ips[i].data = mat.new_ipdata(elem.ndim)
-        elem.ips[i].data0 = deepcopy(elem.ips[i].data)
         elem.ips[i].owner = elem
     end
 
@@ -296,6 +314,9 @@ end
 Especifies the material model `mat` to be used to represent the behavior of a set of `Element` objects `elems`.
 """
 function set_mat(elems::Array{Element,1}, mm::Material; nips::Int64=0)
+    if length(elems)==0
+        pcolor(:red, "Warning: Defining material model ($(string(typeof(mm)))) for an empty array of elements.\n")
+    end
     for elem in elems
         set_mat(elem, mm, nips=nips)
     end

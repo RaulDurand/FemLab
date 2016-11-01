@@ -24,7 +24,7 @@ export Hordijk
 # Integration point data
 type HordijkIpData<:IpData
     ndim::Int
-    sig ::Array{Float64,1} # stress vector (τx', τy', σn)
+    sig ::Array{Float64,1} # stress vector (σn, τx', τy')
     eps ::Array{Float64,1} # relative displacement (sx', sy', w)
     h   ::Float64          # surrouding element size h=(V1+V2)/(2A)
     function HordijkIpData(ndim=3)
@@ -43,24 +43,26 @@ type Hordijk<:AbsJoint
     ft::Float64  # surrounding material tensile strength
     wc::Float64  # critical crack opennig (e.g. 160 μm for concrete)
     p0::Float64  # penalty value
+    c ::Float64  # constant to allow curve smoothing
     new_ipdata::DataType
 
     function Hordijk(prms::Dict{Symbol,Float64})
         return  Hordijk(;prms...)
     end
 
-    function Hordijk(;ks=NaN, E=NaN, fc=NaN, ft=NaN, wc=NaN, p0=100.0)
+    function Hordijk(;ks=0.0, E=NaN, fc=NaN, ft=NaN, wc=NaN, p0=100.0, c=1.0)
         @assert ks>=0
 
-        if fc>0.0
+        #if fc>0.0
             #ft = funcao... TODO
-        end
+        #end
         @assert E  >= 0.0
         @assert ft >= 0.0
         @assert wc >  0.0
         @assert p0 >= 0.0
+        #@assert c >= 1.0 && c<=2.0
 
-        this = new(ks, E, ft, wc, p0)
+        this = new(ks, E, ft, wc, p0, c)
         this.new_ipdata = HordijkIpData
         return this
     end
@@ -79,46 +81,59 @@ function set_state(ipd::HordijkIpData, sig=zeros(0), eps=zeros(0))
     end
 end
 
-function Tau(mat::Hordijk, s::Float64)
-    ss = abs(s)
-    #if ss<mat.s1
-        #return mat.ks*s
-    #elseif ss<mat.s2
-        #return mat.ks*mat.s1*sign(s)
-    #elseif ss<mat.s3
-        #τmax = mat.ks*mat.s1
-        #return (mat.τres + (mat.τres-τmax)/(mat.s3-mat.s2)*(ss-mat.s3))*sign(s)
-        #
-    #else
-        #return mat.τres*sign(s)
-    #end
+function z(ρ, c)
+    ρ0   = ρ^c
+    return (1.0+27.0*ρ0^3.0)*exp(-7.0*ρ0) - 28.0*ρ0*exp(-7.0)
+    #return (1.0+27.0*ρ^3.0)*exp(-7.0*ρ) - 28.0*ρ*exp(-7.0)
 end
 
-function Tau_deriv(mat::Hordijk, ipd::HordijkIpData, s::Float64)
-    ss = abs(s)
-    
-    #if ss<mat.s1
-        #return mat.ks
-    #elseif ss<mat.s2
-        #return 0.0
-    #elseif ss<mat.s3
-        #τmax = mat.ks*mat.s1
-        #return (mat.τres-τmax)/(mat.s3-mat.s2)
-    #else
-        #return 0.0
-    #end
+function Tau(mat::Hordijk, ipd::HordijkIpData, s::Float64, w::Float64)
+    wt = 2.0*ipd.h*mat.ft/(mat.p0*mat.E)
+    st = wt
+
+    if w<wt
+        return 2*s/st*mat.ft   # z==1.0
+    elseif w<mat.wc
+        ρ = (w-wt)/(mat.wc-wt) # varies from 0 to 1
+        c = mat.c
+        return 2.0*s/st*mat.ft*z(ρ,c)
+    else 
+        return 0.0
+    end
+end
+
+function Tau_deriv(mat::Hordijk, ipd::HordijkIpData, s::Float64, w::Float64)
+    wt = 2.0*ipd.h*mat.ft/(mat.p0*mat.E)
+    st = wt
+    if w<wt
+        return 0.0, 2/st*mat.ft  # dτ/dw dτ/ds
+    elseif w<mat.wc
+        ρ    = (w-wt)/(mat.wc-wt) # varies from 0 to 1
+        dρdw = 1.0/(mat.wc - wt)
+        c    = mat.c
+        ρ0   = ρ^c
+        #dzdρ = 81.0*ρ^2.0*exp(-7.0*ρ) - 7.0*exp(-7.0*ρ) - 189.0*(ρ^3.0)*exp(-7.0*ρ) - 28.0*exp(-7.0)
+        dzdρ0 = 81.0*ρ0^2.0*exp(-7.0*ρ0) - 7.0*exp(-7.0*ρ0) - 189.0*(ρ0^3.0)*exp(-7.0*ρ0) - 28.0*exp(-7.0)
+        dρ0dρ = c*ρ^(c-1)
+        dzdρ  = dzdρ0*dρ0dρ
+        dzdw  = dzdρ*dρdw
+        return 2*abs(s)/st*mat.ft*dzdw, 2/st*mat.ft*z(ρ,c)  # dτ/dw dτ/ds
+    else
+        return 0.0, 0.0
+    end
 end
 
 function Sig(mat::Hordijk, ipd::HordijkIpData, w::Float64)
     wt = 2.0*ipd.h*mat.ft/(mat.p0*mat.E)
-    if w<wt
-        return ( 2*w/wt - (w/wt)^2 )*mat.ft
-        #kn0 = mat.ft/wt
-        #return kn0*w
+    if w<0.0
+        return 2*w/wt*mat.ft
+    elseif w<wt
+        kn0 = mat.ft/wt
+        return kn0*w
     elseif w<mat.wc
         ρ = (w-wt)/(mat.wc-wt) # varies from 0 to 1
-        z = (1.0+27.0*ρ^3.0)*exp(-7.0*ρ) - 28.0*ρ*exp(-7.0)
-        return z*mat.ft
+        c = mat.c
+        return z(ρ,c)*mat.ft
     else
         return 0.0
     end
@@ -127,21 +142,26 @@ end
 function Sig_deriv(mat::Hordijk, ipd::HordijkIpData, w::Float64)
     wt = 2.0*ipd.h*mat.ft/(mat.p0*mat.E)
     kn0 = mat.ft/wt
-    if w<wt
-        return (2/wt - 2*w/wt^2 )*mat.ft
-        #return kn0
+    if w<0.0
+        return 2*kn0
+    elseif w<wt
+        return kn0
     elseif w<mat.wc
         # dσ/dw = dz/dw*ft
         # dz/dw = dz/dρ*dρ/dw
         dρdw = 1.0/(mat.wc - wt)
         ρ    = (w-wt)/(mat.wc-wt) # varies from 0 to 1
-        dzdρ = 81.0*ρ^2.0*exp(-7.0*ρ) - 7.0*exp(-7.0*ρ) - 189.0*(ρ^3.0)*exp(-7.0*ρ) - 28.0*exp(-7.0)
-        dzdw = dzdρ*dρdw
+        c    = mat.c
+        ρ0   = ρ^c
+        dzdρ0 = 81.0*ρ0^2.0*exp(-7.0*ρ0) - 7.0*exp(-7.0*ρ0) - 189.0*(ρ0^3.0)*exp(-7.0*ρ0) - 28.0*exp(-7.0)
+        #dzdρ = 81.0*ρ^2.0*exp(-7.0*ρ) - 7.0*exp(-7.0*ρ) - 189.0*(ρ^3.0)*exp(-7.0*ρ) - 28.0*exp(-7.0)
+        dρ0dρ = c*ρ^(c-1)
+        dzdρ  = dzdρ0*dρ0dρ
+        dzdw  = dzdρ*dρdw
         dσdw  = dzdw*mat.ft
 
         # Tamming the derivative to avoid convergence problems for high values
         #max_dσdw = kn0/10000.0
-#
         #if abs(dσdw) > max_dσdw
             #dσdw = abs(dσdw)/dσdw * max_dσdw
         #end
@@ -156,26 +176,48 @@ function mountD(mat::Hordijk, ipd::HordijkIpData)
 
     wt = 2.0*ipd.h*mat.ft/(mat.p0*mat.E)
     ks = mat.ks
-    w  = ipd.eps[3]
+    w  = ipd.eps[1]
 
-    #kn0 = mat.ft/wt
+    kn0 = mat.ft/wt
     kn  = Sig_deriv(mat, ipd, w)
 
-    #if w>wt
-        #kn = kn0*kn/(kn0+kn)
-    #end
+    if w>wt
+        kn = kn0*kn/(kn0+kn)
+    end
 
     if ipd.ndim==2
-        return [  ks  0.0 
-                 0.0   kn ]
+        #      [  dσ/dw     0.0  ]
+        #  D = [ dτ1/dw dτ1/ds1  ]
+
+        s1 = ipd.eps[2]
+        ks1, dτ1dw = Tau_deriv(mat, ipd, s1, w)
+        return [    kn  0.0  
+                  dτ1dw  ks1 ]
     else
-        return  [  ks  0.0  0.0
-                  0.0   ks  0.0
-                  0.0  0.0   kn ]
+        if mat.ks==0.0
+            s1 = ipd.eps[2]
+            s2 = ipd.eps[3]
+            dτ1dw, ks1 = Tau_deriv(mat, ipd, s1, w)
+            dτ2dw, ks2 = Tau_deriv(mat, ipd, s2, w)
+
+            #      [   dσ/dw     0.0      0.0 ]
+            #  D = [  dτ1/dw dτ1/ds1      0.0 ]
+            #      [  dτ2/dw     0.0  dτ2/ds2 ]
+
+            return [     kn   0.0   0.0 
+                      dτ1dw   ks1   0.0 
+                      dτ2dw   0.0   ks2 ]
+         else
+            ks = mat.ks
+            return [    kn   0.0   0.0 
+                       0.0   ks    0.0   
+                       0.0   0.0   ks   ]
+         end
     end
 end
 
 function stress_update(mat::Hordijk, ipd::HordijkIpData, Δu)
+    #@show Δu
     wt  = 2.0*ipd.h*mat.ft/(mat.p0*mat.E)
     @assert wt < mat.wc
 
@@ -183,28 +225,47 @@ function stress_update(mat::Hordijk, ipd::HordijkIpData, Δu)
     ks  = mat.ks
 
     # relative displacements
-    Δw = Δu[3]
+    Δw = Δu[1]
 
     # increment of relative displacements
-    Δσ = zeros(3)
+    Δσ = zeros(1)
 
     # relative displacements at end of increment
-    wf = ipd.eps[3] + Δw
+    wf = ipd.eps[1] + Δw
+    s1f = ipd.eps[2] + Δu[2]
+    s2f = ipd.eps[3] + Δu[3]
 
     # normal stress increment
-    #if wf<wt
-        #Δσ[3] = kn0*Δw
-    #else
+    if wf<0.0
+        Δσ[1] = 2*kn0*Δw
+    elseif wf<wt
+        Δσ[1] = kn0*Δw
+    else
         σn = Sig(mat, ipd, wf)
-        Δσ[3] = σn - ipd.sig[3]
-    #end
+        Δσ[1] = σn - ipd.sig[1]
+    end
 
     # shear stress increments
-    Δσ[1] = ks*Δu[1]
-    Δσ[2] = ks*Δu[2]
+    if mat.ks==0.0
+        if wf<wt
+            st = wt
+            ks1 = ks2 = 2/st*mat.ft
+            Δσ[2] = ks1*Δu[2]
+            Δσ[3] = ks2*Δu[3]
+        else
+            τ1 = Tau(mat, ipd, s1f, wf) 
+            Δσ[2] = τ1 - ipd.sig[2]
+            τ2 = Tau(mat, ipd, s2f, wf) 
+            Δσ[3] = τ2 - ipd.sig[3]
+        end
+    else
+        Δσ[2] = ks*Δu[2]
+        Δσ[3] = ks*Δu[3]
+    end
 
     # update of relative displacements and stresses
     ipd.eps[1:ipd.ndim] += Δu
+    #@show ipd.eps
 
     ipd.sig[1:ipd.ndim] += Δσ
 
@@ -216,17 +277,24 @@ function getvals(mat::Hordijk, ipd::HordijkIpData)
 
     if ipd.ndim == 2
         return Dict(
-          :s1  => ipd.sig[1] ,
-          :s2  => ipd.sig[2] )
+          :s1  => ipd.sig[2] ,
+          :s2  => ipd.sig[3] )
     else
         w      = ipd.eps[3]
         ncrack = w>wt ? 1.0: 0.0
+
+        s1 = ipd.eps[1]
+        dτ1dw, ks1 = Tau_deriv(mat, ipd, s1, w)
         return Dict(
-          :s1  => ipd.sig[1] ,
-          :s2  => ipd.sig[2] ,
-          :s_n  => ipd.sig[3] ,
-          :w    => ipd.eps[3] ,
+          :s1  => ipd.eps[2] ,
+          :s2  => ipd.eps[3] ,
+          :w    => ipd.eps[1] ,
           :wt   => wt ,
+          :tau1 => ipd.sig[2] ,
+          :tau2 => ipd.sig[3] ,
+          :s_n  => ipd.sig[1] ,
+          :ks1 => ks1,
+          :dt1dw => dτ1dw,
           :ncrack => ncrack
           )
     end

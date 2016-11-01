@@ -91,9 +91,15 @@ function set_state(ipd::SmearedCrackIpData; sig=zeros(0), eps=zeros(0))
 end
 
 function calcT(V::Array{Float64,2})
+    #V = V'
     l1, m1, n1 = V[:,1]
     l2, m2, n2 = V[:,2]
     l3, m3, n3 = V[:,3]
+
+    #@show V
+    #@show l1, m1, n1
+    #@show l2, m2, n2
+    #@show l3, m3, n3
     sq2 = √2.0 # form Mandel notation
 
     T = zeros(3,6)
@@ -101,12 +107,19 @@ function calcT(V::Array{Float64,2})
     T[1,1] =     l1*l1;  T[1,2] =     m1*m1;  T[1,3] =     n1*n1;  T[1,4] =   sq2*l1*m1;  T[1,5] =   sq2*m1*n1;  T[1,6] =   sq2*n1*l1     
     T[2,1] = sq2*l1*l2;  T[2,2] = sq2*m1*m2;  T[2,3] = sq2*n1*n2;  T[2,4] = l1*m2+l2*m1;  T[2,5] = m1*n2+m2*n1;  T[2,6] = l1*n2+l2*n1     
     T[3,1] = sq2*l3*l1;  T[3,2] = sq2*m3*m1;  T[3,3] = sq2*n3*n1;  T[3,4] = l3*m1+l1*m3;  T[3,5] = m3*n1+m1*n3;  T[3,6] = l3*n1+l1*n3 
+    #@show T[2,:]
+    #@show T[3,:]
+    #exit()
     return T
 
 end
 
 
 function calcσn(mat::SmearedCrack, ipd::SmearedCrackIpData, εn)
+    if εn<0
+        return 0.0
+    end
+
     T   = calcT(ipd.V)
 
     α1, α2, ξ1, ξ2 = mat.α1, mat.α2, mat.ξ1, mat.ξ2
@@ -140,11 +153,16 @@ function calcσn(mat::SmearedCrack, ipd::SmearedCrackIpData, εn)
 end
 
 
-function calcDcr(mat::SmearedCrack, ipd::SmearedCrackIpData)
+function calcDcr(mat::SmearedCrack, ipd::SmearedCrackIpData, εn)
     T   = calcT(ipd.V)
     #εcr = T*ipd.ε
 
-    εn  = ipd.εcr[1]
+    #εn  = ipd.εcr[1]
+
+    if εn<0.0
+        return zeros(3,3)
+    end
+
     #@show ipd.εcr
 
     α1, α2, ξ1, ξ2 = mat.α1, mat.α2, mat.ξ1, mat.ξ2
@@ -152,7 +170,7 @@ function calcDcr(mat::SmearedCrack, ipd::SmearedCrackIpData)
     k4 = 2./(ξ1 + α1*ξ2 - α2*ξ1 + α2)
     εnul = k4*mat.Gf/(mat.ft*mat.h)
     #@show εn
-    #@show εnul
+    @show εnul
 
     k=0
 
@@ -167,10 +185,13 @@ function calcDcr(mat::SmearedCrack, ipd::SmearedCrackIpData)
     end
     DI = -k*mat.h*mat.ft^2/mat.Gf
 
-    if εn==0.0
+    if εn<0.0 || εn>εnul   # TODO: Check
         DII = 0.0
     else
         β   = (1-εn/εnul)^mat.p1
+        if εn==0
+            β=0.0
+        end
         Gc  = mat.E/(2*(1+mat.nu))
         DII = Gc*β/(1-β)
     end
@@ -187,7 +208,7 @@ function calcD(mat::SmearedCrack, ipd::SmearedCrackIpData)
     else
         #@show ipd.ncracks
         T = calcT(ipd.V)
-        Dcr = calcDcr(mat, ipd)
+        Dcr = calcDcr(mat, ipd, ipd.εcr[1])
         Dco = mat.De
         Dcrco = Dco - Dco*T'*inv(Dcr + T*Dco*T')*T*Dco
         return Dcrco
@@ -199,20 +220,24 @@ function stress_update(mat::SmearedCrack, ipd::SmearedCrackIpData, Δε::Array{F
     σini = ipd.σ
 
     #initial number of cracks
-    σtr = ipd.σ + inner(mat.De, Δε)
+    σtr = ipd.σ + mat.De*Δε
 
     # principal stresses
     if ipd.ncracks == 0
         Sig, EV = principal(σtr)
-        #@show Sig
+        @show Sig
         #@show EV
         #exit()
         if Sig[1] > mat.ft
-            @show σtr
-            @show Sig
+            #@show σtr
+            #@show Sig
             ipd.ncracks = 1
             ipd.V = EV
-            @show EV
+            #@show ipd.V
+            #TT = zeros(6,6)
+            #rotation4(ipd.V,TT)
+            #@showm TT*σtr
+            #exit()
         end
     end
 
@@ -222,35 +247,62 @@ function stress_update(mat::SmearedCrack, ipd::SmearedCrackIpData, Δε::Array{F
         #@show ipd.ncracks
         T = calcT(ipd.V)
         Δεcr0 = zeros(3) 
-        #Δεcr0 = T*Δε
+        Δεcr0 = T*Δε*0.5
+
         Δεcr = zeros(3)
         Dco  = mat.De
 
         # Fixed point iterations to find Δεcr
-        maxit = 40
+        maxit = 20
         i = 0
+        #println()
+        εn = ipd.εcr[1]
+        Dcr = calcDcr(mat, ipd, εn)
+        @showm Dcr
+        Δεcr = inv(Dcr + T*Dco*T')*T*Dco*Δε
+        εn = (ipd.εcr + Δεcr)[1]
+        @show εn
+        #@show Δεcr0
+        #DII = Dcr[2,2]
+        #@show DII
+        if false
         for i=1:maxit
-            #@show i
-            Dcr  = calcDcr(mat, ipd)
+            @show i
             εn = (ipd.εcr + Δεcr0)[1]
-            σn = calcσn(mat, ipd, εn)
-            Δσn = σn - (T*σini)[1]
-            DII = Dcr[2,2]
+            #σn = calcσn(mat, ipd, εn)
+            #Δσn = σn - (T*σini)[1]
 
-            Δτ2 = DII*Δεcr0[2]
-            Δτ3 = DII*Δεcr0[3]
-            Δσ = [Δσn, Δτ2, Δτ3]
+            #Δτ2 = DII*Δεcr0[2]
+            #Δτ3 = DII*Δεcr0[3]
+            #Δσ = [Δσn, Δτ2, Δτ3]
+            Δσ = Dcr*Δεcr0
             
             @show Δσ
 
             @show εn
-            @show σn
+            #@show σn
             #@show Dcr
+            #if DII>0
+                #s = √2.0/2
+                #ipd.V = [1 0 0; 0 -s -s; 0 -s s]
+                #@showm ipd.V
+                #@showm Δε
+                #@showm Dco*Δε
+                #@showm T*Dco*Δε
+                #TT = zeros(6,6)
+                #rotation4(ipd.V,TT)
+                #@showm TT*Dco*Δε
+                #exit()
+            #end
             Δεcr = inv(T*Dco*T')*( T*Dco*Δε - Δσ )
             @show Δεcr
             #@show norm(Δεcr - Δεcr0)
-            if norm(Δεcr - Δεcr0)< 1e-4 break end
-            Δεcr0 .= Δεcr
+            @show norm(Δεcr - Δεcr0)
+            if norm(Δεcr - Δεcr0)< 1e-6 break end
+            Δεcr0 .= Δεcr  # TODO: check
+
+            @show Δεcr0
+        end
         end
 
         if i==maxit
@@ -258,6 +310,7 @@ function stress_update(mat::SmearedCrack, ipd::SmearedCrackIpData, Δε::Array{F
         end
 
         Δσ = Dco*(Δε - T'*Δεcr)
+        #Δσ = Dco*Δε - Dco*T'*Δεcr
         ipd.εcr += Δεcr
     end
 
