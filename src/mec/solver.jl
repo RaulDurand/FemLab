@@ -53,7 +53,7 @@ function mount_RHS(dom::Domain, ndofs::Int64, Δt::Float64)
 end
 
 
-function solve!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::AbstractString="FE", precision::Float64=0.01, reset_bc::Bool=true, verbose::Bool=true, autosave::Bool=false, save_ips::Bool=false)
+function solve!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::AbstractString="FE", precision::Number=0.01, reset_bc::Bool=true, verbose::Bool=true, autosave::Bool=false, save_ips::Bool=false)
     
     if verbose; pbcolor(:cyan,"FEM analysis:\n") end
 
@@ -124,12 +124,13 @@ function solve!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::AbstractStrin
     if verbose; println("  unknowns dofs: $nu") end
     lam = 1.0/nincs
 
-    DU, DF   = lam*U, lam*F
     residue  = 0.0
     remountK = true  # Warning: remountK is bug prone
     tracking(dom)    # Tracking nodes, ips, elements, etc.
 
-    autosave && save(dom, dom.filekey * "-0" * ".vtk", verbose=false, save_ips=save_ips)
+    if dom.nincs == 0 && autosave 
+        save(dom, dom.filekey * "-0" * ".vtk", verbose=false, save_ips=save_ips)
+    end
 
     # Set the converged state at ips
     for ip in ips
@@ -157,6 +158,7 @@ function solve!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::AbstractStrin
             if verbose; print("    updating... \r") end
             DUa += DUi
 
+
             # Restore to last converged state
             for ip in ips
                 ip.data = deepcopy(ip.data0)
@@ -170,7 +172,7 @@ function solve!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::AbstractStrin
 
             DF[pmap] = DFin[pmap]  # Updates reactions
             R    = DF - DFin
-        
+
             lastres = residue
             residue = maxabs(R)
 
@@ -187,9 +189,6 @@ function solve!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::AbstractStrin
         end
 
         if converged
-            tracking(dom) # Tracking nodes, ips, elements, etc.
-            autosave && save(dom, dom.filekey * "-$inc" * ".vtk", verbose=false, save_ips=save_ips)
-
             # Store converged state at ips
             for ip in ips
                 ip.data0 = deepcopy(ip.data)
@@ -200,6 +199,9 @@ function solve!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::AbstractStrin
                 dof.U += DUa[i]
                 dof.F += DFin[i]
             end
+
+            tracking(dom) # Tracking nodes, ips, elements, etc.
+            autosave && save(dom, dom.filekey * "-$(dom.nincs + inc)" * ".vtk", verbose=false, save_ips=save_ips)
         end
 
         if !converged
@@ -222,6 +224,9 @@ function solve!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::AbstractStrin
             end
         end
     end
+
+    # Update number of used increments at domain
+    dom.nincs = nincs
 
     return true
 
@@ -285,7 +290,7 @@ end
 end # let
 
 
-function solve_legacy!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::AbstractString="FE", precision::Float64=0.01, reset_bc::Bool=true, verbose::Bool=true, autosave::Bool=false, save_ips::Bool=false)
+function solve_legacy!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::AbstractString="FE", precision::Number=0.01, reset_bc::Bool=true, verbose::Bool=true, autosave::Bool=false, save_ips::Bool=false)
 
     if verbose; pbcolor(:cyan,"FEM analysis:\n") end
 
@@ -379,11 +384,12 @@ function solve_legacy!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::Abstra
 
             verbose && print("    updating... \r")
             DUa += DU
+
             DFin = update!(dom.elems, dofs, DU) # Internal forces (DU+DUaccum?)
 
             R    = R - DFin
             DFa += DFin
-        
+
             lastres = residue
             residue = maxabs(R)
 
