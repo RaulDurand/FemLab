@@ -35,10 +35,10 @@ type KotsovosIpData<:IpData
         this.σ   = zeros(6)
         this.ε   = zeros(6)
         this.ncracks = 0
+        this.D = zeros(6,6)
         this.V1 = zeros(3)
         this.V2 = zeros(3)
         this.V3 = zeros(3)
-        this.D = zeros(6,6)
         return this
     end
 end
@@ -143,6 +143,7 @@ function stress_update(mat::Kotsovos, ipd::KotsovosIpData, Δε::Array{Float64,1
     T = zeros(6,6)
 
     # trial stress
+    ipd.D = calcD(mat, ipd)
     σtr = ipd.σ + inner(ipd.D, Δε)
 
     # principal stresses
