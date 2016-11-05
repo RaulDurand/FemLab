@@ -25,6 +25,7 @@ type MCJointIpData<:IpData
     ndim::Int
     σ  ::Array{Float64,1}
     w  ::Array{Float64,1}
+    wpa::Array{Float64,1}
     upa::Float64  # max plastic displacement
     Δλ ::Float64  # plastic multiplier
     h  ::Float64  # element size
@@ -32,6 +33,7 @@ type MCJointIpData<:IpData
         this = new(ndim)
         this.σ = zeros(3)
         this.w = zeros(3)
+        this.wpa = zeros(3)
         this.upa = 0.0
         this.Δλ  = 0.0
         this.h  = 0.0
@@ -62,16 +64,7 @@ type MCJoint<:AbsJoint
 end
 
 function set_state(ipd::MCJointIpData, sig=zeros(0), eps=zeros(0))
-    if length(sig)==3
-        ipd.σ[:] = sig
-    else
-        if length(sig)!=0; error("MCJointIpData: Wrong size for stress array: $sig") end
-    end
-    if length(eps)==3
-        ipd.ε[:] = eps
-    else
-        if length(eps)!=0; error("MCJointIpData: Wrong size for strain array: $eps") end
-    end
+    @assert(false)
 end
 
 function calc_σmax(mat::MCJoint, upa)
@@ -85,7 +78,6 @@ function calc_σmax(mat::MCJoint, upa)
     else
         a = 0.0
         b = 0.0
-        b = 1e-5
     end
     return a, b
 end
@@ -93,31 +85,23 @@ end
 function yield_func(mat::MCJoint, ipd::MCJointIpData, σ::Array{Float64,1}, upa)
     a, b = calc_σmax(mat, upa)
     σmax = a - b*upa
-    return (σ[2]^2 + σ[3]^2)^0.5 + (σ[1]-σmax)*mat.μ
-end
-
-function yield_func2(mat::MCJoint, ipd::MCJointIpData, σ::Array{Float64,1}, upa)
-    a, b = calc_σmax(mat, upa)
-    σmax = a - upa*b
-    return σ[2]^2 + σ[3]^2 - ( (σmax - σ[1])*mat.μ )^2
+    return abs(σ[2]) + abs(σ[3]) + (σ[1]-σmax)*mat.μ
 end
 
 function yield_derivs(mat::MCJoint, ipd::MCJointIpData, σ::Array{Float64,1})
-    τ = (σ[2]^2 + σ[3]^2)^0.5
-    return [ mat.μ, σ[2]/τ, σ[3]/τ ]
+    return [ mat.μ, sign(σ[2]), sign(σ[3]) ]
 end
 
 function potential_derivs(mat::MCJoint, ipd::MCJointIpData, σ::Array{Float64,1}, upa)
     a, b = calc_σmax(mat, upa)
     σmax = a - upa*b
-    if σ[1]<0.0
+    if σ[1]<=0.0 || σmax == 0.0
         r = [0.0, 2*σ[2], 2*σ[3]]
         return r/norm(r)
     else
         τmax = σmax*mat.μ
         r = [2*σ[1]/σmax^2, 2*σ[2]/τmax^2, 2*σ[3]/τmax^2]
         return r/norm(r)
-        #return [2*σ[1]/σmax^2, 2*σ[2]/τmax^2, 2*σ[3]/τmax^2]
     end
 end
 
@@ -127,9 +111,6 @@ end
 
 function mountD(mat::MCJoint, ipd::MCJointIpData)
     kn = mat.E*mat.α/ipd.h
-    #if ipd.w[1]<0.0
-        #kn = mat.E*mat.α/ipd.h*10.0
-    #end
 
     G  = mat.E/(2.0*(1.0+mat.ν))
     ks = G*mat.α/ipd.h
@@ -147,8 +128,11 @@ function mountD(mat::MCJoint, ipd::MCJointIpData)
         y    = -mat.μ # dF/dσmax
         a, b = calc_σmax(mat, ipd.upa)
         m    = -b   # dσmax/dupa
-        Dep  = De - De*r*v'*De/(v'*De*r - y*m*normβ(r,mat.β))
-        #@show Dep
+
+        l    = ipd.wpa .* [1.0, mat.β, mat.β ] / ipd.upa # dupa/dwpa
+        #@show l
+        Dep  = De - De*r*v'*De/(v'*De*r - y*m*dot(l,r))
+
         return Dep
     end
 end
@@ -161,7 +145,7 @@ function stress_update(mat::MCJoint, ipd::MCJointIpData, Δw::Vect)
 
     # calculate De
     kn = mat.E*mat.α/ipd.h
-    #@show kn*mat.ws
+
     G  = mat.E/(2.0*(1.0+mat.ν))
     ks = G*mat.α/ipd.h
     De = [  kn  0.0  0.0
@@ -171,212 +155,110 @@ function stress_update(mat::MCJoint, ipd::MCJointIpData, Δw::Vect)
     σtr  = ipd.σ + De*Δw
     Ftr  = yield_func(mat, ipd, σtr, ipd.upa)
 
+
     if Ftr<0.0
         ipd.Δλ = 0.0
         ipd.σ  = σtr
+
+        # update w
+        ipd.w += Δw
+
+        # calculate Δσ
+        Δσ = ipd.σ - σini
     else
-        local a, b, r, nr, q
-        
-        eps = 1e-7
-        err = eps + 1
-        x0  = 1.0
-        nmaxits = 40
-        f = 0
-        i=0
-        x0 = ipd.upa
+        # Pure elastic increment
 
-        function func(x)
-            # at n
-            r = potential_derivs(mat, ipd, ipd.σ, ipd.upa)  # r_n
-            nr= normβ(r, mat.β)
-            Δupa = x*nr
-            q = De*r
-            s   = σtr - x*q
+        F1 = yield_func(mat, ipd, ipd.σ, ipd.upa)
+        α  = 0.0
+        # Find intersection with the yield surface
+        if abs(F1)>1e-6
+            #F1 = -abs(F1)
+            F0 = F1
+            F2 = Ftr
+            F = 1.0
+            i = 0
 
-            # at n+1
-            r = potential_derivs(mat, ipd, s, ipd.upa+Δupa)  # r_n+1 
-            nr= normβ(r, mat.β)
-            Δupa = x*nr
-            q = De*r
-            s   = σtr - x*q
-
-            # at n+1
-            r = potential_derivs(mat, ipd, s, ipd.upa+Δupa)  # r_n+1 
-            nr= normβ(r, mat.β)
-            Δupa = x*nr
-            q = De*r
-            s   = σtr - x*q
-
-            a, b = calc_σmax(mat, ipd.upa+x*nr)
-            root = ( (σtr[2] - x*q[2])^2 + (σtr[3] - x*q[3])^2 )^0.5 
-            f = root + (σtr[1] - x*q[1])*mat.μ - (a - b*(ipd.upa + x*nr))*mat.μ
-            d = ( (x*q[2] - σtr[2])*q[2] + (x*q[3] - σtr[3])*q[3] )/root + (b*nr -q[1])*mat.μ
-            return f, d, r, nr, q, a, b
-        end
-
-
-        change_deriv_sgn = false
-        xx = 0.0
-        for i=1:40
-
-            #if false
-            # at n
-            r = potential_derivs(mat, ipd, ipd.σ, ipd.upa)  # r_n
-            nr= normβ(r, mat.β)
-            Δupa = x0*nr
-            q = De*r
-            s   = σtr - x0*q
-
-            # at n+1
-            r = potential_derivs(mat, ipd, s, ipd.upa+Δupa)  # r_n+1 
-            nr= normβ(r, mat.β)
-            Δupa = x0*nr
-            q = De*r
-            s   = σtr - x0*q
-
-            # at n+1
-            r = potential_derivs(mat, ipd, s, ipd.upa+Δupa)  # r_n+1 
-            nr= normβ(r, mat.β)
-            Δupa = x0*nr
-            q = De*r
-            s   = σtr - x0*q
-
-
-            a, b = calc_σmax(mat, ipd.upa+x0*nr)
-            root = ( (σtr[2] - x0*q[2])^2 + (σtr[3] - x0*q[3])^2 )^0.5 
-            f = root + (σtr[1] - x0*q[1])*mat.μ - (a - b*(ipd.upa + x0*nr))*mat.μ
-            d = ( (x0*q[2] - σtr[2])*q[2] + (x0*q[3] - σtr[3])*q[3] )/root + (b*nr -q[1])*mat.μ
-            #end
-
-
-            #f, d, r, nr, q, a, b = func(x0)
-
-            if change_deriv_sgn
-                if d>0 && a>0
-                    d = -d*10
+            @assert(F1*F2<0.0)
+            while F>1e-5
+                i = i+1
+                α  = F1/(F1 - F2)
+                F  = yield_func(mat, ipd, ipd.σ + α*De*Δw, ipd.upa)
+                if F<0.0
+                    F1 = F
+                else
+                    F2 = F
                 end
-                #else
-                #d = -abs(d)*10.0
             end
 
-            x = x0 - f/d
-
-            err = abs(x- x0)
-
-            x0 = x
-            if err<eps 
-                break
-                if x0>0.0 break end
-                #@show i,x0
-                xx = x
-                x0 = 0.0
-                #@show i,x0
-                change_deriv_sgn = true
-            end
+            # Update w and Δσ up to the intersection
+            ipd.w += α*Δw
+            ipd.σ += α*De*Δw
         end
 
-        if x0<0.0
-            x0 = 1e-10
-            f, d, r, nr, q, a, b = func(x0)
-        end
+        # Elastic-plastic increment
+        Δwep = (1.0-α)*Δw
 
-        ipd.Δλ = x0
+        #ipd.Δλ = 0.0
+        σtr = ipd.σ + De*Δwep
+        y   = -mat.μ # dF/dσmax
+        σ   = ipd.σ
+        upa = ipd.upa
+        wpa = ipd.wpa
+        r   = zeros(3)
+        ipd.Δλ = 0.0001
 
-        #if i==40 && xx!=0.0
-            #ipd.Δλ = xx
-        #end
+        maxit = 40
+        for i=1:maxit
+            v    = yield_derivs(mat, ipd, σ)
+            r    = potential_derivs(mat, ipd, σ, upa)
+            Δwpa = ipd.Δλ*r
+            wpa  = ipd.wpa + Δwpa
+            upa  = normβ(wpa, mat.β)
 
 
-        #@assert(ipd.Δλ>0)
-        #if ipd.Δλ < 0.0
-            #printcolor(:red, "Warning: ipd.Δλ<0 ($(ipd.Δλ)) \n")
-        #end
+            a, b = calc_σmax(mat, upa)
+            m    = -b   # dσmax/dupa
+            l    = wpa .* [1.0, mat.β, mat.β ] / upa # dupa/dwpa
 
 
-        if false
-        if ipd.Δλ<0 || i== 40
-            @show i
-            @show yield_func(mat, ipd, σini, ipd.upa) 
-            @show r
-            @show ipd.Δλ
-            @show σini
-            @show σtr
-            @show Δw
+            #@show 
+            @show v
+            @show l
+            #@show upa
+            #@show ipd.upa + ipd.Δλ*dot(l,r)
+            #@show v
             @show a,b
-            @show ipd.upa + x0*nr
-            @show err
-            @show yield_func(mat, ipd, σtr - x0*q, ipd.upa + x0*nr) 
-            X = linspace(-0.001,0.001,1000)
-            Y = []
-            F = []
+            @show r
 
+            ipd.Δλ = dot(v, De*Δwep)/( dot(v,De*r) - y*m*dot(l,r) )
+            σ      = σtr - ipd.Δλ*De*r
 
-            for x in X
-                #s    = σtr - x*q
-                r = potential_derivs(mat, ipd, ipd.σ, ipd.upa)  # r_n+1 -> r_n
-                nr= normβ(r, mat.β)
-                Δupa = x*nr
-                q = De*r
-                s   = σtr - x*q
-
-                r = potential_derivs(mat, ipd, s, ipd.upa+Δupa)  # r_n+1 -> r_n
-                nr= normβ(r, mat.β)
-                Δupa = x*nr
-                q = De*r
-                s   = σtr - x*q
-
-                r = potential_derivs(mat, ipd, s, ipd.upa+Δupa)  # r_n+1 -> r_n
-                nr= normβ(r, mat.β)
-                Δupa = x*nr
-                q = De*r
-                s   = σtr - x*q
-
-                r = potential_derivs(mat, ipd, s, ipd.upa+Δupa)  # r_n+1 -> r_n
-                nr= normβ(r, mat.β)
-                Δupa = x*nr
-                q = De*r
-                s   = σtr - x*q
-
-                y = yield_func(mat, ipd, s, ipd.upa + Δupa) 
-                root = ( (σtr[2] - x*q[2])^2 + (σtr[3] - x*q[3])^2 )^0.5 
-                a, b = calc_σmax(mat, ipd.upa+Δupa)
-                #@show σini
-                #@show a,b
-                #@show r
-                #@show s
-                f = root + (σtr[1] - x*q[1])*mat.μ - (a - b*(ipd.upa + x*nr))*mat.μ
-                push!(Y, y)
-                push!(F, f)
+            @show ipd.Δλ
+            F  = yield_func(mat, ipd, σ, upa)
+            #@show F
+            if abs(F)<1e-10
+                break
             end
-
-            PyPlot.plot([-0.001,0.001],[0,0], "-")
-            PyPlot.plot(X,Y, "-o")
-            PyPlot.plot(X,F, "-^")
-            show()
-            exit()
         end
-        end
+        @assert(i<maxit)
 
+        Δwpa = ipd.Δλ*r
+        ipd.wpa += Δwpa
+        ipd.upa  = normβ(ipd.wpa, mat.β)
 
-        ipd.σ   = σtr - ipd.Δλ*q
-        Δupa    = ipd.Δλ*nr
-        ipd.upa += Δupa
-        #if ipd.upa<0.0
-            #ipd.upa = 0.0
-            #printcolor(:red, "Warning: ipd.upa<0 ($(ipd.upa))  σmax=$(a-b*ipd.upa)\n")
-        #end
-        #f = yield_func(mat, ipd, ipd.σ, ipd.upa) 
-        #if abs(f)>10
-            #printcolor(:red, "Warning: yield function f=$f\n")
-        #end
+        ipd.σ = σtr - ipd.Δλ*De*r
+
+        # Elastic plastic update of w and Δσ
+        ipd.w += Δwep
+        Δσ = ipd.σ - σini
+        #@show Δwpa
+        #@show ipd.upa
+        F  = yield_func(mat, ipd, ipd.σ, ipd.upa)
+        #@show F
+
+        #exit()
     end
-    #@show ipd.upa
 
-    # update w
-    ipd.w += Δw
-
-    # calculate Δσ
-    Δσ = ipd.σ - σini
 
     return Δσ
 end
