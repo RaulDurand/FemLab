@@ -16,11 +16,11 @@ set_trackers(dom, node_dat)
 
 
 bc1 = NodeBC( :(x==0), ux=0, uy=0, uz=0)
-bc2 = NodeBC( :(x==0.8), ux=0.05)
+bc2 = NodeBC( :(x==0.8), ux=0.01)
 
 set_bc(dom, bc1, bc2)
 
-solve!(dom, nincs=40, verbose=verbose, autosave=true)
+solve!(dom, nincs=5, verbose=verbose, autosave=true)
 save(node_dat, "node.dat")
 
 if verbose

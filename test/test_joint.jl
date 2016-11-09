@@ -5,13 +5,13 @@ verbose = isdefined(:verbose) ? verbose : true
 bl  = Block3D( [0 0 0; 0.2 0.1 0.1], nx=2, ny=1, nz=1, shape=HEX8)
 
 # mesh generation
-mesh = Mesh(bl, verbose=true)
-split!(mesh)
+msh = Mesh(bl, verbose=true)
+split!(msh)
 
-dom = Domain(mesh)
+dom = Domain(msh)
 
 set_mat(dom.elems[:solids], ElasticSolid(E=27.e6, nu=0.2))
-set_mat(dom.elems[:joints], MCJoint(E=27e6, nu=0.2, ft=2.4e3, mu=1.4, alfa=0.4, beta=1.0, wc=1.7e-4, ws=1.85e-5  ) )
+set_mat(dom.elems[:joints], MCJoint(E=27e6, nu=0.2, ft=2.4e3, mu=1.4, alfa=0.4, beta=0.0, wc=1.7e-4, ws=1.85e-5  ) )
 
 # Tracking
 midjoint = dom.elems[:joints][:(x==0.1)][1]
@@ -20,13 +20,31 @@ set_trackers(dom, midjointdat)
 
 # Boundary conditions
 bc1 = FaceBC( :(x==0), ux=0, uy=0, uz=0 )
-bc2 = FaceBC( :(x==0.2), uy=0.9*1.7e-4)
+bc2 = FaceBC( :(x==0.2), ux=0.9*1.7e-4)
 
 set_bc(dom, bc1, bc2)
-solve!(dom, nincs=20, precision=1e-4, autosave=verbose, verbose=verbose)
+#solve!(dom, nincs=200, precision=1e-1, autosave=verbose, verbose=verbose)
+solve_legacy!(dom, nincs=20, precision=1e-3, autosave=verbose, verbose=verbose)
+#solveFE!(dom, nincs=80, autosave=verbose, verbose=verbose)
 
 verbose && save(dom, "joint.vtk")
+
+
+
+using PyPlot
+
+plot(midjointdat.table[:w1], midjointdat.table[:s1], marker="o")
+show()
+#plot(midjointdat.table[:s1], midjointdat.table[:tau1], marker="o")
+#show()
+#plot(midjointdat.table[:s2], midjointdat.table[:tau2], marker="o")
+#show()
+
+
+
+
 
 facts("\nTest Joints") do
     @fact 1 --> 1
 end
+

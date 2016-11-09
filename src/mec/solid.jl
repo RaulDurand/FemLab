@@ -82,11 +82,11 @@ function calcD(mat::ElasticSolid, ipd::ElasticSolidIpData)
     return mat.De
 end
 
-function stress_update(mat::ElasticSolid, ipd::ElasticSolidIpData, deps::Array{Float64,1})
-    dsig = mat.De*deps
-    ipd.ε += deps
-    ipd.σ += dsig
-    dsig
+function stress_update(mat::ElasticSolid, ipd::ElasticSolidIpData, dε::Array{Float64,1})
+    dσ = mat.De*dε
+    ipd.ε += dε
+    ipd.σ += dσ
+    return dσ
 end
 
 function getvals(mat::ElasticSolid, ipd::ElasticSolidIpData)

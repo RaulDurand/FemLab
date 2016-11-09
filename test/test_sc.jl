@@ -25,17 +25,16 @@ set_trackers(dom, node_dat)
 bc1 = NodeBC( :(y==0 && z==0), ux=0, uy=0, uz=0)
 bc2 = NodeBC( :(y==6 && z==0), ux=0, uz=0)
 #bc3 = FaceBC( :(z==0.4), tz=-30)
-bc3 = NodeBC( :(y==3 && z==0.4), uz=-0.003)
-#bc3 = NodeBC( :(y==3.0 && z==0.4), uz=-0.01)
+#bc3 = NodeBC( :(y==3 && z==0.4), uz=-0.003)
+bc3 = NodeBC( :(y==3.0 && z==0.4), uz=-0.02)
 
 set_bc(dom, bc1, bc2, bc3)
 
-solve!(dom, nincs=10, verbose=verbose, autosave=true)
+solve!(dom, nincs=80, precision=100, verbose=verbose, autosave=true)
 
 #save(dom, "")
 if verbose
     using PyPlot
-    #plot(-node_dat.table[:uz], 0:80, marker="o")
     plot(-node_dat.table[:uz], -node_dat.table[:fz], marker="o")
     show()
 end

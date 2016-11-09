@@ -20,6 +20,7 @@
 
 export solve!
 export solve_legacy!
+export solveFE!
 
 
 function mount_K(dom::Domain, ndofs::Int64)
@@ -231,6 +232,166 @@ function solve!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::AbstractStrin
     return true
 
 end
+
+
+
+function solveFE!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::AbstractString="FE", reset_bc::Bool=true, verbose::Bool=true, autosave::Bool=false, save_ips::Bool=false)
+    
+    if verbose; pbcolor(:cyan,"FEM analysis:\n") end
+
+    # check if all elements have material defined
+    count = 0
+    for elem in dom.elems
+        if !isdefined(elem, :mat)
+            count += 1
+        end
+    end
+    count > 0 && error("There are $count elements without material definition\n")
+
+    # Set boundary conditions at nodes
+    for bc in dom.node_bcs
+        set_bc(bc.nodes; bc.conds...)
+    end
+
+    # Boundary conditions at faces
+    for bc in dom.face_bcs
+        set_bc(bc.faces; bc.conds...)
+    end
+
+    # Boundary conditions at edges
+    for bc in dom.edge_bcs
+        set_bc(bc.edges; bc.conds...)
+    end
+
+    # Fill arrays of prescribed dofs and unknown dofs
+    udofs = Array(Dof, 0)
+    pdofs = Array(Dof, 0)
+
+    for node in dom.nodes
+        for dof in node.dofs
+            if dof.prescU
+                push!(pdofs, dof) 
+            else
+                push!(udofs, dof) 
+            end
+        end
+    end
+
+    # Get array with all dofs
+    dofs  = vcat(udofs, pdofs)
+    ndofs = length(dofs)
+
+    # Set equation id for each dof
+    for (i,dof) in enumerate(dofs)
+        dof.eq_id = i
+    end
+    
+    # Fill arrays of prescribed dofs and unknown dofs
+    umap  = [dof.eq_id for dof in udofs]
+    pmap  = [dof.eq_id for dof in pdofs]
+
+    # Get array with all integration points
+    ips = [ ip for elem in dom.elems for ip in elem.ips ]
+
+    # Global RHS vector 
+    RHS = mount_RHS(dom::Domain, ndofs::Int64, 0.0)
+
+    # Global U and F vectors
+    U  = [ dof.bryU for dof in dofs]
+    F  = [ dof.bryF for dof in dofs] # nodal and face boundary conditions
+    F += RHS
+
+    # Solving process
+    nu  = length(udofs)  # number of unknowns
+    if verbose; println("  unknowns dofs: $nu") end
+    lam = 1.0/nincs
+
+    residue  = 0.0
+    remountK = true  # Warning: remountK is bug prone
+    tracking(dom)    # Tracking nodes, ips, elements, etc.
+
+    if dom.nincs == 0 && autosave 
+        save(dom, dom.filekey * "-0" * ".vtk", verbose=false, save_ips=save_ips)
+    end
+
+    # Incremental analysis
+    for inc=1:nincs
+        if verbose; printcolor(:blue, "  increment $inc/$nincs:\n") end
+        DU, DF = lam*U, lam*F   # increment vectors
+        R      = copy(DF)       # residual
+        local DFin, DUa
+
+        DUa    = zeros(ndofs)   # accumulated essential values (e.g. displacements)
+        DUi    = copy(DU)       # values at iteration i
+        nbigger  = 0            # counter to test non convergence
+        remountK = true
+
+        solve_inc(dom, DUi, R, umap, pmap, remountK, verbose)   # Changes DUi and R
+
+        if verbose; print("    updating... \r") end
+        DUa += DUi
+
+        # Get internal forces and update data at integration points
+        DFin  = zeros(ndofs)
+        for elem in dom.elems
+            update!(elem, DUa, DFin) # updates DFin
+        end
+
+        DF[pmap] = DFin[pmap]  # Updates reactions
+        R    = DF - DFin
+
+        residue = maxabs(R)
+
+        if verbose
+            @printf("    residue: %-15.4e", residue)
+            println()
+        end
+
+
+        # Update nodal variables at dofs
+        for (i,dof) in enumerate(dofs)
+            dof.U += DUa[i]
+            dof.F += DFin[i]
+        end
+
+        tracking(dom) # Tracking nodes, ips, elements, etc.
+        autosave && save(dom, dom.filekey * "-$(dom.nincs + inc)" * ".vtk", verbose=false, save_ips=save_ips)
+
+    end
+
+    for ip in ips
+        ip.data0 = deepcopy(ip.data)
+    end
+
+    if verbose && autosave
+        printcolor(:green, "  $(dom.filekey)..vtk files written (Domain)\n")
+    end
+
+
+    if reset_bc
+        for node in dom.nodes
+            for dof in node.dofs
+                dof.bryU = 0.0
+                dof.bryF = 0.0
+                dof.prescU = false
+            end
+        end
+    end
+
+    # Update number of used increments at domain
+    dom.nincs = nincs
+
+    return true
+
+end
+
+
+
+
+
+
+
+
 
 
 # function solve_inc with static variables

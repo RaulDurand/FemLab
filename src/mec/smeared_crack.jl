@@ -73,6 +73,21 @@ type SmearedCrack<:Mechanical
         this.new_ipdata = SmearedCrackIpData
         this.De  = zeros(6,6)
         setDe(E, nu, this.De) # elastic tensor
+
+        α1 = al1
+        α2 = al2
+        ξ1 = xi1
+        ξ2 = xi2
+
+        k1 = (1-α1)*(ξ1 + α1*ξ2 - α2*ξ1 + α2)/(2*ξ1)
+        k2 = (α1-α2)*(ξ1 + α1*ξ2 - α2*ξ1 + α2)/(2*(ξ2-ξ1))
+        k3 = α2*(ξ1 + α1*ξ2 - α2*ξ1 + α2)/(2*(1-ξ2))
+        k4 = 2./(ξ1 + α1*ξ2 - α2*ξ1 + α2)
+        εnul = k4*Gf/(ft*h)
+
+        b = max(k1,k2,k3,k4)
+        @assert h<=Gf*E/(b*ft^2)
+
         return this 
     end
 end
@@ -91,25 +106,16 @@ function set_state(ipd::SmearedCrackIpData; sig=zeros(0), eps=zeros(0))
 end
 
 function calcT(V::Array{Float64,2})
-    #V = V'
     l1, m1, n1 = V[:,1]
     l2, m2, n2 = V[:,2]
     l3, m3, n3 = V[:,3]
 
-    #@show V
-    #@show l1, m1, n1
-    #@show l2, m2, n2
-    #@show l3, m3, n3
     sq2 = √2.0 # form Mandel notation
-
     T = zeros(3,6)
 
     T[1,1] =     l1*l1;  T[1,2] =     m1*m1;  T[1,3] =     n1*n1;  T[1,4] =   sq2*l1*m1;  T[1,5] =   sq2*m1*n1;  T[1,6] =   sq2*n1*l1     
     T[2,1] = sq2*l1*l2;  T[2,2] = sq2*m1*m2;  T[2,3] = sq2*n1*n2;  T[2,4] = l1*m2+l2*m1;  T[2,5] = m1*n2+m2*n1;  T[2,6] = l1*n2+l2*n1     
     T[3,1] = sq2*l3*l1;  T[3,2] = sq2*m3*m1;  T[3,3] = sq2*n3*n1;  T[3,4] = l3*m1+l1*m3;  T[3,5] = m3*n1+m1*n3;  T[3,6] = l3*n1+l1*n3 
-    #@show T[2,:]
-    #@show T[3,:]
-    #exit()
     return T
 
 end
@@ -159,9 +165,9 @@ function calcDcr(mat::SmearedCrack, ipd::SmearedCrackIpData, εn)
 
     #εn  = ipd.εcr[1]
 
-    if εn<0.0
-        return zeros(3,3)
-    end
+    #if εn<0.0
+        #return zeros(3,3)
+    #end
 
     #@show ipd.εcr
 
@@ -185,12 +191,17 @@ function calcDcr(mat::SmearedCrack, ipd::SmearedCrackIpData, εn)
     end
     DI = -k*mat.h*mat.ft^2/mat.Gf
 
-    if εn<0.0 || εn>εnul   # TODO: Check
+    #@assert εn>0
+    #if εn <= 0.0
+        #@show εn
+    #end
+
+    if εn>εnul   # TODO: Check
         DII = 0.0
     else
         β   = (1-εn/εnul)^mat.p1
         if εn==0
-            β=0.0
+            β=0.9999999
         end
         Gc  = mat.E/(2*(1+mat.nu))
         DII = Gc*β/(1-β)
@@ -203,7 +214,7 @@ function calcDcr(mat::SmearedCrack, ipd::SmearedCrackIpData, εn)
 end
 
 function calcD(mat::SmearedCrack, ipd::SmearedCrackIpData)
-    if ipd.ncracks == 0
+    if ipd.εcr[1] <= 0.0
         return mat.De # defines D as elastic for this ip
     else
         #@show ipd.ncracks
@@ -260,9 +271,10 @@ function stress_update(mat::SmearedCrack, ipd::SmearedCrackIpData, Δε::Array{F
         Dcr = calcDcr(mat, ipd, εn)
         #@showm Dcr
         Δεcr = inv(Dcr + T*Dco*T')*T*Dco*Δε
-        εn = (ipd.εcr + Δεcr)[1]
+
+        #εn = (ipd.εcr + Δεcr)[1]
         #@show εn
-        #@show Δεcr0
+        @show Δεcr
         #DII = Dcr[2,2]
         #@show DII
         if false

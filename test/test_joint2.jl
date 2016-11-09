@@ -10,7 +10,7 @@ save(mesh, "mesh.vtk")
 dom = Domain(mesh)
 
 set_mat(dom.elems[:solids], ElasticSolid(E=38000e3,nu=0.2) )
-set_mat(dom.elems[:joints], MCJoint( E=38000e3, nu=0.2, ft=3.7e3, mu=1.4, alfa=1, beta=1 ,wc=1.17e-4, ws=1.28e-5))  
+set_mat(dom.elems[:joints], MCJoint( E=38000e3, nu=0.2, ft=3.7e3, mu=1.4, alfa=0.5, beta=1 ,wc=1.17e-4, ws=1.28e-5))  
 
 # Acompanhamento
 midjoint = dom.elems[:joints][:(y==0.4)][1]
