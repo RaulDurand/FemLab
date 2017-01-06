@@ -125,7 +125,7 @@ function get_basicD(mat::Kotsovos, ipd::KotsovosIpData)
         D[6,6] = β*G
     end
 
-    # update for Mandel notation
+    # fix for Mandel notation
     D[4,4] *= 2.0
     D[5,5] *= 2.0
     D[6,6] *= 2.0
@@ -207,15 +207,15 @@ function stress_update(mat::Kotsovos, ipd::KotsovosIpData, Δε::Array{Float64,1
         end
     end
 
-    if newcracks
+    #if newcracks
         ipd.ε += Δε
-        ipd.σ = inner(ipd.D, ipd.ε)
+        ipd.σ = inner(ipd.D, ipd.ε) # important!
         Δσ    = ipd.σ - σini
-    else
-        ipd.ε += Δε
-        ipd.σ = σtr
-        Δσ    = σtr - σini
-    end
+    #else
+        #ipd.ε += Δε
+        #ipd.σ = σtr
+        #Δσ    = σtr - σini
+    #end
 
     return Δσ 
 end

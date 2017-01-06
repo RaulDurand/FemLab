@@ -60,6 +60,7 @@ type Domain
 
     trackers::Array{Tracker,1}
     nincs::Integer
+    ndofs::Integer
 
     function Domain(;filekey::AbstractString="out")
         this = new()
@@ -71,6 +72,7 @@ type Domain
 
         this.trackers = []
         this.nincs    = 0
+        this.ndofs    = 0
         return this
     end
 end

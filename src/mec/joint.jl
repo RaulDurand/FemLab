@@ -278,6 +278,14 @@ function node_and_elem_vals(mat::AbsJoint, elem::Element)
     end
 
     # Elem vals
+    nips = length(elem.ips) 
+    E = extrapolator(get_basic_shape(elem.shape), nips)
+
+    Sn = [ ip.data.σ[1] for ip in elem.ips ]
+    Wn = [ ip.data.w[1] for ip in elem.ips ]
+    node_vals[:sn] = [ Sn; Sn ]
+    node_vals[:wn] = [ Wn; Wn ]
+
     #all_ip_vals = [ getvals(mat, ip.data) for ip in elem.ips ]
     #labels      = keys(all_ip_vals[1])
     #nips        = length(elem.ips) 

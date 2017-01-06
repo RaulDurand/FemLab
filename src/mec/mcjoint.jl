@@ -79,42 +79,47 @@ function calc_σmax(mat::MCJoint, upa)
         a = 0.0
         b = 0.0
         #b = 1.0
-        b  = -σs/(mat.wc-mat.ws)/1e6
+        b  = -σs/(mat.wc-mat.ws)/mat.σmax0 # important in pull tests
         #b = -1e-1
     end
     return a, b
 end
 
-#function yield_func(mat::MCJoint, ipd::MCJointIpData, σ::Array{Float64,1}, upa)
-    #a, b = calc_σmax(mat, upa)
-    #σmax = a - b*upa
-    #return abs(σ[2]) + abs(σ[3]) + (σ[1]-σmax)*mat.μ
-#end
-
-#function yield_derivs(mat::MCJoint, ipd::MCJointIpData, σ::Array{Float64,1})
-    #return [ mat.μ, sign(σ[2]), sign(σ[3]) ]
-#end
-
 function yield_func(mat::MCJoint, ipd::MCJointIpData, σ::Array{Float64,1}, upa)
     a, b = calc_σmax(mat, upa)
     σmax = a - b*upa
-    return (σ[2]^2 + σ[3]^2)^0.5 + (σ[1]-σmax)*mat.μ
+    return √(σ[2]^2 + σ[3]^2) + (σ[1]-σmax)*mat.μ
 end
 
 function yield_derivs(mat::MCJoint, ipd::MCJointIpData, σ::Array{Float64,1})
-    τ = (σ[2]^2 + σ[3]^2)^0.5
-    return [ mat.μ, σ[2]/τ, σ[3]/τ ]
+    τ = √(σ[2]^2 + σ[3]^2)
+    if τ==0.0
+        return [ 1., 0., 0.]
+    else
+        return [ mat.μ, σ[2]/τ, σ[3]/τ ]
+    end
 end
 
 function potential_derivs(mat::MCJoint, ipd::MCJointIpData, σ::Array{Float64,1}, upa)
     a, b = calc_σmax(mat, upa)
     σmax = a - upa*b
-    if σ[1]<=0.0 || σmax == 0.0
-        r = [0.0, 2*σ[2], 2*σ[3]]
+    if σ[1]>0.0
+        # G1:
+        σm = √(σ[2]^2 + σ[3]^2 + σmax^2*mat.μ^2)
+        if σm>0.0
+            r  = [ σ[1]*mat.μ^2/σm, σ[2]/σm, σ[3]/σm ]
+        else
+            r = [ 1., 0., 0.]
+        end
         return r/norm(r)
     else
-        τmax = σmax*mat.μ
-        r = [2*σ[1]/σmax^2, 2*σ[2]/τmax^2, 2*σ[3]/τmax^2]
+        # G2:
+        τ = √(σ[2]^2 + σ[3]^2)
+        if τ>0.0
+            r = [ 0.0, σ[2]/τ, σ[3]/τ ]
+        else
+            r = [ 1., 0., 0.]
+        end
         return r/norm(r)
     end
 end
@@ -132,8 +137,6 @@ function mountD(mat::MCJoint, ipd::MCJointIpData)
            0.0   ks  0.0
            0.0  0.0   ks ]
 
-    #@show De
-
     if ipd.Δλ==0.0 # Elastic 
         return De
     else
@@ -143,8 +146,7 @@ function mountD(mat::MCJoint, ipd::MCJointIpData)
         a, b = calc_σmax(mat, ipd.upa)
         m    = -b   # dσmax/dupa
 
-        l    = ipd.wpa .* [1.0, mat.β, mat.β ] / ipd.upa # dupa/dwpa
-        Dep  = De - De*r*v'*De/(v'*De*r - y*m*dot(l,r))
+        Dep  = De - De*r*v'*De/(v'*De*r - y*m*norm(r))
 
         return Dep
     end
@@ -157,7 +159,7 @@ function find_intersection(mat::MCJoint, ipd::MCJointIpData, F1::Float64, F2::Fl
     α1 = 0.0
     α2 = 1.0
     F  = F1
-    while abs(F)>1e-5
+    while abs(F)>1e-7
         α  = α1 + F1/(F1-F2)*(α2-α1)
         F  = yield_func(mat, ipd, σ0 + α*Δσ, ipd.upa)
         if F<0.0
@@ -173,8 +175,8 @@ function find_intersection(mat::MCJoint, ipd::MCJointIpData, F1::Float64, F2::Fl
     return α
 end
 
-    using PyPlot
-function stress_update(mat::MCJoint, ipd::MCJointIpData, Δw::Vect)
+    #using PyPlot
+function stress_update(mat::MCJoint, ipd::MCJointIpData, Δw::Array{Float64,1})
     σini   = copy(ipd.σ)
 
     # calculate De
@@ -220,44 +222,45 @@ function stress_update(mat::MCJoint, ipd::MCJointIpData, Δw::Vect)
 
         F  = yield_func(mat, ipd, ipd.σ, ipd.upa)
 
-        nincs = 10
+        nincs = 1
         Δwi = Δwep/nincs
         for i=1:nincs
             σtr = ipd.σ + De*Δwi
             v   = yield_derivs(mat, ipd, ipd.σ)
             r   = potential_derivs(mat, ipd, ipd.σ, ipd.upa)
-
-            if ipd.Δλ==0.0
-                l = zeros(3)
-            else
-                l = ipd.wpa .* [1.0, mat.β, mat.β ] / ipd.upa # dupa/dwpa
-            end
+            #@show r
+            #@show v
 
             a, b = calc_σmax(mat, upa)
             m    = -b   # dσmax/dupa
 
-            ipd.Δλ = dot(v, De*Δwi)/( dot(v,De*r) - y*m*dot(l,r) )
-
-            #q = De*r
-            #ipd.Δλ = yield_func(mat, ipd, σtr, ipd.upa)/ ( q[2]*sign(σtr[2]) + q[3]*sign(σtr[3]) +q[1]*mat.μ - b*dot(l,r)*mat.μ  )
+            #ipd.Δλ = dot(v, De*Δwi)/( dot(v,De*r) - y*m*norm(r) )
+            ipd.Δλ = yield_func(mat, ipd, σtr, ipd.upa)/(kn*mat.μ^2-b*mat.μ)
+            #@show ipd.Δλ
+            #a, b = calc_σmax(mat, upa + ipd.Δλ)
+            #ipd.Δλ = yield_func(mat, ipd, σtr, ipd.upa)/(kn*mat.μ^2-b*mat.μ)
 
             if ipd.Δλ<0.0
                 warn("MCJoint: Negative plastic multiplier Δλ = $(ipd.Δλ)")
+                @show i
+                @show yield_func(mat, ipd, σtr, ipd.upa) # if <0 then elastic
+                @show (kn*mat.μ^2-b*mat.μ)
             end
 
             Δwpa = ipd.Δλ*r
-            ipd.wpa += Δwpa
-            ipd.upa  = normβ(ipd.wpa, mat.β)
+            ipd.upa += norm(Δwpa)
+            #@show ipd.upa
 
             ipd.σ = σtr - ipd.Δλ*De*r
 
             # Return to surface:
             F  = yield_func(mat, ipd, ipd.σ, ipd.upa)
-
+            #@show F
+            #@show ipd.σ
             #if false 
             if F>1e-6
-                Δσ = ipd.σ
                 # The return algorithm needs improving
+                Δσ = ipd.σ
                 σ0 = [-0.000001, 0.0, 0.0]
                 F0 = yield_func(mat, ipd, σ0, ipd.upa)
                 @assert(F0*F<0.0)
@@ -272,6 +275,8 @@ function stress_update(mat::MCJoint, ipd::MCJointIpData, Δw::Vect)
         ipd.w += Δwep
         Δσ = ipd.σ - σini
         F  = yield_func(mat, ipd, ipd.σ, ipd.upa)
+        #@show F
+        #@show ipd.σ
     end
 
     #@show Δσ

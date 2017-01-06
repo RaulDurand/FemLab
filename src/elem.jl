@@ -19,6 +19,7 @@
 ##############################################################################
 
 import Base.reset
+#export IpData
 export Element, Dof
 export set_mat, get_nodes, get_ips, set_state, reset, getcoords
 export min, max, sort
