@@ -24,13 +24,13 @@ abstract AbsJoint<:Mechanical
 
 type JointIpData<:IpData
     ndim::Int
-    sig ::Array{Float64,1}
-    eps ::Array{Float64,1}
+    σ   ::Array{Float64,1}
+    w ::Array{Float64,1}
     h   ::Float64
     function JointIpData(ndim=3)
         this = new(ndim)
-        this.sig = zeros(3)
-        this.eps = zeros(3)
+        this.σ   = zeros(3)
+        this.w = zeros(3)
         this.h = 0.0
         return this
     end
@@ -55,16 +55,16 @@ type Joint<:AbsJoint
     end
 end
 
-function set_state(ipd::JointIpData, sig=zeros(0), eps=zeros(0))
+function set_state(ipd::JointIpData, sig=zeros(0), w=zeros(0))
     if length(sig)==3
-        ipd.sig[:] = sig
+        ipd.σ[:] = sig
     else
         if length(sig)!=0; error("Joint: Wrong size for stress array: $sig") end
     end
-    if length(eps)==3
-        ipd.eps[:] = eps
+    if length(w)==3
+        ipd.w[:] = w
     else
-        if length(eps)!=0; error("Joint: Wrong size for strain array: $eps") end
+        if length(w)!=0; error("Joint: Wrong size for strain array: $w") end
     end
 end
 
@@ -135,8 +135,8 @@ function stress_update(mat::Joint, ipd::JointIpData, Δu)
     D  = mountD(mat, ipd)
     Δσ = D*Δu
 
-    ipd.eps[1:ipd.ndim] += Δu
-    ipd.sig[1:ipd.ndim] += Δσ
+    ipd.w[1:ipd.ndim] += Δu
+    ipd.σ[1:ipd.ndim] += Δσ
     return Δσ
 end
 
@@ -257,14 +257,16 @@ end
 function getvals(mat::Joint, ipd::JointIpData)
     if ipd.ndim == 2
         return Dict(
-          :s1  => ipd.sig[1] ,
-          :s2  => ipd.sig[2] )
+          :w1  => ipd.σ[1] ,
+          :w2  => ipd.σ[2] )
     else
         return Dict(
-          :s1  => ipd.sig[1] ,
-          :s2  => ipd.sig[2] ,
-          :sn  => ipd.sig[3] ,
-          :en  => ipd.sig[3] )
+          :w1  => ipd.w[1] ,
+          :w2  => ipd.w[2] ,
+          :w3  => ipd.w[3] ,
+          :s1  => ipd.σ[1] ,
+          :s2  => ipd.σ[2] ,
+          :s3  => ipd.σ[3] )
     end
 end
 

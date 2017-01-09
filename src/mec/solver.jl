@@ -157,8 +157,9 @@ function solve!(dom::Domain; nincs=1, maxits::Int=15, auto::Bool=false, scheme::
     dT  = 1.0/nincs
     inc = 1
     nsuccess = 0
+    eps = 1e-10
 
-    while T < 1.0
+    while T < 1.0 - eps
         if verbose; printcolor(:blue, "  increment $inc from T=$(round(T,10)) to T=$(round(T+dT,10)) (dT=$(round(dT,10))):\n") end
         ΔU, ΔF = dT*U, dT*F     # increment vectors
         R      = copy(ΔF)       # residual

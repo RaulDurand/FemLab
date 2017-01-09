@@ -316,7 +316,7 @@ Especifies the material model `mat` to be used to represent the behavior of a se
 """
 function set_mat(elems::Array{Element,1}, mm::Material; nips::Int64=0)
     if length(elems)==0
-        pcolor(:red, "Warning: Defining material model ($(string(typeof(mm)))) for an empty array of elements.\n")
+        warn("Defining material model ($(string(typeof(mm)))) for an empty array of elements.\n")
     end
     for elem in elems
         set_mat(elem, mm, nips=nips)
