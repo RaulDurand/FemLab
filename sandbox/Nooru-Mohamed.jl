@@ -15,7 +15,7 @@ split!(mesh)
 
 dom = Domain(mesh)
 set_mat(dom.elems[:solids], ElasticSolid(E=E_c, nu=0.2) )
-set_mat(dom.elems[:joints], MCJoint( E=E_c, nu=0.2, ft=f_t, mu=1.4, alfa=1.0,wc=1.70e-4*1, ws=1.85e-5*1))
+set_mat(dom.elems[:joints], MCJoint( E=E_c, nu=0.2, ft=f_t, mu=1.4, alfa=5.0,wc=1.70e-4*1, ws=1.85e-5*1))
 
 #set_mat( [dom.elems[:solids][:(x<=0)]; dom.elems[:solids][:(y>=0.2)]], ElasticSolid(E=E_c*100, nu=0.0) )
 #set_mat( [dom.elems[:joints][:(x<=0)]; dom.elems[:joints][:(y>=0.2)]], Joint(ks=1e9, kn=1e9) )
