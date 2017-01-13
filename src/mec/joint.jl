@@ -150,19 +150,15 @@ function matrixT(J::Matrix{Float64})
         L3 /= norm(L3)
         return [L1 L2 L3]'
     else
-        L1 = [ -L1[2],  L1[1] ]
-        L2 = vec(J)/norm(J)
+        L2 = vec(J)
+        L1 = [ L2[2], -L2[1] ]
+        L1 /= norm(L1)
+        L2 /= norm(L2)
         return [L1 L2]'
     end
 end
 
 function elem_jacobian(mat::AbsJoint, elem::Element)
-    
-    # calculate h and set at integration points
-    #if elem.ips[1].data.h == 0.0
-        #set_h(elem)
-    #end
-
     ndim   = elem.ndim
     nnodes = length(elem.nodes)
     hnodes = div(nnodes, 2) # half the number of total nodes
@@ -185,7 +181,6 @@ function elem_jacobian(mat::AbsJoint, elem::Element)
 
         # compute B matrix
         T    = matrixT(J)
-        #@show T
         NN[:,:] = 0.0  # NN = [ -N[]  N[] ]
         for i=1:hnodes
             for dof=1:ndim
@@ -193,6 +188,7 @@ function elem_jacobian(mat::AbsJoint, elem::Element)
                 NN[dof, hnodes*ndim + (i-1)*ndim + dof] =  N[i]
             end
         end
+
         @gemm B = T*NN
 
         # compute K
@@ -221,9 +217,8 @@ function update!(mat::AbsJoint, elem::Element, DU::Array{Float64,1}, DF::Array{F
     DB = zeros(ndim, nnodes*ndim)
     J  = zeros(ndim-1, ndim)
     NN = zeros(ndim, nnodes*ndim)
-    Δu = zeros(3)
+    Δu = zeros(ndim)
 
-    #@show dU
     for ip in elem.ips
         # compute shape Jacobian
         dNdR = deriv_func(bshape, ip.R)
@@ -244,7 +239,6 @@ function update!(mat::AbsJoint, elem::Element, DU::Array{Float64,1}, DF::Array{F
 
         # internal force
         @gemv Δu = B*dU
-        #@show Δu[3]
         Δσ   = stress_update(mat, ip.data, Δu)
         coef = detJ*ip.w
         @gemv dF += coef*B'*Δσ
@@ -257,8 +251,10 @@ end
 function getvals(mat::Joint, ipd::JointIpData)
     if ipd.ndim == 2
         return Dict(
-          :w1  => ipd.σ[1] ,
-          :w2  => ipd.σ[2] )
+          :w1  => ipd.w[1] ,
+          :w2  => ipd.w[2] ,
+          :s1  => ipd.σ[1] ,
+          :s2  => ipd.σ[2] )
     else
         return Dict(
           :w1  => ipd.w[1] ,
