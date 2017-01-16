@@ -135,7 +135,7 @@ function solve!(dom::Domain; nincs=1, maxits::Int=15, auto::Bool=false, scheme::
 
     # Solving process
     nu  = length(udofs)  # number of unknowns
-    if verbose; println("  unknowns dofs: $nu") end
+    if verbose; println("  unknown dofs: $nu") end
 
     residue  = 0.0
     tracking(dom)    # Tracking nodes, ips, elements, etc.
@@ -157,9 +157,9 @@ function solve!(dom::Domain; nincs=1, maxits::Int=15, auto::Bool=false, scheme::
     dT  = 1.0/nincs
     inc = 1
     nsuccess = 0
-    eps = 1e-10
+    min_dT = 1e-8
 
-    while T < 1.0 - eps
+    while T < 1.0 - min_dT
         if verbose; printcolor(:blue, "  increment $inc from T=$(round(T,10)) to T=$(round(T+dT,10)) (dT=$(round(dT,10))):\n") end
         ΔU, ΔF = dT*U, dT*F     # increment vectors
         R      = copy(ΔF)       # residual
@@ -174,18 +174,23 @@ function solve!(dom::Domain; nincs=1, maxits::Int=15, auto::Bool=false, scheme::
         for it=1:maxits
             if it>1; ΔUi[:] = 0.0 end
 
-            if scheme=="FE" 
+            if scheme=="FE" || scheme==:FE
                 ΔFin, R = solve_step_FE(dom, ips, ΔF, ΔUa, ΔUi, R, umap, pmap, precision, verbose)
-            elseif scheme=="ME"
+            elseif scheme=="ME"|| scheme==:ME
                 ΔFin, R = solve_step_ME(dom, ips, ΔF, ΔUa, ΔUi, R, umap, pmap, precision, verbose)
-            elseif scheme=="Ralston"
+            elseif scheme=="Ralston"|| scheme==:Ralston
                 ΔFin, R = solve_step_Ralston(dom, ips, ΔF, ΔUa, ΔUi, R, umap, pmap, precision, verbose)
-            elseif scheme=="RK3"
+            elseif scheme=="RK3"|| scheme==:RK3
                 ΔFin, R = solve_step_RK3(dom, ips, ΔF, ΔUa, ΔUi, R, umap, pmap, precision, verbose)
+            elseif scheme=="RK4"|| scheme==:RK4
+                ΔFin, R = solve_step_RK4(dom, ips, ΔF, ΔUa, ΔUi, R, umap, pmap, precision, verbose)
             end
 
             lastres = residue
             residue = maxabs(R)
+            #residue = norm(R)/norm(ΔFin)
+            #@show norm(R)
+            #@show norm(ΔFin)
 
             # Update accumulated displacement
             ΔUa += ΔUi
@@ -221,13 +226,17 @@ function solve!(dom::Domain; nincs=1, maxits::Int=15, auto::Bool=false, scheme::
             inc += 1
             T   += dT
             if auto
-                dT = min(2*dT, 1.0/nincs, 1.0-T)
+                dT = min(1.5*dT, 1.0/nincs, 1.0-T)
             end
 
         else
             if auto
                 println("    increment failed.")
                 dT *= 0.5
+                if dT<min_dT
+                    printcolor(:red, "solve!: solver did not converge\n",)
+                    return false
+                end
             else
                 printcolor(:red, "solve!: solver did not converge\n",)
                 return false
@@ -341,6 +350,109 @@ function solve_step_ME(dom::Domain, ips, ΔF, ΔUa, ΔUi::Array{Float64,1}, R::A
     return ΔFin, R
 end
 
+
+function solve_step_RK4(dom::Domain, ips, ΔF, ΔUa, ΔUi::Array{Float64,1}, R::Array{Float64,1}, umap, pmap, precision, verbose)
+    # FE step
+    ndofs = length(R)
+
+    verbose && print("    assembling K1... \r")
+    K1 = mount_K(dom)
+
+    verbose && print("    solving...       \r")
+    solve_inc(K1, ΔUi, R, umap, pmap)   # Changes unknown positions in ΔUi and R
+
+    verbose && print("    updating... \r")
+
+    # Restore the state to last converged increment
+    for ip in ips; ip.data = deepcopy(ip.data0) end
+
+    # Get internal forces and update data at integration points (update ΔFin)
+    ΔFin = zeros(ndofs)
+    ΔUt  = ΔUa + ΔUi
+
+    for elem in dom.elems; update!(elem, ΔUt, ΔFin) end
+
+    # Residual
+    R0       = ΔF - ΔFin
+    R0[pmap] = 0.0
+    residue = maxabs(R0)
+
+    if residue < precision
+        return ΔFin, R0
+    end
+
+    # RK4 scheme
+
+    # Predictor step:
+    verbose && print("    solving...   \r")
+    ΔUi05 = ΔUi/2
+    R05   = R/2
+    solve_inc(K1, ΔUi05, R05, umap, pmap)   # Changes unknown positions in ΔUi and R
+
+    verbose && print("    updating... \r")
+    # Restore the state to last converged increment
+    for ip in ips; ip.data = deepcopy(ip.data0) end
+
+    # Get internal forces and update data at integration points (update ΔFin)
+    ΔFin = zeros(ndofs)
+    ΔUt  = ΔUa + ΔUi05
+    for elem in dom.elems; update!(elem, ΔUt, ΔFin) end
+
+
+    verbose && print("    assembling K2... \r")
+    K2 = mount_K(dom)
+
+    verbose && print("    solving...       \r")
+    solve_inc(K2, ΔUi05, R05, umap, pmap)   # Changes unknown positions in ΔUi and R
+
+    verbose && print("    updating... \r")
+    # Restore the state to last converged increment
+    for ip in ips; ip.data = deepcopy(ip.data0) end
+
+    # Get internal forces and update data at integration points (update ΔFin)
+    ΔFin = zeros(ndofs)
+    ΔUt  = ΔUa + ΔUi05
+    for elem in dom.elems; update!(elem, ΔUt, ΔFin) end
+
+
+    verbose && print("    assembling K3... \r")
+    K3 = mount_K(dom)
+
+    verbose && print("    solving...       \r")
+    solve_inc(K3, ΔUi, R, umap, pmap)   # Changes unknown positions in ΔUi and R
+
+    verbose && print("    updating... \r")
+    # Restore the state to last converged increment
+    for ip in ips; ip.data = deepcopy(ip.data0) end
+
+    # Get internal forces and update data at integration points (update ΔFin)
+    ΔFin = zeros(ndofs)
+    ΔUt  = ΔUa + ΔUi
+    for elem in dom.elems; update!(elem, ΔUt, ΔFin) end
+
+
+    verbose && print("    assembling K4... \r")
+    K4 = mount_K(dom)
+    K  = 1/6*K1 + 1/3*K2 + 1/3*K3 + 1/6*K4
+
+    verbose && print("    solving...       \r")
+    solve_inc(K, ΔUi, R, umap, pmap)   # Changes unknown positions in ΔUi and R
+
+    verbose && print("    updating... \r")
+    # Restore the state to last converged increment
+    for ip in ips; ip.data = deepcopy(ip.data0) end
+
+    # Get internal forces and update data at integration points (update ΔFin)
+    ΔFin = zeros(ndofs)
+    ΔUt  = ΔUa + ΔUi
+    for elem in dom.elems; update!(elem, ΔUt, ΔFin) end
+
+    # Residual
+    R       = ΔF - ΔFin
+    R[pmap] = 0.0
+    
+    return ΔFin, R
+end
 
 function solve_step_RK3(dom::Domain, ips, ΔF, ΔUa, ΔUi::Array{Float64,1}, R::Array{Float64,1}, umap, pmap, precision, verbose)
     # FE step
