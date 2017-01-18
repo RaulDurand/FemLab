@@ -71,11 +71,22 @@ function set_state(ipd::ElasticSolidIpData; sig=zeros(0), eps=zeros(0))
 end
 
 function setDe(E::Float64, nu::Float64, De::Array{Float64,2})
-    c = E/((1.0+nu)*(1.0-2.0*nu))
-    De[:] = 0.0
-    De[1,1] = De[2,2] = De[3,3] = c*(1.-nu)
-    De[1,2] = De[1,3] = De[2,1] = De[2,3] = De[3,1] = De[3,2] = c*nu
-    De[4,4] = De[5,5] = De[6,6] = c*(1.-2.*nu)
+    if gl_stress_state==:plane_stress
+        c   = E/(1.0-nu^2)
+        De .= 0.0
+        De[1,1] = De[2,2] = c
+        #De[1,2] = De[1,3] = De[2,1] = De[2,3] = c*nu
+        De[1,2] = De[2,1] = c*nu
+        De[4,4] = c*(1.-nu)
+        #@showm De
+        #exit()
+    else
+        c   = E/((1.0+nu)*(1.0-2.0*nu))
+        De .= 0.0
+        De[1,1] = De[2,2] = De[3,3] = c*(1.-nu)
+        De[1,2] = De[1,3] = De[2,1] = De[2,3] = De[3,1] = De[3,2] = c*nu
+        De[4,4] = De[5,5] = De[6,6] = c*(1.-2.*nu)
+    end
 end
 
 function calcD(mat::ElasticSolid, ipd::ElasticSolidIpData)
@@ -96,30 +107,50 @@ function getvals(mat::ElasticSolid, ipd::ElasticSolidIpData)
     sr2  = 2.0^0.5
 
     if ndim==2;
+        if gl_stress_state == :plane_stress
+            return Dict(
+                :sxx => σ[1],
+                :syy => σ[2],
+                :szz => σ[3],
+                :sxy => σ[4]/sr2,
+                :syz => σ[5]/sr2,
+                :sxz => σ[6]/sr2,
+                :exx => ε[1],
+                :eyy => ε[2],
+                :ezz => ε[3],
+                :exy => ε[4]/sr2,
+                :eyz => ε[5]/sr2,
+                :exz => ε[6]/sr2,
+                :s_m => sum(σ[1:3])/3.0 
+            )
+        else
+            return Dict(
+                :sxx => σ[1],
+                :syy => σ[2],
+                :szz => σ[3],
+                :sxy => σ[4]/sr2,
+                :exx => ε[1],
+                :eyy => ε[2],
+                :ezz => ε[3],
+                :exy => ε[4]/sr2,
+                :s_m => sum(σ[1:3])/3.0
+            )
+        end
+    else
         return Dict(
-          :sxx => σ[1],
-          :syy => σ[2],
-          :szz => σ[3],
-          :sxy => σ[4]/sr2,
-          :exx => ε[1],
-          :eyy => ε[2],
-          :ezz => ε[3],
-          :exy => ε[4]/sr2,
-          :s_m => sum(σ[1:3])/3.0 )
-      else
-        return Dict(
-          :sxx => σ[1],
-          :syy => σ[2],
-          :szz => σ[3],
-          :sxy => σ[4]/sr2,
-          :syz => σ[5]/sr2,
-          :sxz => σ[6]/sr2,
-          :exx => ε[1],
-          :eyy => ε[2],
-          :ezz => ε[3],
-          :exy => ε[4]/sr2,
-          :eyz => ε[5]/sr2,
-          :exz => ε[6]/sr2,
-          :s_m => sum(σ[1:3])/3.0 )
-      end
+            :sxx => σ[1],
+            :syy => σ[2],
+            :szz => σ[3],
+            :sxy => σ[4]/sr2,
+            :syz => σ[5]/sr2,
+            :sxz => σ[6]/sr2,
+            :exx => ε[1],
+            :eyy => ε[2],
+            :ezz => ε[3],
+            :exy => ε[4]/sr2,
+            :eyz => ε[5]/sr2,
+            :exz => ε[6]/sr2,
+            :s_m => sum(σ[1:3])/3.0
+        )
+    end
 end

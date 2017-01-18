@@ -23,6 +23,7 @@ export Domain
 export set_trackers
 export get_node
 
+
 """
 `Domain(mesh, [filekey="out"])`
 
@@ -78,9 +79,11 @@ type Domain
 end
 
 
-function Domain(mesh::Mesh; filekey::AbstractString="out")
-    dom = Domain(filekey=filekey)
+function Domain(mesh::Mesh; filekey::AbstractString="out", stress_state=:general, thickness=1.0)
+    dom  = Domain(filekey=filekey)
     ndim = dom.ndim = mesh.ndim
+    global gl_stress_state = stress_state
+    global gl_thickness    = thickness
 
     # Setting nodes
     dom.nodes = [ Node(point, id=i) for (i,point) in enumerate(mesh.points)]
@@ -468,6 +471,13 @@ function tracking(dom::Domain)
             push!(trk.book, table)
         end
 
+    end
+
+    # Update tracked files
+    for trk in dom.trackers
+        if trk.filename != ""
+            save(trk, trk.filename, verbose=false)
+        end
     end
 end
 

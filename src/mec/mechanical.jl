@@ -127,15 +127,16 @@ function setB(ndim::Int, dNdX::Matx, detJ::Float64, B::Matx)
             B[2,2+j*ndim] = dNdX[2,i]
             B[4,1+j*ndim] = dNdX[2,i]/sqr2; B[4,2+j*ndim] = dNdX[1,i]/sqr2
         end
-        axisym = false
-        if axisym # TODO: Check this
-            N = shape_func(elem.shape, R)
-            j = i-1
-            r = R[0]
-            B[1,1+j*ndim] = dNdX[1,i]
-            B[2,2+j*ndim] = dNdX[2,i]
-            B[3,1+j*ndim] =    N[i]/r
-            B[4,1+j*ndim] = dNdX[2,i]/sqr2; B[4,2+j*ndim] = dNdX[1,i]/sqr2
+        if gl_stress_state==:axisymmetric # TODO: Check this
+            for i in 1:nnodes
+                N = shape_func(elem.shape, R)
+                j = i-1
+                r = R[0]
+                B[1,1+j*ndim] = dNdX[1,i]
+                B[2,2+j*ndim] = dNdX[2,i]
+                B[3,1+j*ndim] =    N[i]/r
+                B[4,1+j*ndim] = dNdX[2,i]/sqr2; B[4,2+j*ndim] = dNdX[1,i]/sqr2
+            end
         end
     else
         for i in 1:nnodes

@@ -110,6 +110,7 @@ include("tools/expr.jl")
 include("tools/table.jl")
 
 # Fem module
+include("globals.jl")
 include("node.jl")
 include("elem.jl")
 include("face.jl")

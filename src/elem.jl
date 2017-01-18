@@ -119,7 +119,7 @@ end
 abstract Material
 
 function copy!(target::Material, source::Material)
-    @show("Hi")
+    @show("Hi - I am not used")
     # source and target must be of the same type
     T = typeof(source)
     for fld in fieldnames(source)

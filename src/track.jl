@@ -6,90 +6,95 @@ export NodeTracker, NodesTracker, IpTracker, IpsTracker, FacesTracker
 type NodeTracker <: Tracker
     table::DTable
     node::Node
+    filename::String
 
-    function NodeTracker(node::Node)
-        return new(DTable(), node )
+    function NodeTracker(node::Node, filename="")
+        return new(DTable(), node, filename )
     end
 
-    function NodeTracker(nodes::Array{Node,1})
-        return new(DTable(), nodes[1])
+    function NodeTracker(nodes::Array{Node,1}, filename="")
+        return new(DTable(), nodes[1], filename)
     end
 
-    function NodeTracker(domain, expr::Expr) # TODO: verify if this syntax is convenient
+    function NodeTracker(domain, expr::Expr, filename="") # TODO: verify if this syntax is convenient
         nodes = domain.nodes[expr]
         @assert length(nodes)==1
-        return new(DTable(), nodes[1])
+        return new(DTable(), nodes[1], filename)
     end
 end
 
 type NodesTracker <: Tracker
     book::DBook
     nodes::Array{Node,1}
+    filename::String
 
-    function NodesTracker(nodes::Array{Node,1})
-        return new(DBook(), nodes[:])
+    function NodesTracker(nodes::Array{Node,1}, filename="")
+        return new(DBook(), nodes[:], filename)
     end
 
-    function NodesTracker(domain, expr::Expr)
+    function NodesTracker(domain, expr::Expr, filename="")
         nodes = domain.nodes[expr]
         @assert length(nodes)>0
-        return new(DBook(), nodes)
+        return new(DBook(), nodes, filename)
     end
 end
 
 type FacesTracker <: Tracker
     table::DTable
     nodes::Array{Node,1} # nodes from all selected faces
+    filename::String
 
-    function FacesTracker(faces::Array{Face,1})
-        return new(DTable(), faces[:nodes])
+    function FacesTracker(faces::Array{Face,1}, filename="")
+        return new(DTable(), faces[:nodes], filename)
     end
 
-    function FacesTracker(domain, expr::Expr)
+    function FacesTracker(domain, expr::Expr, filename="")
         faces = domain.faces[expr]
         @assert length(faces)>0
-        return new(DTable(), faces[:nodes])
+        return new(DTable(), faces[:nodes], filename)
     end
 end
 
 type IpTracker <: Tracker
     table::DTable
     ip   ::Ip
+    filename::String
 
-    function IpTracker(ip::Ip)
-        return new(DTable(), ip)
+    function IpTracker(ip::Ip, filename="")
+        return new(DTable(), ip, filename)
     end
 
-    function IpTracker(elem::Element)
+    function IpTracker(elem::Element, filename="")
         @assert length(elem.ips)>0
-        return new(DTable(), elem.ips[1])
+        return new(DTable(), elem.ips[1], filename)
     end
 
-    function IpTracker(domain, expr::Expr)
+    function IpTracker(domain, expr::Expr, filename="")
         ips = get_ips(domain.elems)[expr]
         @assert length(ips)==1
-        return new(DTable(), ips[1])
+        return new(DTable(), ips[1], filename)
     end
 end
 
 type IpsTracker <: Tracker
     book::DBook
     ips  ::Array{Ip,1}
+    filename::String
 
-    function IpsTracker(ips::Array{Ip,1})
-        return this = new(DBook(), ips)
+    function IpsTracker(ips::Array{Ip,1}, filename="")
+        return this = new(DBook(), ips, filename)
     end
 
-    function IpsTracker(elems::Array{Element,1})
+    function IpsTracker(elems::Array{Element,1}, filename="")
         ips = get_ips(elems)
         @assert length(ips)>0
-        return new(DBook(), ips)
+        return new(DBook(), ips, filename)
     end
 
-    function IpsTracker(domain, expr::Expr)
+    function IpsTracker(domain, expr::Expr, filename="")
         ips = get_ips(domain.elems)[expr]
         @assert length(ips)>0
-        return new(DBook(), ips)
+        return new(DBook(), ips, filename)
     end
 end
 
