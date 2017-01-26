@@ -476,7 +476,11 @@ function tracking(dom::Domain)
     # Update tracked files
     for trk in dom.trackers
         if trk.filename != ""
-            save(trk, trk.filename, verbose=false)
+            try
+                save(trk, trk.filename, verbose=false)
+            catch
+                warn("Problem writing file ", trk.filename)
+            end
         end
     end
 end
