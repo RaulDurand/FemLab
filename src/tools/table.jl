@@ -34,7 +34,7 @@ type DTable
         this.dict = Dict{Symbol,Array{Float64,1}}() 
         return this
     end
-    function DTable(header::Array{Symbol,1}, matrix::Array{Float64}=Float64[])
+    function DTable(header::Array{Symbol,1}, matrix::Array{Float64,2}=zeros(0,0))
         this = new()
         if length(matrix)==0
             this.data = [ [] for s in header]
@@ -216,7 +216,7 @@ end
 
 function loadtable(filename::AbstractString)
     data, headstr = readdlm(filename, '\t',header=true)
-    header = Symbol[ symbol(strip(field)) for field in headstr ]
+    header = Symbol[ Symbol(strip(field)) for field in vec(headstr) ]
 
     table = DTable(header, data)
     return table
