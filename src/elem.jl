@@ -175,6 +175,16 @@ function reset(elems::Array{Element,1})
     end
 end
 
+# Index operator for an element
+function getindex(elem::Element, s::Symbol)
+    if s == :nodes
+        return elem.nodes
+    end
+    if s == :ips
+        return elem.ips
+    end
+    error("Element getindex: Invalid symbol $s")
+end
 # Index operator for a collection of elements
 function getindex(elems::Array{Element,1}, s::Symbol)
     if s == :solids
