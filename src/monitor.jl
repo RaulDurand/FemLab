@@ -1,9 +1,9 @@
-abstract Tracker
+abstract Monitor
 
 import Base.getindex
 export NodeTracker, NodesTracker, IpTracker, IpsTracker, FacesTracker
 
-type NodeTracker <: Tracker
+type NodeTracker <: Monitor
     table::DTable
     node::Node
     filename::String
@@ -23,7 +23,7 @@ type NodeTracker <: Tracker
     end
 end
 
-type NodesTracker <: Tracker
+type NodesTracker <: Monitor
     book::DBook
     nodes::Array{Node,1}
     filename::String
@@ -39,7 +39,7 @@ type NodesTracker <: Tracker
     end
 end
 
-type FacesTracker <: Tracker
+type FacesTracker <: Monitor
     table::DTable
     nodes::Array{Node,1} # nodes from all selected faces
     filename::String
@@ -55,7 +55,7 @@ type FacesTracker <: Tracker
     end
 end
 
-type IpTracker <: Tracker
+type IpTracker <: Monitor
     table::DTable
     ip   ::Ip
     filename::String
@@ -76,7 +76,7 @@ type IpTracker <: Tracker
     end
 end
 
-type IpsTracker <: Tracker
+type IpsTracker <: Monitor
     book::DBook
     ips  ::Array{Ip,1}
     filename::String
@@ -98,10 +98,10 @@ type IpsTracker <: Tracker
     end
 end
 
-function save(trk::Tracker, filename::AbstractString; verbose=true, format="dat")
-    if typeof(trk) in (NodeTracker, IpTracker, FacesTracker)
-        save(trk.table, filename, verbose=verbose, format=format)
+function save(monit::Monitor, filename::AbstractString; verbose=true, format="dat")
+    if typeof(monit) in (NodeTracker, IpTracker, FacesTracker)
+        save(monit.table, filename, verbose=verbose, format=format)
     else
-        save(trk.book , filename, verbose=verbose, format=format)
+        save(monit.book , filename, verbose=verbose, format=format)
     end
 end

@@ -132,10 +132,11 @@ end
 
 
 function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=true, scheme::String="FE", precision::Number=0.01,
-    tol::Number=0.0, reset_bc::Bool=true, verbose::Bool=true, autosave::Bool=false, savesteps::Bool=false, save_ips::Bool=false)
+    tol::Number=0.0, reset_bc::Bool=true, verbose::Bool=true, autosave::Bool=false, savesteps::Bool=false, nout::Int=100, save_ips::Bool=false)
     
-    savesteps && (autosave = true)
+    autosave && (savesteps = true)
     !NR       && (nincs = 1)
+    nout<1    && (nout = min(nincs, 100))
 
     if verbose
         pbcolor(:cyan,"FEM analysis:\n") 
@@ -204,13 +205,24 @@ function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=
     F  = [ dof.bryF for dof in dofs] # nodal and face boundary conditions
     F += RHS
 
+    # Scheme selection
+    sch = Symbol(scheme)
+    local solve_inc_scheme::Function
+
+    if     sch==:ME;      solve_inc_scheme = solve_step_ME
+    elseif sch==:Ralston; solve_inc_scheme = solve_step_Ralston
+    elseif sch==:RK3;     solve_inc_scheme = solve_step_RK3
+    elseif sch==:RK4;     solve_inc_scheme = solve_step_RK4
+    else   sch =:FE 
+    end
+
     # Solving process
     nu  = length(udofs)  # number of unknowns
     if verbose; println("  unknown dofs: $nu") end
 
-    tracking(dom)    # Tracking nodes, ips, elements, etc.
+    update_monitors(dom)    # Tracking nodes, ips, elements, etc.
 
-    if dom.nincs == 0 && autosave 
+    if dom.nincs == 0 && savesteps 
         save(dom, dom.filekey * "-0" * ".vtk", verbose=false, save_ips=save_ips)
     end
 
@@ -222,20 +234,11 @@ function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=
     # State back-up for iterations
     data_bk = [ deepcopy(ip.data) for ip in ips ] 
 
-    # Scheme selection
-    sch = Symbol(scheme)
-    local solve_inc_scheme::Function
-
-    if     sch==:ME;      solve_inc_scheme = solve_step_ME
-    elseif sch==:Ralston; solve_inc_scheme = solve_step_Ralston
-    elseif sch==:RK3;     solve_inc_scheme = solve_step_RK3
-    elseif sch==:RK4;     solve_inc_scheme = solve_step_RK4
-    else   sch = :FE 
-    end
-
     # Incremental analysis
     T   = 0.0
     dT  = 1.0/nincs
+    dTs = 1.0/nout   # increment for saving vtk file
+    Ts  = dTs        # T for next vtk file saving
     μdT = 1e-9       # minimum dT
     inc = 1
     tol == 0.0 && (tol = precision)
@@ -313,8 +316,12 @@ function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=
                 dof.F += ΔFin[i]
             end
 
-            tracking(dom) # Tracking nodes, ips, elements, etc.
-            autosave && save(dom, dom.filekey * "-$(dom.nincs + inc)" * ".vtk", verbose=false, save_ips=save_ips)
+            update_monitors(dom) # Tracking nodes, ips, elements, etc.
+            Tn = T + dT
+            if Tn>=Ts && savesteps
+                save(dom, dom.filekey * "-$(dom.nincs + inc)" * ".vtk", verbose=false, save_ips=save_ips)
+                Ts = Tn - mod(Tn, dTs) + dTs
+            end
 
             inc += 1
             T   += dT
@@ -345,7 +352,7 @@ function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=
         println("  time spent: $(hs)h $(mins)m $secs.$(msecs)s")
     end
 
-    if verbose && autosave
+    if verbose && savesteps
         printcolor(:green, "  $(dom.filekey)..vtk files written (Domain)\n")
     end
 
@@ -530,7 +537,7 @@ function solve_legacy!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::Abstra
     DU, DF  = λ*U, λ*F
     residue = 0.0
     remountK = true   # Warning: use of remountK is bug prone!
-    tracking(dom) # Tracking nodes, ips, elements, etc.
+    update_monitors(dom) # Tracking nodes, ips, elements, etc.
 
     if autosave
         save(dom, dom.filekey * "-0" * ".vtk", verbose=false, save_ips=save_ips)
@@ -598,7 +605,7 @@ function solve_legacy!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::Abstra
                 dof.U += DUa[i]
                 dof.F += DFin[i]
             end
-            tracking(dom) # Tracking nodes, ips, elements, etc.
+            update_monitors(dom) # Tracking nodes, ips, elements, etc.
             autosave && save(dom, dom.filekey * "-$inc" * ".vtk", verbose=false, save_ips=save_ips)
         end
 

@@ -19,8 +19,7 @@
 ##############################################################################
 
 export Domain
-#export track
-export set_trackers
+export set_monitors, set_trackers
 export get_node
 
 
@@ -59,7 +58,7 @@ type Domain
     edge_bcs::Array{BC, 1}
     filekey::AbstractString
 
-    trackers::Array{Tracker,1}
+    trackers::Array{Monitor,1}
     nincs::Integer
     ndofs::Integer
 
@@ -425,13 +424,14 @@ function get_node(dom::Domain, coord::Array{Float64,1})
     return nothing
 end
 
-function set_trackers(dom::Domain, ts::Tracker...)
+function set_monitors(dom::Domain, ts::Monitor...)
     for t in ts
         push!(dom.trackers, t)
     end
 end
+set_trackers = set_monitors
 
-function tracking(dom::Domain)
+function update_monitors(dom::Domain)
     for trk in dom.trackers
         ty = typeof(trk)
 

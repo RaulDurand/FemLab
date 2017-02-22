@@ -177,7 +177,7 @@ function stress_update(mat::Mazars, ipd::MazarsIpData, Δε::Array{Float64,1})
         ipd.ε̅max = ε̅
 
         # Principal stresses and principal directions
-        norm(ipd.σ)==0.0 && error("Mazars: At least one increment inside the elastic region is required")
+        #norm(ipd.σ)==0.0 && error("Mazars: At least one increment inside the elastic region is required")
         σp, V = principal(ipd.σ)
         σp = [ σp; zeros(3) ]
 
@@ -198,6 +198,9 @@ function stress_update(mat::Mazars, ipd::MazarsIpData, Δε::Array{Float64,1})
         # Tensile and compression damage weights
         αt =  sum(pos(εt[i]) for i=1:3)/εv
         αc =  sum(pos(εc[i]) for i=1:3)/εv
+        if εv==0.0
+            αt = αc = 0.5
+        end
 
         #@show αt
         #@show αc
