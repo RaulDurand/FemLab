@@ -212,8 +212,8 @@ function update!(::Mechanical, elem::Element, DU::Array{Float64,1}, DF::Array{Fl
     map    = get_map(elem)
     mat    = elem.mat
 
-    dF = zeros(nnodes*ndim)
-    dU = DU[map]
+    ΔF = zeros(nnodes*ndim)
+    ΔU = DU[map]
     B  = zeros(6, nnodes*ndim)
 
     DB = Array(Float64, 6, nnodes*ndim)
@@ -232,17 +232,18 @@ function update!(::Mechanical, elem::Element, DU::Array{Float64,1}, DF::Array{Fl
         detJ > 0.0 || error("Negative jacobian determinant in cell $(cell.id)")
         setB(ndim, dNdX, detJ, B)
 
-        @gemv Δε = B*dU
-        #Δσ   = stress_update(mat, ip.data, ip.data0, Δε)
+        @gemv Δε = B*ΔU
         Δσ   = stress_update(mat, ip.data, Δε)
         coef = detJ*ip.w
-        @gemv dF += coef*B'*Δσ
+        @gemv ΔF += coef*B'*Δσ
     end
 
     # Update global vector
-    DF[map] += dF
+    DF[map] += ΔF
 
 end
+
+
 
 function elem_vals(mat::Mechanical, elem::Element)
     return Dict{Symbol, Float64}()
@@ -286,6 +287,7 @@ include("tensors.jl")
 include("solid.jl")
 include("dp.jl")
 include("kotsovos.jl")
+include("mazars.jl")
 
 include("truss.jl")
 include("pptruss.jl")
@@ -299,6 +301,5 @@ include("mcjoint1d.jl")
 include("cebjoint1d.jl")
 
 #include("bilinear.jl")
-include("smeared_crack.jl")
+#include("smeared_crack.jl")
 include("mcjoint.jl")
-

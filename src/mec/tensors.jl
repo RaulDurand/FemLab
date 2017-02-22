@@ -83,7 +83,7 @@ end
 
 
 const V2M = [ 1., 1., 1., √2., √2., √2. ]
-const M2V = [ 1., 1., 1., √.5, √.5, √.5 ]
+const M2V = [ 1., 1., 1., √.5, √.5, √.5 ] # Use .* operator
 
 function tfull(T::Tensor2)
     t1, t2, t3, t4, t5, t6 = T.*M2V
@@ -91,6 +91,16 @@ function tfull(T::Tensor2)
         t1 t4 t6
         t4 t2 t5
         t6 t5 t3 ]
+end
+
+function matrix2Mandel(M::Array{Float64,2})
+    t11 = M[1,1]
+    t22 = M[2,2]
+    t33 = M[3,3]
+    t12 = M[1,2]
+    t23 = M[2,3]
+    t13 = M[1,3]
+    return [t11, t22, t33, t12, t23, t13] .* V2M
 end
 
 function dyad(T1::Tensor2, T2::Tensor2)

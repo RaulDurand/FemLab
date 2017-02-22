@@ -37,19 +37,20 @@ type JointIpData<:IpData
 end
 
 type Joint<:AbsJoint
-    ks::Float64
-    kn::Float64
+    E::Float64
+    ν::Float64
+    α::Float64
     new_ipdata::DataType
 
     function Joint(prms::Dict{Symbol,Float64})
         return  Joint(;prms...)
     end
 
-    function Joint(;ks=NaN, kn=NaN)
-        @assert ks>=0
-        @assert kn>=0
+    function Joint(;E=NaN, nu=NaN, alpha=1.0)
+        @assert E>=0
+        @assert nu>=0
 
-        this = new(ks, kn)
+        this = new(E, nu, alpha)
         this.new_ipdata = JointIpData
         return this
     end
@@ -119,8 +120,9 @@ function init_elem(elem::Element, mat::AbsJoint)
 end
 
 function mountD(mat::Joint, ipd::JointIpData)
-    ks = mat.ks/ipd.h
-    kn = mat.kn/ipd.h
+    G  = mat.E/(1.0+mat.ν)/2.0
+    kn = mat.E*mat.α/ipd.h
+    ks =     G*mat.α/ipd.h
     if ipd.ndim==2
         return [  kn  0.0 
                  0.0   ks ]
@@ -144,14 +146,14 @@ function matrixT(J::Matrix{Float64})
     if size(J,1)==2
         L2 = vec(J[1,:])
         L3 = vec(J[2,:])
-        L1 = cross(L2, L3)
+        L1 = cross(L2, L3)  # L1 is normal to the first element face
         L1 /= norm(L1)
         L2 /= norm(L2)
         L3 /= norm(L3)
         return [L1 L2 L3]'
     else
         L2 = vec(J)
-        L1 = [ L2[2], -L2[1] ]
+        L1 = [ L2[2], -L2[1] ] # It follows the anti-clockwise numbering of 2D elements: L1 should be normal to the first element face
         L1 /= norm(L1)
         L2 /= norm(L2)
         return [L1 L2]'
@@ -209,15 +211,15 @@ function update!(mat::AbsJoint, elem::Element, DU::Array{Float64,1}, DF::Array{F
     mat    = elem.mat
     map    = get_map(elem)
 
-    dF = zeros(nnodes*ndim)
-    dU = DU[map]
+    ΔF = zeros(nnodes*ndim)
+    ΔU = DU[map]
     C = getcoords(elem)[1:hnodes,:]
     B = zeros(ndim, nnodes*ndim)
 
     DB = zeros(ndim, nnodes*ndim)
     J  = zeros(ndim-1, ndim)
     NN = zeros(ndim, nnodes*ndim)
-    Δu = zeros(ndim)
+    Δω = zeros(ndim)
 
     for ip in elem.ips
         # compute shape Jacobian
@@ -238,14 +240,14 @@ function update!(mat::AbsJoint, elem::Element, DU::Array{Float64,1}, DF::Array{F
         @gemm B = T*NN
 
         # internal force
-        @gemv Δu = B*dU
-        Δσ   = stress_update(mat, ip.data, Δu)
+        @gemv Δω = B*ΔU
+        Δσ   = stress_update(mat, ip.data, Δω)
         coef = detJ*ip.w
-        @gemv dF += coef*B'*Δσ
+        @gemv ΔF += coef*B'*Δσ
     end
 
     # Update global vector
-    DF[map] += dF
+    DF[map] += ΔF
 end
 
 function getvals(mat::Joint, ipd::JointIpData)
@@ -281,8 +283,15 @@ function node_and_elem_vals(mat::AbsJoint, elem::Element)
 
     Sn = [ ip.data.σ[1] for ip in elem.ips ]
     Wn = [ ip.data.w[1] for ip in elem.ips ]
+
+    #Up = [ ip.data.upa for ip in elem.ips ]
+    #T  = [ ip.data.σ[2] for ip in elem.ips ]
+
     node_vals[:sn] = [ Sn; Sn ]
     node_vals[:wn] = [ Wn; Wn ]
+
+    #node_vals[:up] = [ Up; Up ]
+    #node_vals[:tau] = [ T; T ]
 
     #all_ip_vals = [ getvals(mat, ip.data) for ip in elem.ips ]
     #labels      = keys(all_ip_vals[1])

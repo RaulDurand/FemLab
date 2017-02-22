@@ -73,10 +73,13 @@ function mount_RHS(dom::Domain, ndofs::Int64, Δt::Float64)
 end
 
 
-function calc_residue(ΔF, ΔFin, F, Fex, umap)
+function calc_residue(ΔF, ΔFin, Fmax, umap)
     abstol = 1e-8
     num    = norm((ΔF-ΔFin)[umap])
-    den    = max(norm(Fex), norm(F))
+    #@show num
+    #den    = max(norm(Fin), norm(F))
+    den = Fmax
+    #@show den
     if num < abstol 
         residue = num
     else
@@ -128,7 +131,7 @@ function solve_inc(sdata::MecSolverData, K::SparseMatrixCSC{Float64, Int}, DU::V
 end
 
 
-function solve!(dom::Domain; nincs=1, maxits::Int=10, auto::Bool=false, NR::Bool=true, scheme::String="ME", precision::Number=0.01,
+function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=true, scheme::String="FE", precision::Number=0.01,
     tol::Number=0.0, reset_bc::Bool=true, verbose::Bool=true, autosave::Bool=false, savesteps::Bool=false, save_ips::Bool=false)
     
     savesteps && (autosave = true)
@@ -236,16 +239,15 @@ function solve!(dom::Domain; nincs=1, maxits::Int=10, auto::Bool=false, NR::Bool
     μdT = 1e-9       # minimum dT
     inc = 1
     tol == 0.0 && (tol = precision)
-    Fex =  zeros(ndofs)
+    Fin   =  zeros(ndofs)
+    maxF  = norm(F) # Maximum norm of vectors of internal/external forces
     sdata = MecSolverData(dom, ips, tol, verbose, umap, pmap, ndofs)
 
     while T < 1.0 - μdT
         if verbose; printcolor(:blue, "  increment $inc from T=$(round(T,10)) to T=$(round(T+dT,10)) (dT=$(round(dT,10))):\n") end
         ΔU, ΔF = dT*U, dT*F     # increment vectors
         R      = copy(ΔF)       # residual
-        local ΔFin, ΔUa   # current increment of internal force and displacement
-        Fex0 = copy(Fex)
-
+        local ΔFin              # internal forces vector for current increment
 
         ΔUa    = zeros(ndofs)   # accumulated essential values (e.g. displacements)
         ΔUi    = copy(ΔU)       # values at iteration i
@@ -254,8 +256,8 @@ function solve!(dom::Domain; nincs=1, maxits::Int=10, auto::Bool=false, NR::Bool
         # Newton Rapshon iterations
         residue   = 0.0
         converged = false
-        maxfails = 3   # maximum number of it. fails with close residues (> 0.9)
-        nfails = 0
+        maxfails  = 3   # maximum number of it. fails with close residues (> 0.9)
+        nfails    = 0
         for it=1:maxits
             if it>1; ΔUi .= 0.0 end
 
@@ -265,17 +267,17 @@ function solve!(dom::Domain; nincs=1, maxits::Int=10, auto::Bool=false, NR::Bool
             # Try FE step
             K = mount_K(sdata)
             ΔFin, R = solve_update_step(sdata, K, ΔUa, ΔUi, R)
-            residue = calc_residue(ΔF, ΔFin, F, Fex+R, umap)
+            maxF = max(norm(Fin+ΔFin), maxF)
+            residue = calc_residue(ΔF, ΔFin, maxF, umap)
 
             # Other schemes
             if residue > tol && sch != :FE
                 ΔFin, R = solve_inc_scheme(sdata, K, ΔUa, ΔUi, R)
-                Fex += R
-                residue = calc_residue(ΔF, ΔFin, F, Fex+R, umap)
+                maxF = max(norm(Fin+ΔFin), maxF)
+                residue = calc_residue(ΔF, ΔFin, maxF, umap)
             end
 
             # Update external forces vector
-            Fex += R
             # Update accumulated displacement
             ΔUa += ΔUi
 
@@ -298,6 +300,10 @@ function solve!(dom::Domain; nincs=1, maxits::Int=10, auto::Bool=false, NR::Bool
         end
 
         if converged
+
+            Fin += ΔFin
+            maxF = max(norm(Fin), maxF)
+
             # Store converged state at ips
             for ip in ips ip.data0 = deepcopy(ip.data) end
 
@@ -314,7 +320,6 @@ function solve!(dom::Domain; nincs=1, maxits::Int=10, auto::Bool=false, NR::Bool
             T   += dT
             if auto; dT = min(1.5*dT, 1.0/nincs, 1.0-T) end
         else
-            Fex .= Fex0
             if auto
                 println("    increment failed.")
                 dT *= 0.5
@@ -484,7 +489,7 @@ function solve_legacy!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::Abstra
     for node in dom.nodes
         for dof in node.dofs
             if dof.prescU
-                push!(pdofs, dof) 
+                push!(pdofs, dof)
             else
                 push!(udofs, dof) 
             end
@@ -520,9 +525,9 @@ function solve_legacy!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::Abstra
     # Solving process
     nu  = length(udofs)
     verbose && println("  unknowns dofs: $nu")
-    lam = 1.0/nincs
+    λ = 1.0/nincs
 
-    DU, DF  = lam*U, lam*F
+    DU, DF  = λ*U, λ*F
     residue = 0.0
     remountK = true   # Warning: use of remountK is bug prone!
     tracking(dom) # Tracking nodes, ips, elements, etc.
@@ -533,7 +538,7 @@ function solve_legacy!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::Abstra
 
     for inc=1:nincs
         verbose && printcolor(:blue, "  increment $inc/$nincs:\n")
-        DU, DF = lam*U, lam*F
+        DU, DF = λ*U, λ*F
         R      = copy(DF) # residual
         local DFin, DUa
 

@@ -56,6 +56,9 @@ end
 macro showm(M)
     return quote
         println($(string(M)), "=")
+        Base.showarray(STDOUT, $M, false)
+        println()
+        #=
         dim = size($M)
         if length(dim)==1
             print(" [ ")
@@ -83,6 +86,7 @@ macro showm(M)
             end
             println(" ]")
         end
+        =#
     end
 end
 

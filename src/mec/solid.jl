@@ -70,7 +70,7 @@ function set_state(ipd::ElasticSolidIpData; sig=zeros(0), eps=zeros(0))
     end
 end
 
-function setDe(E::Float64, nu::Float64, De::Array{Float64,2})
+function setDe(E::Number, nu::Number, De::Array{Float64,2})
     if gl_stress_state==:plane_stress
         c   = E/(1.0-nu^2)
         De .= 0.0
