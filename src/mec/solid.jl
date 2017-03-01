@@ -47,8 +47,7 @@ type ElasticSolid<:Mechanical
         if E<=0.0      ; error("Invalid value for E: $E") end
         if !(0<=nu<0.5); error("Invalid value for nu: $nu") end
         this    = new(E, nu)
-        this.De = zeros(6,6)
-        setDe(E, nu, this.De)
+        this.De = calcDe(E,nu)
         this.new_ipdata = ElasticSolidIpData
 
         return this
@@ -70,6 +69,33 @@ function set_state(ipd::ElasticSolidIpData; sig=zeros(0), eps=zeros(0))
     end
 end
 
+function calcDe(E::Number, nu::Number)
+    if gl_stress_state==:plane_stress
+        c = E/(1.0-nu^2)
+        return [
+            c    c*nu 0. 0. 0. 0.
+            c*nu c    0. 0. 0. 0.
+            0.   0.   0. 0. 0. 0.
+            0.   0.   0. c*(1.-nu) 0. 0.
+            0.   0.   0. 0. 0. 0.
+            0.   0.   0. 0. 0. 0. ]
+    else
+        c = E/((1.0+nu)*(1.0-2.0*nu))
+        return [
+            c*(1-nu) c*nu     c*nu     0.         0.         0.
+            c*nu     c*(1-nu) c*nu     0.         0.         0.
+            c*nu     c*nu     c*(1-nu) 0.         0.         0.
+            0.       0.       0.       c*(1-2*nu) 0.         0.
+            0.       0.       0.       0.         c*(1-2*nu) 0.
+            0.       0.       0.       0.         0.         c*(1-2*nu) ]
+        #De .= 0.0
+        #De[1,1] = De[2,2] = De[3,3] = c*(1.-nu)
+        #De[1,2] = De[1,3] = De[2,1] = De[2,3] = De[3,1] = De[3,2] = c*nu
+        #De[4,4] = De[5,5] = De[6,6] = c*(1.-2.*nu)
+    end
+end
+
+#=
 function setDe(E::Number, nu::Number, De::Array{Float64,2})
     if gl_stress_state==:plane_stress
         c   = E/(1.0-nu^2)
@@ -88,6 +114,7 @@ function setDe(E::Number, nu::Number, De::Array{Float64,2})
         De[4,4] = De[5,5] = De[6,6] = c*(1.-2.*nu)
     end
 end
+=#
 
 function calcD(mat::ElasticSolid, ipd::ElasticSolidIpData)
     return mat.De

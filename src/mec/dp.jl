@@ -58,8 +58,7 @@ type DruckerPrager<:Mechanical
         @assert H>=0.0
 
         this    = new(E, nu, alpha, kappa, H)
-        this.De = zeros(6,6)
-        setDe(E, nu, this.De)
+        this.De = calcDe(E, nu)
         this.new_ipdata = DruckerPragerIpData
         return this 
     end

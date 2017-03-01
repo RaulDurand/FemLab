@@ -132,7 +132,7 @@ end
 
 
 function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=true, scheme::String="FE", precision::Number=0.01,
-    tol::Number=0.0, reset_bc::Bool=true, verbose::Bool=true, autosave::Bool=false, savesteps::Bool=false, nout::Int=100, save_ips::Bool=false)
+    tol::Number=0.0, reset_bc::Bool=true, verbose::Bool=true, autosave::Bool=false, savesteps::Bool=false, nout::Int=10, save_ips::Bool=false)
     
     autosave && (savesteps = true)
     !NR       && (nincs = 1)
@@ -223,7 +223,8 @@ function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=
     update_monitors(dom)    # Tracking nodes, ips, elements, etc.
 
     if dom.nincs == 0 && savesteps 
-        save(dom, dom.filekey * "-0" * ".vtk", verbose=false, save_ips=save_ips)
+        save(dom, dom.filekey * "-0.vtk", verbose=false, save_ips=save_ips)
+        verbose && print_with_color(:green, "  $(dom.filekey)-0.vtk file written (Domain)\n")
     end
 
     # Set the last converged state at ips
@@ -241,6 +242,7 @@ function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=
     Ts  = dTs        # T for next vtk file saving
     μdT = 1e-9       # minimum dT
     inc = 1
+    iout = dom.nouts
     tol == 0.0 && (tol = precision)
     Fin   =  zeros(ndofs)
     maxF  = norm(F) # Maximum norm of vectors of internal/external forces
@@ -319,8 +321,10 @@ function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=
             update_monitors(dom) # Tracking nodes, ips, elements, etc.
             Tn = T + dT
             if Tn>=Ts && savesteps
-                save(dom, dom.filekey * "-$(dom.nincs + inc)" * ".vtk", verbose=false, save_ips=save_ips)
+                iout += 1
+                save(dom, dom.filekey * "-$iout.vtk", verbose=false, save_ips=save_ips)
                 Ts = Tn - mod(Tn, dTs) + dTs
+                verbose && print_with_color(:green, "  ", dom.filekey * "-$iout.vtk file written (Domain)\n")
             end
 
             inc += 1
@@ -352,9 +356,9 @@ function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=
         println("  time spent: $(hs)h $(mins)m $secs.$(msecs)s")
     end
 
-    if verbose && savesteps
-        printcolor(:green, "  $(dom.filekey)..vtk files written (Domain)\n")
-    end
+    #if verbose && savesteps
+        #printcolor(:green, "  $(dom.filekey)..vtk files written (Domain)\n")
+    #end
 
 
     if reset_bc
@@ -369,6 +373,7 @@ function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=
 
     # Update number of used increments at domain
     dom.nincs += inc
+    dom.nouts = iout
 
     return true
 

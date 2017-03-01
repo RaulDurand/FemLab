@@ -25,6 +25,8 @@ type MazarsIpData<:IpData
     ndim::Int64
     σ::Tensor2
     ε::Tensor2
+    φt::Float64
+    φc::Float64
     φ::Float64  # damage
     ε̅max::Float64
     D::Array{Float64,2}
@@ -64,8 +66,7 @@ type Mazars<:Mechanical
         @assert Bc>0.0
 
         this     = new(E, nu, eps0, At, Bt, Ac, Bc)
-        this.De  = zeros(6,6)
-        setDe(E, nu, this.De) # elastic tensor
+        this.De  = calcDe(E, nu)
         this.invDe  = inv(this.De)
         this.new_ipdata = MazarsIpData
         return this 
@@ -187,6 +188,9 @@ function stress_update(mat::Mazars, ipd::MazarsIpData, Δε::Array{Float64,1})
         φt = 1.0 - (1-mat.At)*mat.ε̅0/ε̅ - mat.At/exp(mat.Bt*(ε̅-mat.ε̅0))
         φc = 1.0 - (1-mat.Ac)*mat.ε̅0/ε̅ - mat.Ac/exp(mat.Bc*(ε̅-mat.ε̅0))
 
+        ipd.φt = max(ipd.φt, φt)
+        ipd.φc = max(ipd.φc, φc)
+
         # Tensile and compression tensors
         σt = pos.(σp)
         σc = neg.(σp)
@@ -208,7 +212,10 @@ function stress_update(mat::Mazars, ipd::MazarsIpData, Δε::Array{Float64,1})
         #@show φc
 
         # Damage variable
-        ipd.φ = αt*φt + αc*φc
+        #ipd.φ = αt*φt + αc*φc
+        #φ = αt*φt + αc*φc
+        φ = αt*ipd.φt + αc*ipd.φc
+        ipd.φ = max(φ, ipd.φ)
 
         # Total stress and stress increment
         ipd.σ = (1.0 - ipd.φ)*mat.De*ipd.ε
@@ -256,6 +263,8 @@ function getvals(mat::Mazars, ipd::MazarsIpData)
           :ev  => trace(ε),
           :p   => trace(σ)/3.0,
           :dam => ipd.φ,
+          :damt => ipd.φt,
+          :damc => ipd.φc,
           :eq => ipd.ε̅max
           )
       end

@@ -1,7 +1,7 @@
 abstract Monitor
 
 import Base.getindex
-export NodeTracker, NodesTracker, IpTracker, IpsTracker, FacesTracker
+export NodeTracker, NodesTracker, IpTracker, IpsTracker, FacesTracker, EdgesTracker
 
 type NodeTracker <: Monitor
     table::DTable
@@ -39,7 +39,7 @@ type NodesTracker <: Monitor
     end
 end
 
-type FacesTracker <: Monitor
+type FacesTracker <: Monitor # TODO: change to FacetsMonitor
     table::DTable
     nodes::Array{Node,1} # nodes from all selected faces
     filename::String
@@ -54,6 +54,8 @@ type FacesTracker <: Monitor
         return new(DTable(), faces[:nodes], filename)
     end
 end
+
+EdgesTracker = FacesTracker
 
 type IpTracker <: Monitor
     table::DTable

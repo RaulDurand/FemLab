@@ -284,22 +284,21 @@ end
 
 include("tensors.jl")
 
+# Models for solid elements (2D and 3D)
 include("solid.jl")
 include("dp.jl")
 include("kotsovos.jl")
 include("mazars.jl")
 
+# Models for truss elements
 include("truss.jl")
 include("pptruss.jl")
 
+# Models for joint elements
 include("joint.jl")
-include("hordijk.jl")
-include("nljoint.jl")
+include("mcjoint.jl")
 
 include("joint1d.jl")
 include("mcjoint1d.jl")
 include("cebjoint1d.jl")
 
-#include("bilinear.jl")
-#include("smeared_crack.jl")
-include("mcjoint.jl")
