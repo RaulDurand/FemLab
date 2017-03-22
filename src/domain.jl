@@ -640,7 +640,7 @@ function save(dom::Domain, filename::AbstractString; verbose=true, save_ips=fals
     println(f, "SCALARS cell_type int 1")
     println(f, "LOOKUP_TABLE default")
     for elem in dom.elems
-        println(f, elem.shape, " ")
+        println(f, Int64(elem.shape), " ")
     end
     println(f, )
 

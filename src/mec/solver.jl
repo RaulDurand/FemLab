@@ -273,13 +273,15 @@ function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=
             K = mount_K(sdata)
             ΔFin, R = solve_update_step(sdata, K, ΔUa, ΔUi, R)
             maxF = max(norm(Fin+ΔFin), maxF)
-            residue = calc_residue(ΔF, ΔFin, maxF, umap)
+            #residue = calc_residue(ΔF, ΔFin, maxF, umap)
+            residue = maxabs( (ΔF-ΔFin)[umap] ) #*****
 
             # Other schemes
             if residue > tol && sch != :FE
                 ΔFin, R = solve_inc_scheme(sdata, K, ΔUa, ΔUi, R)
                 maxF = max(norm(Fin+ΔFin), maxF)
-                residue = calc_residue(ΔF, ΔFin, maxF, umap)
+                #residue = calc_residue(ΔF, ΔFin, maxF, umap)
+                residue = maxabs( (ΔF-ΔFin)[umap] ) #*****
             end
 
             # Update external forces vector
@@ -332,7 +334,7 @@ function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=
             if auto; dT = min(1.5*dT, 1.0/nincs, 1.0-T) end
         else
             if auto
-                println("    increment failed.")
+                verbose && println("    increment failed.")
                 dT *= 0.5
                 if dT < μdT
                     printcolor(:red, "solve!: solver did not converge\n",)
