@@ -281,8 +281,8 @@ function node_and_elem_vals(mat::AbsJoint, elem::Element)
     nips = length(elem.ips) 
     E = extrapolator(get_basic_shape(elem.shape), nips)
 
-    Sn = [ ip.data.σ[1] for ip in elem.ips ]
-    Wn = [ ip.data.w[1] for ip in elem.ips ]
+    Sn = E*[ ip.data.σ[1] for ip in elem.ips ]
+    Wn = E*[ ip.data.w[1] for ip in elem.ips ]
 
     #Up = [ ip.data.upa for ip in elem.ips ]
     #T  = [ ip.data.σ[2] for ip in elem.ips ]
