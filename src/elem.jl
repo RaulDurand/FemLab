@@ -308,6 +308,9 @@ function set_mat(elem::Element, mat::Material; nips::Int64=0)
     for ip in elem.ips
         N = shape_func(shape, ip.R)
         ip.X = C'*N
+        if length(ip.X)==2 # complete z=0.0 for 2D analyses
+            ip.X = [ ip.X; 0.0 ]
+        end
     end
 
     # configure degrees of freedom
