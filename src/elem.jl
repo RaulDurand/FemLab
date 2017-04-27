@@ -65,7 +65,7 @@ end
 
 # Get ip values in a dictionary
 function getvals(ip::Ip)
-    coords = Dict( :x => ip.X[1], :y => ip.X[1], :z => ip.X[3] )
+    coords = Dict( :x => ip.X[1], :y => ip.X[2], :z => ip.X[3] )
     vals   = getvals(ip.owner.mat, ip.data)
     return merge(coords, vals)
 end
