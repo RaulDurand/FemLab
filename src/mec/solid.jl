@@ -33,11 +33,10 @@ type ElasticSolidIpData<:IpData
     end
 end
 
-type ElasticSolid<:Mechanical
+type ElasticSolid<:AbsSolid
     E ::Float64
     nu::Float64
     De::Tensor4
-    new_ipdata::DataType
 
     function ElasticSolid(prms::Dict{Symbol,Float64})
         return  ElasticSolid(;prms...)
@@ -48,14 +47,16 @@ type ElasticSolid<:Mechanical
         if !(0<=nu<0.5); error("Invalid value for nu: $nu") end
         this    = new(E, nu)
         this.De = calcDe(E,nu)
-        this.new_ipdata = ElasticSolidIpData
 
         return this
     end
 end
 
+# Create a new instance of Ip data
+new_ipdata(mat::ElasticSolid, ndim::Int) = ElasticSolidIpData(ndim)
+
 function set_state(ipd::ElasticSolidIpData; sig=zeros(0), eps=zeros(0))
-    sq2 = 2.0^0.5
+    sq2 = √2.0
     mdl = [1, 1, 1, sq2, sq2, sq2]
     if length(sig)==6
         ipd.σ[:] = sig.*mdl

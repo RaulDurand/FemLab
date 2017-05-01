@@ -37,14 +37,13 @@ type DruckerPragerIpData<:IpData
     end
 end
 
-type DruckerPrager<:Mechanical
+type DruckerPrager<:AbsSolid
     E::Float64
     ν::Float64
     α::Float64
     κ::Float64
     H::Float64
     De::Tensor4
-    new_ipdata::DataType
 
     function DruckerPrager(prms::Dict{Symbol,Float64})
         return DruckerPrager(;prms...)
@@ -59,10 +58,12 @@ type DruckerPrager<:Mechanical
 
         this    = new(E, nu, alpha, kappa, H)
         this.De = calcDe(E, nu)
-        this.new_ipdata = DruckerPragerIpData
         return this 
     end
 end
+
+# Create a new instance of Ip data
+new_ipdata(mat::DruckerPrager, ndim::Int) = DruckerPragerIpData(ndim)
 
 function nlE(fc::Float64, εc::Float64, ε::Array{Float64,1})
     εv = abs(sum(ε[1:3]))

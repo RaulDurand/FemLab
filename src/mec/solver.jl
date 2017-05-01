@@ -132,25 +132,29 @@ end
 
 
 function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=true, scheme::String="FE", precision::Number=0.01,
-    tol::Number=0.0, reset_bc::Bool=true, verbose::Bool=true, autosave::Bool=false, savesteps::Bool=false, nout::Int=10, save_ips::Bool=false)
+    tol::Number=0.0, reset_bc::Bool=true, verbose::Bool=true, autosave::Bool=false, savesteps::Bool=false, nout::Int=0, save_ips::Bool=false)
     
     autosave && (savesteps = true)
-    !NR       && (nincs = 1)
-    nout<1    && (nout = min(nincs, 100))
+    !NR      && (nincs = 1)
+    (savesteps && nout==0) && (nout=10)  # default value for nout
+    savesteps = nout>0
 
     if verbose
         pbcolor(:cyan,"FEM analysis:\n") 
         tic()
     end
 
-    # check if all elements have material defined
+    # get list of active elements
+    aelems = [ elem for elem in dom.elems if elem.active ]
+
+    # check if all active elements have material defined
     count = 0
-    for elem in dom.elems
+    for elem in aelems
         if !isdefined(elem, :mat)
             count += 1
         end
     end
-    count > 0 && error("There are $count elements without material definition\n")
+    count > 0 && error("There are $count active elements without material definition\n")
 
     # Set boundary conditions at nodes
     for bc in dom.node_bcs
@@ -195,7 +199,7 @@ function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=
     pmap  = [dof.eq_id for dof in pdofs]
 
     # Get array with all integration points
-    ips = [ ip for elem in dom.elems for ip in elem.ips ]
+    ips = [ ip for elem in aelems for ip in elem.ips ]
 
     # Global RHS vector 
     RHS = mount_RHS(dom::Domain, ndofs::Int64, 0.0)
@@ -358,11 +362,6 @@ function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=
         println("  time spent: $(hs)h $(mins)m $secs.$(msecs)s")
     end
 
-    #if verbose && savesteps
-        #printcolor(:green, "  $(dom.filekey)..vtk files written (Domain)\n")
-    #end
-
-
     if reset_bc
         for node in dom.nodes
             for dof in node.dofs
@@ -398,7 +397,12 @@ function solve_update_step(sdata::MecSolverData, K, ΔUa::Vect, ΔUi::Vect, R::V
     # Get internal forces and update data at integration points (update ΔFin)
     ΔFin = zeros(ndofs)
     ΔUt  = ΔUa + ΔUi
-    for elem in elems; update!(elem, ΔUt, ΔFin) end
+    for elem in elems  
+        map = get_map(elem)
+        dU  = ΔUt[map]
+        dF = update!(elem.mat, elem, dU) # gets internal force
+        ΔFin[map] += dF
+    end
 
     return ΔFin, R
 end
@@ -642,25 +646,5 @@ function solve_legacy!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::Abstra
 end
 
 
-function update!(elems::Array{Element,1}, dofs::Array{Dof,1}, DU::Vect)
-    ndofs = length(dofs)
-    DFin  = zeros(ndofs)
 
-    # Update elements
-    for elem in elems
-        update!(elem, DU, DFin) # updates DFin
-    end
-
-    # Update dofs
-    for (i,dof) in enumerate(dofs)
-        dof.U += DU[i]
-        dof.F += DFin[i]
-    end
-
-    return DFin
-
-end
-
-if VERSION >= v"0.4.0-dev+6521" 
-    precompile(solve!,(Domain,))
-end
+precompile(solve!,(Domain,))

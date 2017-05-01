@@ -1,14 +1,12 @@
 using FemLab
-using FactCheck
+using Base.Test
 
-verbose = isdefined(:verbose) ? verbose : true
-
-bl  = Block3D( [0 0 0; 0.3 6.0 0.4], nx=1, ny=40, nz=6)
+bl  = Block3D( [0 0 0; 0.3 6.0 0.4], nx=1, ny=20, nz=4)
 bl1 = BlockInset( [0.05 0.05 0.05; 0.05 5.95 0.05] , curvetype="polyline")
 bl2 = move( copy(bl1), x=0.1)
 bl3 = move( copy(bl1), x=0.2)
 
-mesh = Mesh(bl, bl1, bl2, bl3, verbose=verbose)
+mesh = Mesh(bl, bl1, bl2, bl3, verbose=false)
 
 dom = Domain(mesh)
 
@@ -22,17 +20,15 @@ set_trackers(dom, node_dat)
 
 bc1 = NodeBC( :(y==0 && z==0), ux=0, uy=0, uz=0)
 bc2 = NodeBC( :(y==6 && z==0), ux=0, uz=0)
-bc3 = NodeBC( :(y==3.0 && z==0.4), uz=-0.002)
+bc3 = NodeBC( :(y==3.0 && z==0.4), uz=-0.005)
 
 set_bc(dom, bc1, bc2, bc3)
 
-solve!(dom, nincs=10, precision=100, verbose=verbose, autosave=true)
-#solve_legacy!(dom, nincs=120, precision=100., verbose=verbose, autosave=true)
+@test solve!(dom, nincs=40, precision=0.1, verbose=false)
+
+#solve_legacy!(dom, nincs=50, precision=0.001, verbose=false, autosave=true)
+#solveFE!(dom, nincs=50, verbose=false, autosave=true)
 
 #using PyPlot
 #plot(-node_dat.table[:uz], -node_dat.table[:fz], marker="o")
 #show()
-
-facts("\nTest Kotsovos:") do
-    @fact 1 --> 1
-end

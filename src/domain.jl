@@ -100,6 +100,11 @@ function Domain(mesh::Mesh; filekey::AbstractString="out", stress_state=:general
 
     # Setting linked cells
     for (i,cell) in enumerate(mesh.cells)
+        # check for embedded elements
+        if is_line(cell.shape) && length(cell.linked_cells)>0
+            dom.elems[i].class = :EMBEDDED
+        end
+        # setting linked elements
         for lcell in cell.linked_cells
             id = lcell.id
             push!(dom.elems[i].linked_elems, dom.elems[id])
@@ -123,23 +128,6 @@ function Domain(mesh::Mesh; filekey::AbstractString="out", stress_state=:general
         edge.oelem = dom.elems[cell.ocell.id]
         push!(dom.edges, edge)
     end
-
-    # Setting 1D joints
-    #edict = Dict{UInt64, Element}()
-    #for elem in dom.elems
-        #hs = hash(getconns(elem))
-        #edict[hs] = elem
-    #end
-    #for elem in dom.elems
-        #if elem.shape in (LINK2, LINK3)
-            #nbnodes = elem.shape==LINK2? 2 : 3
-            #conns = getconns(elem)
-            #hs_hook  = hash(conns[1:end-nbnodes])
-            #hs_truss = hash(conns[end-nbnodes+1:end])
-            #elem.extra[:hook] = edict[hs_hook]
-            #elem.extra[:bar ] = edict[hs_truss]
-        #end
-    #end
 
     return dom
 end
@@ -301,8 +289,8 @@ function node_and_elem_vals(nodes::Array{Node,1}, elems::Array{Element,1})
 
     nlabels_idx = Dict( key=>i for (i,key) in enumerate(nlabels) )
     elabels_idx = Dict( key=>i for (i,key) in enumerate(elabels) )
-    nncomps     = length(nlabels)
-    necomps     = length(elabels)
+    nncomps     = length(nlabels)  # number of nodal labels
+    necomps     = length(elabels)  # number of elem labels
 
     nnodes     = length(nodes)
     nelems     = length(elems)
@@ -488,42 +476,6 @@ function update_monitors(dom::Domain)
 end
 
 
-#function track(dom::Domain, node::Node)
-    #println("Warning: track function is deprecated. Use NodeTrack and set_tracks functions")
-    #t = NodeTracker(node)
-    #push!(dom.trackers, t)
-    #return t
-#end
-
-#function track(dom::Domain, ip::Ip)
-    #println("Warning: track function is deprecated. Use IpTrack and set_tracks functions")
-    #t = IpTracker(ip)
-    #push!(dom.trackers, t)
-    #return t
-#end
-
-#function track(dom::Domain, elem::Element)
-    #println("Warning: track function is deprecated. Use IpTrack and set_tracks functions")
-    #t = IpTracker(elem.ips[1])
-    #push!(dom.trackers, t)
-    #return t
-#end
-
-#function track(dom::Domain, nodes::Array{Node,1})
-    #println("Warning: track function is deprecated. Use NodesTrack and set_tracks functions")
-    #t = NodesTracker(nodes)
-    #push!(dom.trackers, t)
-    #return t
-#end
-
-#function track(dom::Domain, ips::Array{Ip,1})
-    #println("Warning: track function is deprecated. Use IpTrack and set_tracks function")
-    #t = IpTracker(ips)
-    #push!(dom.trackers, t)
-    #return t
-#end
-
-
 function save(dom::Domain, filename::AbstractString; verbose=true, save_ips=false)
     # Saves the dom information in vtk format
     nnodes = length(dom.nodes)
@@ -586,12 +538,15 @@ function save(dom::Domain, filename::AbstractString; verbose=true, save_ips=fals
     println(f, "POINT_DATA ", nnodes)
 
     # Write vectors
-    if :ux in keys(dom.nodes[1].dofdict)
+    if :uy in node_labels
+        ux_idx = findfirst(node_labels, :ux)
+        uy_idx = findfirst(node_labels, :uy)
+        uz_idx = findfirst(node_labels, :uz)
         println(f, "VECTORS ", "U float64")
-        for node in dom.nodes
-            @printf f "%23.10e"   node.dofdict[:ux].U
-            @printf f "%23.10e"   node.dofdict[:uy].U
-            @printf f "%23.10e\n" dom.ndim==3?node.dofdict[:uz].U:0.0
+        for (i,node) in enumerate(dom.nodes)
+            @printf f "%23.10e"   node_vals[i,ux_idx]
+            @printf f "%23.10e"   node_vals[i,uy_idx]
+            @printf f "%23.10e\n" uz_idx==0?0.0:node_vals[i,uz_idx]
         end
     end
     println(f, )

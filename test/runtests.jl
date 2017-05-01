@@ -1,21 +1,20 @@
 # Constants
 using FemLab
-using FactCheck
+using Base.Test
 
 path  = dirname(@__FILE__)
 tests = readdir(path)
 verbose = false
 
-#println(GREEN, BOLD, "\nRunning tests...", DEFAULT)
 print_with_color(:green, "\x1b[1m", "\nRunning tests...\n", "\x1b[0m")
 
-for t in tests
-    if length(t)<5; continue end
-    if t[1:5]!="test_"; continue end
+@testset begin
+    for t in tests
+        if length(t)<5; continue end
+        if t[1:5]!="test_"; continue end
 
-    print("Running file ", t,"...")
-    include(t)
-    println()
+        print_with_color(:white, "Running file ", t,"...\n")
+        include(t)
+        println()
+    end
 end
-
-FactCheck.exitstatus()

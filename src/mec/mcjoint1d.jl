@@ -46,7 +46,6 @@ type MCJoint1D<:AbsJoint1D
     c ::Float64
     μ ::Float64
     kh::Float64
-    new_ipdata::DataType
 
     function MCJoint1D(prms::Dict{Symbol,Float64})
         return  MCJoint1D(;prms...)
@@ -77,10 +76,12 @@ type MCJoint1D<:AbsJoint1D
         end
 
         this = new(ks, kn, h, c, mu, kh)
-        this.new_ipdata = MCJoint1DIpData
         return this
     end
 end
+
+# Create a new instance of Ip data
+new_ipdata(mat::MCJoint1D, ndim::Int) = MCJoint1DIpData(ndim)
 
 function set_state(ipd::MCJoint1DIpData, sig=zeros(0), eps=zeros(0))
     if length(sig)==3
@@ -129,14 +130,12 @@ function calc_σc(elem, R, Ch, Ct)
 
 end
 
-function update!(mat::MCJoint1D, elem::Element, DU::Array{Float64,1}, DF::Array{Float64,1})
+function update!(mat::MCJoint1D, elem::Element, dU::Array{Float64,1})
     ndim   = elem.ndim
     nnodes = length(elem.nodes)
     mat    = elem.mat
-    map    = get_map(elem)
 
     dF = zeros(nnodes*ndim)
-    dU = DU[map]
     B  = zeros(ndim, nnodes*ndim)
 
     hook = elem.linked_elems[1]
@@ -154,8 +153,7 @@ function update!(mat::MCJoint1D, elem::Element, DU::Array{Float64,1}, DF::Array{
         @gemv dF += coef*B'*dsig
     end
 
-    # Update global vector
-    DF[map] += dF
+    return dF
 end
 
 

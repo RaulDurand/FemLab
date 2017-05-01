@@ -46,8 +46,6 @@ type CEBJoint1D<:AbsJoint1D
     s3::Float64
     τres::Float64
 
-    new_ipdata::DataType
-
     function CEBJoint1D(prms::Dict{Symbol,Float64})
         return  CEBJoint1D(;prms...)
     end
@@ -73,10 +71,12 @@ type CEBJoint1D<:AbsJoint1D
         @assert h>0
 
         this = new(h, ks, kn, s1, s2, s3, TauR)
-        this.new_ipdata = CEBJoint1DIpData
         return this
     end
 end
+
+# Create a new instance of Ip data
+new_ipdata(mat::CEBJoint1D, ndim::Int) = CEBJoint1DIpData(ndim)
 
 function Tau(mat::CEBJoint1D, s::Float64)
     ss = abs(s)

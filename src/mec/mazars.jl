@@ -41,7 +41,7 @@ type MazarsIpData<:IpData
     end
 end
 
-type Mazars<:Mechanical
+type Mazars<:AbsSolid
     E ::Float64
     nu::Float64
     ε̅0::Float64
@@ -51,7 +51,6 @@ type Mazars<:Mechanical
     Bc::Float64
     De::Tensor4
     invDe::Tensor4
-    new_ipdata::DataType 
 
     function Mazars(prms::Dict{Symbol,Float64})
         return Mazars(;prms...)
@@ -68,10 +67,12 @@ type Mazars<:Mechanical
         this     = new(E, nu, eps0, At, Bt, Ac, Bc)
         this.De  = calcDe(E, nu)
         this.invDe  = inv(this.De)
-        this.new_ipdata = MazarsIpData
         return this 
     end
 end
+
+# Create a new instance of Ip data
+new_ipdata(mat::Mazars, ndim::Int) = MazarsIpData(ndim)
 
 function set_state(ipd::MazarsIpData; sig=zeros(0), eps=zeros(0))
     if length(sig)==6

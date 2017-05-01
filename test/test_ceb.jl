@@ -1,7 +1,5 @@
 using FemLab
-using FactCheck
-
-verbose = isdefined(:verbose) ? verbose : true
+using Base.Test
 
 bl  = Block3D( [0 0 0; 1.0 6.0 1.0], nx=1, ny=10, nz=1)
 bli = BlockInset( [0.5 3 0.5; 0.5 6.0 0.5], curvetype="polyline")
@@ -32,24 +30,21 @@ tab_tjoint = IpTracker(tjoint)
 set_trackers(dom, tab_tnode, tab_tjoint)
 
 ## CEB test
+scheme = "ME" 
 disp_bc  = NodeBC( solid_nodes, ux=0, uy=0, uz=0)
 force_bc = NodeBC( hook_node, uy=-0.0015)
 set_bc(dom, disp_bc, force_bc)
-solve!(dom, nincs=10, verbose=verbose)
+@test solve!(dom, nincs=10, scheme=scheme, verbose=true)
 
 disp_bc  = NodeBC( solid_nodes, ux=0, uy=0, uz=0)
 force_bc = NodeBC( hook_node, uy=+0.0005)
 set_bc(dom, disp_bc, force_bc)
-solve!(dom, nincs=5, verbose=verbose)
+@test solve!(dom, nincs=5, scheme=scheme, verbose=true)
 
 disp_bc  = NodeBC( solid_nodes, ux=0, uy=0, uz=0)
 force_bc = NodeBC( hook_node, uy=-0.0045)
 set_bc(dom, disp_bc, force_bc)
-solve!(dom, nincs=10, verbose=verbose)
+@test solve!(dom, nincs=10, scheme=scheme, verbose=true)
 
-verbose && save(tab_tnode , "tab_tnode.dat")
-verbose && save(tab_tjoint, "tab_tjoint.dat")
-
-facts("\nTest Pull-out") do
-    @fact 1 --> 1
-end
+#save(tab_tnode , "tab_tnode.dat")
+#save(tab_tjoint, "tab_tjoint.dat")

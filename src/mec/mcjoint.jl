@@ -49,7 +49,6 @@ type MCJoint<:AbsJoint
     α  ::Float64  # elastic scale factor
     wc ::Float64  # critical openning
     ws ::Float64  # openning at inflection
-    new_ipdata::DataType
 
     function MCJoint(prms::Dict{Symbol,Float64})
         return  MCJoint(;prms...)
@@ -57,10 +56,12 @@ type MCJoint<:AbsJoint
 
     function MCJoint(;E=NaN, nu=NaN, ft=NaN, mu=NaN, alpha=NaN, wc=NaN, ws=NaN)
         this = new(E, nu, ft, mu, alpha, wc, ws)
-        this.new_ipdata = MCJointIpData
         return this
     end
 end
+
+# Create a new instance of Ip data
+new_ipdata(mat::MCJoint, ndim::Int) = MCJointIpData(ndim)
 
 function set_state(ipd::MCJointIpData, sig=zeros(0), eps=zeros(0))
     @assert(false)

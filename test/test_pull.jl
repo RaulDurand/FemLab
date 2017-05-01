@@ -1,6 +1,5 @@
 using FemLab
-using FactCheck
-verbose = isdefined(:verbose) ? verbose : true
+using Base.Test
 
 bl  = Block3D( [0 0 0; 1.0 6.0 1.0], nx=1, ny=10, nz=1)
 bli = BlockInset( [0.5 2 0.5; 0.5 6.0 0.5], curvetype="polyline")
@@ -28,6 +27,7 @@ nstages = length(load_incs)
 tload   = (pi*dm*4.)*(c+100*tan(phi))
 
 # loop along stages
+#=
 for i=1:nstages
     disp_bc  = NodeBC( solid_nodes, ux=0, uy=0, uz=0)
     force_bc = NodeBC( hook_node, fy = tload*load_incs[i] )
@@ -35,9 +35,12 @@ for i=1:nstages
     #set_bc(solid_nodes, ux=0, uy=0, uz=0)
     #set_bc(hook_node, fy = tload*load_incs[i] )
 
-    solve!(dom, nincs=1, verbose=verbose)
+    solve!(dom, auto=true, scheme="ME", nincs=5, verbose=false, precision=1e-3)
 end
+=#
 
-facts("\nTest Pull-out") do
-    @fact 1 --> 1
-end
+disp_bc  = NodeBC( solid_nodes, ux=0, uy=0, uz=0)
+force_bc = NodeBC( hook_node, fy=tload)
+set_bc(dom, disp_bc, force_bc)
+@test solve!(dom, auto=true, scheme="FE", nincs=16, verbose=true, precision=1e-3)
+

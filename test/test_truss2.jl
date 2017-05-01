@@ -1,12 +1,11 @@
 using FemLab
-using FactCheck
-verbose = isdefined(:verbose) ? verbose : true
+using Base.Test
 
 coord = [ 0. 0.; 2. 0.; 1. 1. ]
 conn  = [ 1 2; 2 3; 1 3]
 
 blt = BlockTruss(coord, conn)
-mesh = Mesh(blt, verbose=verbose)
+mesh = Mesh(blt, verbose=false)
 
 dom = Domain(mesh)
 
@@ -22,11 +21,8 @@ tnode  = NodeTracker(dom.nodes[3])
 tnodes = NodesTracker(dom.nodes)
 set_trackers(dom, tnode, tnodes)
 
-solve!(dom, nincs=10, verbose=verbose)
+@test solve!(dom, nincs=10, verbose=false)
 
-verbose && save(tnode, "tab.dat")
-verbose && save(tnodes, "tnodes.dat")
+#verbose && save(tnode, "tab.dat")
+#verbose && save(tnodes, "tnodes.dat")
 
-facts("\nTest Truss 2D") do
-    @fact 1 --> 1
-end

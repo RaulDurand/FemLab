@@ -43,14 +43,13 @@ type KotsovosIpData<:IpData
     end
 end
 
-type Kotsovos<:Mechanical
+type Kotsovos<:AbsSolid
     E::Float64
     nu::Float64
     β::Float64
     fc::Float64
     ft::Float64
     De::Tensor4
-    new_ipdata::DataType #TODO: use an instance of KotsovosIpData instead, later use copies of it
 
     function Kotsovos(prms::Dict{Symbol,Float64})
         return Kotsovos(;prms...)
@@ -67,12 +66,13 @@ type Kotsovos<:Mechanical
         @assert ft>0.0
 
         this     = new(E, nu, beta, fc, ft)
-        this.new_ipdata = KotsovosIpData
-        this.De  = zeros(6,6)
-        setDe(E, nu, this.De) # elastic tensor
+        this.De  = calcDe(E, nu)
         return this 
     end
 end
+
+# Create a new instance of Ip data
+new_ipdata(mat::Kotsovos, ndim::Int) = KotsovosIpData(ndim)
 
 function set_state(ipd::KotsovosIpData; sig=zeros(0), eps=zeros(0))
     if length(sig)==6

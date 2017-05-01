@@ -1,6 +1,5 @@
 using FemLab
-using FactCheck
-verbose = isdefined(:verbose) ? verbose : true
+using Base.Test
 
 # mesh 
 bl = Block3D( [0 0 0; 1 1 0.5], nx=2, ny=2, nz=2)
@@ -20,14 +19,11 @@ sidex = NodeBC( :(x==0 || x==1.0), ux=0, uy=0)
 sidey = NodeBC( :(y==0 || y==1.0), ux=0, uy=0)
 
 set_bc(dom, base, top, sidex, sidey)
-solve!(dom, nincs=10, verbose=verbose)
+@test solve!(dom, auto=true, nincs=10, precision=1e-2, verbose=true)
 
 # boundary conditions
 top   = NodeBC( :(z==0.5) , uz=+0.008)
 set_bc(dom, base, top, sidex, sidey)
 
-solve!(dom, nincs=10, verbose=verbose)
+@test solve!(dom, auto=true, nincs=10, verbose=true)
 
-facts("\nTest Drucker Prager:") do
-    @fact 1 --> 1
-end

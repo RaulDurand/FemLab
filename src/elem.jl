@@ -27,7 +27,7 @@ export getvals
 export read_prms
 import Base.copy!
 export copy!
-export @get_elems
+#export @get_elems
 
 
 # Abstract type for IP data
@@ -52,7 +52,6 @@ type Ip
     owner::Any    # Element
     data ::IpData  # Ip current state
     data0::IpData  # Ip state at begin of increment
-    dataK::IpData  # Ip state backup
 
     function Ip(R::Array, w::Float64)
         this   = new(vec(R), w)
@@ -135,6 +134,13 @@ function copy!(target::Material, source::Material)
     end
 end
 
+#@enum(ElemClass,
+#SOLID,
+#LINE,
+#JOINT,
+#JOINT1D,
+#EMBEDDED)
+
 
 # Type Element
 # ============
@@ -151,19 +157,22 @@ type Element
     ndim  ::Int
     tag   ::AbstractString
     id    ::Int
-    ips   ::Array{Ip,1}
     active::Bool
     mat   ::Material
+    ips   ::Array{Ip,1}
+    class ::Symbol  # Class of element: SOLID, LINE, JOINT, JOINT1D, EMBEDDED
     linked_elems::Array{Element,1}
 
     function Element(shape, nodes, ndim, tag="")
         this     = new(shape, nodes, ndim, tag)
+        this.active = true
         this.ips = []
         this.linked_elems = []
+        # Set the element class. For embedded elems, the class will be set by the Domain object.
+        this.class = shape_class(shape) 
         this
     end
 end
-
 
 function reset(elems::Array{Element,1})
     # Resets data at integration points
@@ -193,6 +202,10 @@ function getindex(elems::Array{Element,1}, s::Symbol)
     end
     if s == :lines
         cr = [ is_line(elem.shape) for elem in elems]
+        return elems[cr]
+    end
+    if s == :embedded
+        cr = [ is_line(elem.shape) && length(elem.linked_elems)>0 for elem in elems]
         return elems[cr]
     end
     if s == :joints1D
@@ -237,6 +250,7 @@ function getindex(elems::Array{Element,1}, cond::Expr)
 end
 
 function getindex(elems::Array{Element,1}, cond::AbstractString) 
+    # filter by tag
     if typeof(parse(cond)) == Symbol
         result = Array(Element,0)
         for elem in elems
@@ -247,6 +261,7 @@ function getindex(elems::Array{Element,1}, cond::AbstractString)
         return result
     end
 
+    # filter by expression
     return getindex(elems, parse(cond))
 end
 
@@ -273,6 +288,11 @@ config_dofs(elem::Element) = config_dofs(elem.mat, elem)
 Especifies the material model `mat` to be used to represent the behavior of an `Element` object `elem`.
 """
 function set_mat(elem::Element, mat::Material; nips::Int64=0)
+    # check if material is suitable for the element
+    if client_elem_class(mat) != elem.class
+        error("set_mat: Material $(typeof(mat)) is not suitable for element class $(elem.class)")
+    end
+
     ipc =  get_ip_coords(elem.shape, nips)
     nips = size(ipc,1)
 
@@ -283,7 +303,7 @@ function set_mat(elem::Element, mat::Material; nips::Int64=0)
         w = ipc[i,4]
         elem.ips[i] = Ip(R, w)
         elem.ips[i].id = i
-        elem.ips[i].data = mat.new_ipdata(elem.ndim)
+        elem.ips[i].data = new_ipdata(mat, elem.ndim)
         elem.ips[i].owner = elem
     end
 
@@ -392,6 +412,7 @@ function get_ips(elems::Array{Element,1})
     return ips
 end
 
+#=
 # Macro to filter elems using a condition expression
 macro get_elems(dom, expr)
 
@@ -413,4 +434,4 @@ macro get_elems(dom, expr)
         tt = Bool[ ff(elem) for elem in $(esc(dom)).elems]
         $(esc(dom)).elems[ tt ]
     end
-end
+end =#

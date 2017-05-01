@@ -43,7 +43,6 @@ type PPTruss<:AbsTruss
     A::Float64
     σy0::Float64
     H::Float64
-    new_ipdata::DataType
 
     function PPTruss(prms::Dict{Symbol,Float64})
         return  PPTruss(;prms...)
@@ -54,10 +53,12 @@ type PPTruss<:AbsTruss
         @assert A>0
         @assert sig_y>0
         this = new(E, A, sig_y, H)
-        this.new_ipdata = PPTrussIpData
         this
     end
 end
+
+# Create a new instance of Ip data
+new_ipdata(mat::PPTruss, ndim::Int) = PPTrussIpData(ndim)
 
 function set_state(ipd::PPTrussIpData, σ=NaN, ε=NaN)
     if !isnan(σ); ipd.σ = σ end
@@ -92,6 +93,7 @@ function stress_update(mat::PPTruss, ipd::PPTrussIpData, Δε::Float64)
     return Δσ
 end
 
+#=
 function getvals(ipd::PPTrussIpData)
     return Dict(
       :sa => ipd.σ,
@@ -100,6 +102,7 @@ function getvals(ipd::PPTrussIpData)
       #:Fa => ipd.σ*mat.A,
       #:A  => mat.A ]
 end
+=#
 
 function getvals(mat::PPTruss, ipd::PPTrussIpData)
     return Dict(
