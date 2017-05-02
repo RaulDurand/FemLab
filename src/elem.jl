@@ -169,7 +169,7 @@ type Element
         this.ips = []
         this.linked_elems = []
         # Set the element class. For embedded elems, the class will be set by the Domain object.
-        this.class = shape_class(shape) 
+        this.class = shape_class(shape)
         this
     end
 end

@@ -8,14 +8,12 @@ bl2 = move( copy(bl1), x=0.6)
 
 mesh = Mesh(bl, bl1, bl2, verbose=true)
 
-generate_embedded_cells!(mesh)
+generate_embedded_cells!(mesh)  ## Deletes joint1D cells and sets up line cells as embedded cells
 
 # FEM analysis
 dom = Domain(mesh)
 
 set_mat(dom.elems[:solids], ElasticSolid(E=1.e4, nu=0.) )
-#set_mat(dom.elems[:lines ], EmbTruss(E=1.e8, A=0.005) )
-
 set_mat(dom.elems[:embedded], EmbPPTruss(E=1.e8, A=0.005, sig_y=500e3) )
 
 bc1 = NodeBC( :(y==0 && z==0), ux=0, uy=0, uz=0)
@@ -24,5 +22,5 @@ bc3 = FaceBC( :(z==1), tz=-1000 )
 
 set_bc(dom, bc1, bc2, bc3)
 
-@test solve!(dom, nincs=20, verbose=true)
+@test solve!(dom, nincs=20, verbose=true, savesteps=false)
 

@@ -102,3 +102,9 @@ function stress_update(mat::Joint1D, ipd::Joint1DIpData, deps)
     ipd.sig[1:ipd.ndim] += dsig
     return dsig
 end
+
+function getvals(mat::Joint1D, ipd::Joint1DIpData)
+    return Dict(
+      :ur   => ipd.eps[1] ,
+      :tau  => ipd.sig[1] )
+end

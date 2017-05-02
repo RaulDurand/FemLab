@@ -117,8 +117,8 @@ include("face.jl")
 include("bcs.jl")
 include("monitor.jl")
 include("domain.jl")
-include("mec/solver.jl")
-include("mec/mechanical.jl")
+include("mech/mechanical.jl")
+include("mech/solver.jl")
 #include("seep/seep.jl")
 
 end#module

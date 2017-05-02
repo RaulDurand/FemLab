@@ -67,7 +67,7 @@ function init_elem(elem::Element, mat::AbsJoint)
         A += detJ*ip.w
     end
 
-    # Calculate and save h at join element's integration points
+    # Calculate and save h at joint element's integration points
     h = (V1+V2)/(2.0*A)
     for ip in elem.ips
         ip.data.h = h

@@ -33,7 +33,17 @@ const tI  = [1., 1., 1., 0., 0., 0.]
 import Base.trace
 trace(T::Tensor2) = sum(T[1:3])
 J1(T::Tensor2) = sum(T[1:3])
-J2(T::Tensor2) = 0.5*dot(T,T)
+J2(T::Tensor2) = 0.5*dot(T,T) # TODO: Check
+
+function I2(T::Tensor2)
+    t11, t22, t33, t12, t23, t13 = T
+    return t11*t22 + t22*t33 + t11*t33 - 0.5*t12*t12 - 0.5*t23*t23 - 0.5*t13*t13
+end
+
+function I3(T::Tensor2)
+    t11, t22, t33, t12, t23, t13 = T
+    #return t11*(t22*t33 − t23*t23) − t12*(t12*t33 − t23*t13) + t13*(t12*t23 − t22*t13) TODO
+end
 
 
 const Psd = [  
@@ -57,6 +67,29 @@ end
 
 function J3D(T::Tensor2)
     return J3(Psd*T)
+end
+
+
+function princ_stresses(T::Tensor2)::Vect
+    t11, t22, t33, t12, t23, t13 = T
+    t12 /= √2.0
+    t23 /= √2.0
+    t13 /= √2.0
+    i1 = t11 + t22 + t33
+    i2 = t11*t22 + t22*t33 + t11*t33 - t12*t12 - t23*t23 - t13*t13
+    i3 = t11*(t22*t33 - t23*t23) - t12*(t12*t33 - t23*t13) + t13*(t12*t23 - t22*t13)
+    θ = 1/3*acos( (2*i1^3 - 9*i1*i2 + 27*i3 )/( 2*(i1^2 - 3*i2)^(3/2) ) )
+
+    r = 2/3*√(i1^2-3*i2)
+
+    s1 = i1/3 + r*cos(θ)
+    s2 = i1/3 + r*cos(θ - 2*π/3)
+    s3 = i1/3 + r*cos(θ - 4*π/3)
+
+    P = [ s1, s2, s3 ]
+    sort!(P, rev=true)
+
+    return P
 end
 
 function principal(T::Tensor2)
