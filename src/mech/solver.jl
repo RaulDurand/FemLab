@@ -100,7 +100,7 @@ function solve_inc(sdata::MecSolverData, K::SparseMatrixCSC{Float64, Int}, DU::V
     ndofs = length(DU)
     nu    = length(umap)
     if nu == ndofs 
-        printcolor(:red, "solve!: Warning, no essential boundary conditions.\n")
+        warn("solve!: No essential boundary conditions.")
     end
 
     if nu>0
@@ -116,13 +116,18 @@ function solve_inc(sdata::MecSolverData, K::SparseMatrixCSC{Float64, Int}, DU::V
 
     # Solve linear system
     F2 = K22*U2
-    U1 = zeros(0)
+    U1 = zeros(nu)
     if nu>0
         RHS = F1 - K12*U2
-        LUfact = lufact(K11)
-        #U1  = K11\RHS
-        U1 = LUfact\RHS
-        F2 += K21*U1
+        try
+            LUfact = lufact(K11)
+            #U1  = K11\RHS
+            U1  = LUfact\RHS
+            F2 += K21*U1
+        catch err
+            warn("solve!: $err")
+            U1 .= NaN
+        end
     end
 
     # Completing vectors

@@ -103,7 +103,7 @@ function calcD2(mat::Mazars, ipd::MazarsIpData)
         return mat.De
     else
         # Principal stresses and principal directions
-        σp, V = principal(ipd.σ)
+        σp = principal(ipd.σ)
         σp = [ σp; zeros(3) ]
         # Eigen vectors
         p1 = V[:, 1]
@@ -120,7 +120,7 @@ function calcD2(mat::Mazars, ipd::MazarsIpData)
         εv = sum(pos.(εt)) + sum(pos.(εc))
 
         # Equivalent strain scalar
-        εp, V = principal(ipd.ε)
+        εp = principal(ipd.ε)
         ε̅ = √sum( pos(εp[i])^2 for i=1:3 )
 
         # Tensile and compression damage weights
@@ -156,43 +156,30 @@ function calcD(mat::Mazars, ipd::MazarsIpData)
         return mat.De
     else
         D = zeros(6,6)
-        #@show ipd.lastΔε
-        #exit()
-        δ = mat.ε̅0/10
-        δε = sign.(ipd.lastΔε .+ 1e-15)*δ
-        #δε = (ipd.lastΔε .+ 1e-15)/2
-        #δε = ones(6)*δ
+        δ = mat.ε̅0/20  # 20 seems to work better
+        κ = 1.0e-15    # important because some components may be zero
+        δε = sign.(ipd.lastΔε .+ κ)*δ
+
+        Δε = zeros(6)
         for i=1:6
-            Δε = zeros(6)
             Δε[i] = δε[i]
+            if i>1; Δε[i-1] = 0.0 end
             Δσ = mazars_Δσ(mat, ipd, Δε)
             Di = Δσ/Δε[i]
             D[:,i] = Di
         end
-        D2 = (1.0 - ipd.φ)*mat.De 
-        return 0.99*D+0.01*D2
+        return D
+        #return (1.0 - ipd.φ)*mat.De 
+        #Ds = (1.0 - ipd.φ)*mat.De 
+        #return 0.*D + 1*Ds # Required to avoid singular matrix
     end
 end
 
 
-function calc_principal(T::Array{Float64,1})
-    sr2 = √2.
-    # full notation
-    F = [ T[1]      T[4]/sr2  T[6]/sr2 ;
-          T[4]/sr2  T[2]      T[5]/sr2 ;
-          T[6]/sr2  T[5]/sr2  T[3]     ]
-    L, V = eig(F, permute=false, scale=false)
-
-    return L
-end
-
-
 function mazars_Δσ(mat::Mazars, ipd::MazarsIpData, Δε::Vect)::Vect
-    local σ::Vect
-    ε = ipd.ε + Δε
-
-    # Principal stresses tensor
-    εp, V = principal(ε)
+    # Auxiliary function to aid the calculation of numerical D matrix
+    ε = ipd.ε + Δε    # Total strain
+    εp = principal(ε) # Principal stresses tensor
 
     # Equivalent strain scalar
     ε̅ = √sum( pos(εp[i])^2 for i=1:3 )
@@ -201,29 +188,24 @@ function mazars_Δσ(mat::Mazars, ipd::MazarsIpData, Δε::Vect)::Vect
     if ε̅ < ε̅max  # linear-elastic increment
         φ = ipd.φ
     else # increment with damage
-        # Principal stresses and principal directions
-        #norm(ipd.σ)==0.0 && error("Mazars: At least one increment inside the elastic region is required")
-        σp, V = principal(ipd.σ)
+        σp = principal(ipd.σ)
         σp = [ σp; zeros(3) ]
 
         # Damage calculation
-        #@show mat.At
-        #@show mat.Bt
         φt = 1.0 - (1-mat.At)*mat.ε̅0/ε̅ - mat.At/exp(mat.Bt*(ε̅-mat.ε̅0))
         φc = 1.0 - (1-mat.Ac)*mat.ε̅0/ε̅ - mat.Ac/exp(mat.Bc*(ε̅-mat.ε̅0))
-
         φt = max(ipd.φt, φt)
         φc = max(ipd.φc, φc)
 
         # Tensile and compression tensors
         σt = pos.(σp)
         σc = neg.(σp)
-
         εt = mat.invDe*σt
         εc = mat.invDe*σc
+
         εv = sum(pos(εt[i]) + pos(εc[i]) for i=1:3)
 
-        # Tensile and compression damage weights
+        # Tensile and compressive damage weights
         αt =  sum(pos(εt[i]) for i=1:3)/εv
         αc =  sum(pos(εc[i]) for i=1:3)/εv
         if εv==0.0
@@ -232,7 +214,6 @@ function mazars_Δσ(mat::Mazars, ipd::MazarsIpData, Δε::Vect)::Vect
 
         # Damage variable
         φ = αt*φt + αc*φc
-        φ = max(φ, ipd.φ)
     end
 
     # Total stress and stress increment
@@ -245,12 +226,17 @@ end
 
 
 function stress_update(mat::Mazars, ipd::MazarsIpData, Δε::Array{Float64,1})
-    ipd.lastΔε = copy(Δε)
+    if !isnan(Δε[1])
+        ipd.lastΔε = copy(Δε)
+    end
     σini  = ipd.σ
     ipd.ε = ipd.ε + Δε
 
+    E  = mat.E
+    nu = mat.nu
+
     # Principal stresses tensor
-    εp, V = principal(ipd.ε)
+    εp = principal(ipd.ε)
 
     # Equivalent strain scalar
     ε̅ = √sum( pos(εp[i])^2 for i=1:3 )
@@ -258,17 +244,14 @@ function stress_update(mat::Mazars, ipd::MazarsIpData, Δε::Array{Float64,1})
 
     if ε̅ < ipd.ε̅max  # linear-elastic increment
         ipd.σ = (1.0 - ipd.φ)*mat.De*ipd.ε
-    else # increment with damage
+    else # increment with damage: A previous elastic step is desired
         ipd.ε̅max = ε̅
 
         # Principal stresses and principal directions
-        #norm(ipd.σ)==0.0 && error("Mazars: At least one increment inside the elastic region is required")
-        σp, V = principal(ipd.σ)
+        σp = principal(ipd.σ)
         σp = [ σp; zeros(3) ]
 
         # Damage calculation
-        #@show mat.At
-        #@show mat.Bt
         φt = 1.0 - (1-mat.At)*mat.ε̅0/ε̅ - mat.At/exp(mat.Bt*(ε̅-mat.ε̅0))
         φc = 1.0 - (1-mat.Ac)*mat.ε̅0/ε̅ - mat.Ac/exp(mat.Bc*(ε̅-mat.ε̅0))
 
@@ -278,26 +261,19 @@ function stress_update(mat::Mazars, ipd::MazarsIpData, Δε::Array{Float64,1})
         # Tensile and compression tensors
         σt = pos.(σp)
         σc = neg.(σp)
-
         εt = mat.invDe*σt
         εc = mat.invDe*σc
+
         εv = sum(pos(εt[i]) + pos(εc[i]) for i=1:3)
 
-        # Tensile and compression damage weights
+        # Tensile and compressive damage weights
         αt =  sum(pos(εt[i]) for i=1:3)/εv
         αc =  sum(pos(εc[i]) for i=1:3)/εv
         if εv==0.0
             αt = αc = 0.5
         end
 
-        #@show αt
-        #@show αc
-        #@show φt
-        #@show φc
-
         # Damage variable
-        #ipd.φ = αt*φt + αc*φc
-        #φ = αt*φt + αc*φc
         φ = αt*ipd.φt + αc*ipd.φc
         ipd.φ = max(φ, ipd.φ)
 
@@ -307,10 +283,6 @@ function stress_update(mat::Mazars, ipd::MazarsIpData, Δε::Array{Float64,1})
 
     Δσ    = ipd.σ - σini
     return Δσ 
-end
-
-function elem_vals(mat::Mazars, elem::Element)
-    return Dict()
 end
 
 function getvals(mat::Mazars, ipd::MazarsIpData)
@@ -352,4 +324,30 @@ function getvals(mat::Mazars, ipd::MazarsIpData)
           :eq => ipd.ε̅max
           )
       end
+end
+
+function node_and_elem_vals(mat::Mazars, elem::Element)
+    # call generic method from AbsSolid
+    node_vals, e_vals = invoke(node_and_elem_vals, (AbsSolid, Element), mat, elem)
+
+    # vector with nodal damage values
+    D = node_vals[:dam] 
+    Dc = node_vals[:damc] 
+    Dt = node_vals[:damt] 
+
+    # fix nodal values outside damage range
+    for i=1:length(D)
+        if D[i]>1.0; D[i] = 1.0 end
+        if D[i]<0.0; D[i] = 0.0 end
+        if Dc[i]>1.0; Dc[i] = 1.0 end
+        if Dc[i]<0.0; Dc[i] = 0.0 end
+        if Dt[i]>1.0; Dt[i] = 1.0 end
+        if Dt[i]<0.0; Dt[i] = 0.0 end
+    end
+
+    node_vals[:dam] = D
+    node_vals[:damc] = Dc
+    node_vals[:damt] = Dt
+
+    return node_vals, e_vals
 end

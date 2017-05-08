@@ -33,7 +33,7 @@ const tI  = [1., 1., 1., 0., 0., 0.]
 import Base.trace
 trace(T::Tensor2) = sum(T[1:3])
 J1(T::Tensor2) = sum(T[1:3])
-J2(T::Tensor2) = 0.5*dot(T,T) # TODO: Check
+#J2(T::Tensor2) = 0.5*dot(T,T) # TODO: Check
 
 function I2(T::Tensor2)
     t11, t22, t33, t12, t23, t13 = T
@@ -42,7 +42,11 @@ end
 
 function I3(T::Tensor2)
     t11, t22, t33, t12, t23, t13 = T
-    #return t11*(t22*t33 − t23*t23) − t12*(t12*t33 − t23*t13) + t13*(t12*t23 − t22*t13) TODO
+    sq2 = √2.0
+    t12 /= sq2
+    t23 /= sq2
+    t13 /= sq2
+    return t11*(t22*t33 - t23*t23) - t12*(t12*t33 - t23*t13) + t13*(t12*t23 - t22*t13)
 end
 
 
@@ -61,7 +65,13 @@ function dev(T::Tensor2) # deviatoric tensor
 end
 
 function J2D(T::Tensor2)
-    return J2(Psd*T)
+    #return J2(Psd*T)
+    t11, t22, t33, t12, t23, t13 = T
+    sq2 = √2.0
+    t12 /= sq2
+    t23 /= sq2
+    t13 /= sq2
+    return 1/6*( (t11-t22)^2 + (t22-t33)^2 + (t33-t11)^2 ) + t12*t12 + t23*t23 + t13*t13
 end
 
 
@@ -70,15 +80,22 @@ function J3D(T::Tensor2)
 end
 
 
-function princ_stresses(T::Tensor2)::Vect
+function principal(T::Tensor2)::Vect
     t11, t22, t33, t12, t23, t13 = T
-    t12 /= √2.0
-    t23 /= √2.0
-    t13 /= √2.0
+    sq2 = √2.0
+    t12 /= sq2
+    t23 /= sq2
+    t13 /= sq2
     i1 = t11 + t22 + t33
     i2 = t11*t22 + t22*t33 + t11*t33 - t12*t12 - t23*t23 - t13*t13
+
+    if i1==0.0 && i2==0.0
+        return zeros(3)
+    end
+
     i3 = t11*(t22*t33 - t23*t23) - t12*(t12*t33 - t23*t13) + t13*(t12*t23 - t22*t13)
-    θ = 1/3*acos( (2*i1^3 - 9*i1*i2 + 27*i3 )/( 2*(i1^2 - 3*i2)^(3/2) ) )
+    val = round( (2*i1^3 - 9*i1*i2 + 27*i3 )/( 2*(i1^2 - 3*i2)^(3/2) ), 14 )
+    θ = 1/3*acos( val )
 
     r = 2/3*√(i1^2-3*i2)
 
@@ -86,13 +103,35 @@ function princ_stresses(T::Tensor2)::Vect
     s2 = i1/3 + r*cos(θ - 2*π/3)
     s3 = i1/3 + r*cos(θ - 4*π/3)
 
+    # sorting
+    #@show T
+    #@show s1
+    #@show s2
+    #@show s3
+    #@show val
+    #num =  (2*i1^3 - 9*i1*i2 + 27*i3 )
+    #den = ( 2*(i1^2 - 3*i2)^(3/2) )
+    #@show num 
+    #@show den
+    #@show θ
+    #@show i1
+    #@show i2
+    #@show i3
+    #@assert s1 > max(s2,s3)
+    if s1<s2 s1,s2 = s2,s1 end
+    if s2<s3 s2,s3 = s3,s2 end
+    if s1<s2 s1,s2 = s2,s1 end
+    #if s2<s3 s2,s3 = s3,s2 end
+
     P = [ s1, s2, s3 ]
-    sort!(P, rev=true)
+    #sort!(P, rev=true)
+    #@show P
+    #exit()
 
     return P
 end
 
-function principal(T::Tensor2)
+function principal_dir(T::Tensor2)
     sr2 = √2.
     # full notation
     F = [ T[1]      T[4]/sr2  T[6]/sr2 ;
@@ -111,7 +150,10 @@ function principal(T::Tensor2)
     shift = 1 - idx
     L = circshift(L, shift)
     V = circshift(V, (0,shift))
-    return L, V
+    #return L, V
+    #@show L
+    #exit()
+    return L
 end
 
 
