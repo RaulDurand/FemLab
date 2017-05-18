@@ -23,7 +23,7 @@ set_bc(dom, bc1, bc2, bc3)
 #tnodes = NodesTracker(dom.nodes)
 #set_trackers(dom, tnode, tnodes)
 
-@test solve!(dom, nincs=10, verbose=false)
+@test solve!(dom, nincs=10, verbose=true)
 
 #save(tnode, "tab.dat")
 #save(tnodes, "tnodes.dat")

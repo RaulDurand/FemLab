@@ -156,7 +156,7 @@ function elem_jacobian(::AbsSolid, elem::Element)
         @gemm J = dNdR*C
         @gemm dNdX = inv(J)*dNdR
         detJ = det(J)
-        detJ > 0.0 || error("Negative jacobian determinant in cell $(cell.id)")
+        detJ > 0.0 || error("Negative jacobian determinant in cell $(elem.id)")
         setB(ndim, dNdX, detJ, B)
 
         # compute K

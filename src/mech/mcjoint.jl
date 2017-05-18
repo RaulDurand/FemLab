@@ -196,17 +196,40 @@ function potential_derivs(mat::MCJoint, ipd::MCJointIpData, σ::Array{Float64,1}
             return r
         end
     else
+
+        if a>0
+            if σ[1] >= 0.0
+                # G1:
+                a, b = calc_a_b(mat, upa)
+                σmax = a - b*upa
+                r = [ 2*σ[1]/σmax^2, 2*σ[2]/(σmax^2*mat.μ^2) ]
+                return r/norm(r)
+            else
+                τ = σ[2]
+                r = [ 0., sign(τ) ]
+            end
+        else  # a==0
+            if ipd.w[1] > 0.0
+                return [ 1.0, 0.0 ]
+            else
+                τ = σ[2]
+                r = [ 0., sign(τ) ]
+            end
+        end
+
+
         #=
-        if σ[1]>=0.0
+        if σ[1] >= 0.0  && a != 0.0
             # G1:
-            σm = √(σ[2]^2 + σmax^2*mat.μ^2)
-            if σm == 0.0 return [ 1., 0. ] end
-            r = [ σ[1]*mat.μ^2/σm, σ[2]/σm ]
+            a, b = calc_a_b(mat, upa)
+            σmax = a - b*upa
+            r = [ 2*σ[1]/σmax^2, 2*σ[2]/(σmax^2*mat.μ^2) ]
             return r/norm(r)
         else
             # G2:
             τ = σ[2]
-            if τ != 0.0
+            #if τ != 0.0
+            if w[1]>0.0
                 r = [ 0., sign(τ) ]
             else
                 r = [ 1., 0. ]
@@ -214,25 +237,7 @@ function potential_derivs(mat::MCJoint, ipd::MCJointIpData, σ::Array{Float64,1}
             return r
         end
         =#
-        if σ[1] > 0.0  && σmax != 0.0
-            # G1:
-            a, b = calc_a_b(mat, upa)
-            σmax = a - b*upa
-            r = [ 2*σ[1]/σmax^2, 2*σ[2]/(σmax^2*mat.μ^2) ]
-            return r/norm(r)
-        #elseif σ[1] > 0.0
-            #r = [ 2*σ[1], 2*σ[2] ]
-            #return r/norm(r)
-        else
-            # G2:
-            τ = σ[2]
-            if τ != 0.0
-                r = [ 0., sign(τ) ]
-            else
-                r = [ 1., 0. ]
-            end
-            return r
-        end
+
 
     end
 end

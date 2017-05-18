@@ -104,29 +104,11 @@ function principal(T::Tensor2)::Vect
     s3 = i1/3 + r*cos(θ - 4*π/3)
 
     # sorting
-    #@show T
-    #@show s1
-    #@show s2
-    #@show s3
-    #@show val
-    #num =  (2*i1^3 - 9*i1*i2 + 27*i3 )
-    #den = ( 2*(i1^2 - 3*i2)^(3/2) )
-    #@show num 
-    #@show den
-    #@show θ
-    #@show i1
-    #@show i2
-    #@show i3
-    #@assert s1 > max(s2,s3)
     if s1<s2 s1,s2 = s2,s1 end
     if s2<s3 s2,s3 = s3,s2 end
     if s1<s2 s1,s2 = s2,s1 end
-    #if s2<s3 s2,s3 = s3,s2 end
 
     P = [ s1, s2, s3 ]
-    #sort!(P, rev=true)
-    #@show P
-    #exit()
 
     return P
 end
