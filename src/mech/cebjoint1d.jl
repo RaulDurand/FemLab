@@ -54,26 +54,36 @@ type CEBJoint1D<:AbsJoint1D
         return  CEBJoint1D(;prms...)
     end
 
-    function CEBJoint1D(;TauM=NaN, TauR=NaN, s1=NaN, s2=NaN, s3=NaN, alpha=1.0, kn=NaN, ks=NaN, h=NaN, A=NaN, dm=NaN)
+    function CEBJoint1D(;TauM=NaN, TauR=NaN, s1=NaN, s2=NaN, s3=NaN, alpha=NaN, kn=NaN, ks=NaN, h=NaN, A=NaN, dm=NaN)
         @assert s1>0
         @assert s2>s1
         @assert s3>s2
-        @assert alpha<=1.0
+        @assert ks>0
 
-        if isnan(h) # perimeter
+        # Estimate the perimeter h
+        if isnan(h)
             if A>0
                 h = 2.0*√(A*pi)
             else
+                @assert dm>0
                 h = pi*dm
             end
         end
         @assert h>0
 
+        # Estimate TauM if not provided
         if isnan(TauM)
             TauM = ks*s1
         end
         @assert TauM>TauR
 
+        # Define alpha if not provided
+        if isnan(alpha)
+            alpha = 1.0
+        end
+        @assert alpha<=1.0
+
+        # Estimate kn if not provided
         if isnan(kn)
             kn = ks
         end
@@ -103,7 +113,8 @@ end
 
 function deriv(mat::CEBJoint1D, ipd::CEBJoint1DIpData, sy::Float64)
     if sy==0.0
-        sy = 0.01*mat.s1 # to avoid undefined derivative
+        const S1_FACTOR = 0.01
+        sy = S1_FACTOR*mat.s1   # to avoid undefined derivative
     end
 
     if sy<=mat.s1
@@ -166,7 +177,8 @@ function stress_update(mat::CEBJoint1D, ipd::CEBJoint1DIpData, Δε::Vect)
         τ = τtr 
         ipd.elastic = true
     else
-        ipd.sy += abs(Δs)  # Δsy ??
+        Δsy     = (abs(τtr)-ipd.τy)/mat.ks
+        ipd.sy += Δsy
         ipd.τy  = Tau(mat, ipd.sy)
         τ  = ipd.τy*sign(τtr)
         Δτ = τ - τini
