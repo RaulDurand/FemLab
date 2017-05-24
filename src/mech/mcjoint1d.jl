@@ -108,7 +108,7 @@ function calc_σc(elem, R, Ch, Ct)
 
     # Mounting M vector
     N   = shape_func(bar.shape, R)
-    Xip = vec(N'*Ct)
+    Xip = (N'*Ct)[1,:]
     R = inverse_map(hook.shape, Ch, Xip)
     M = shape_func(hook.shape, R)
 

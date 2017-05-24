@@ -22,8 +22,8 @@
 
 export Tensor2, Tensor4
 
-typealias Tensor2 Array{Float64,1}
-typealias Tensor4 Array{Float64,2}
+const Tensor2 = Array{Float64,1}
+const Tensor4 = Array{Float64,2}
 
 tensor2() = zeros(6)
 tensor4() = zeros(6,6)

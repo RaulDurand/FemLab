@@ -145,9 +145,9 @@ function elem_jacobian(::AbsSolid, elem::Element)
     K = zeros(nnodes*ndim, nnodes*ndim)
     B = zeros(6, nnodes*ndim)
 
-    DB = Array(Float64, 6, nnodes*ndim)
-    J  = Array(Float64, ndim, ndim)
-    dNdX = Array(Float64, ndim, nnodes)
+    DB = Array{Float64}(6, nnodes*ndim)
+    J  = Array{Float64}(ndim, ndim)
+    dNdX = Array{Float64}(ndim, nnodes)
 
     for ip in elem.ips
 
@@ -178,9 +178,9 @@ function update!(::AbsSolid, elem::Element, dU::Array{Float64,1})
     #dU = DU[map]
     B  = zeros(6, nnodes*ndim)
 
-    DB = Array(Float64, 6, nnodes*ndim)
-    J  = Array(Float64, ndim, ndim)
-    dNdX = Array(Float64, ndim, nnodes)
+    DB = Array{Float64}(6, nnodes*ndim)
+    J  = Array{Float64}(ndim, ndim)
+    dNdX = Array{Float64}(ndim, nnodes)
     Δε = zeros(6)
 
     C = getcoords(elem)

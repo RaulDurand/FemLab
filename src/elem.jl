@@ -55,7 +55,7 @@ type Ip
 
     function Ip(R::Array, w::Float64)
         this   = new(vec(R), w)
-        this.X = Array(Float64, 3)
+        this.X = Array{Float64}(3)
         this.owner = nothing
         return this
     end
@@ -81,9 +81,9 @@ function getindex(ips::Array{Ip,1}, cond::Expr)
         error("Ip getindex: Invalid condition ", cond)
     end
 
-    result = Array(Ip, 0)
+    result = Array{Ip}(0)
     for ip in ips
-        if fun(ip.X[1], ip.X[2], ip.X[3])
+        if @static VERSION>v"0.6.0-rc1.0" ? Base.invokelatest(fun, ip.X[1], ip.X[2], ip.X[3]) : fun(ip.X[1], ip.X[2], ip.X[3])
             push!(result, ip)
         end
     end
@@ -227,7 +227,7 @@ end
 
 function getindex(elems::Array{Element,1}, cond::Expr)
     condm = fix_comparison_arrays(cond)
-    funex = :( (x,y,z) -> x*y*z )
+    funex = :( (x,y,z) -> false )
     funex.args[2].args[2] = condm
     fun = nothing
     try
@@ -236,13 +236,13 @@ function getindex(elems::Array{Element,1}, cond::Expr)
         error("Element getindex: Invalid condition ", cond)
     end
 
-    result = Array(Element,0)
+    result = Array{Element}(0)
     for elem in elems
         coords = getcoords(elem.nodes)
         x = coords[:,1]
         y = coords[:,2]
         z = coords[:,3]
-        if fun(x, y, z)
+        if @static VERSION>v"0.6.0-rc1.0" ? Base.invokelatest(fun, x, y, z) : fun(x, y, z)
             push!(result, elem) 
         end
     end
@@ -252,7 +252,7 @@ end
 function getindex(elems::Array{Element,1}, cond::AbstractString) 
     # filter by tag
     if typeof(parse(cond)) == Symbol
-        result = Array(Element,0)
+        result = Array{Element}(0)
         for elem in elems
             if cond == elem.tag
                 push!(result, elem) 

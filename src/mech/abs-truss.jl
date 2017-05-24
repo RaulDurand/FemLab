@@ -13,7 +13,7 @@ function elem_jacobian(mat::AbsTruss, elem::Element)
     C = getcoords(elem)
     K = zeros(nnodes*ndim, nnodes*ndim)
     B = zeros(1, nnodes*ndim)
-    J  = Array(Float64, 1, ndim)
+    J  = Array{Float64}(1, ndim)
 
     for ip in elem.ips
         dNdR = deriv_func(elem.shape, ip.R)
@@ -43,7 +43,7 @@ function update!(mat::AbsTruss, elem::Element, dU::Array{Float64,1})
     dF = zeros(nnodes*ndim)
     C  = getcoords(elem)
     B  = zeros(1, nnodes*ndim)
-    J  = Array(Float64, 1, ndim)
+    J  = Array{Float64}(1, ndim)
     for ip in elem.ips
         dNdR = deriv_func(elem.shape, ip.R)
         @gemm J = dNdR*C

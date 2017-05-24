@@ -157,8 +157,10 @@ function calcD(mat::Mazars, ipd::MazarsIpData)
     else
         D = zeros(6,6)
         δ = mat.ε̅0/20  # 20 seems to work better
+        #δ = mat.ε̅0/10  # 20 seems to work better
         κ = 1.0e-15    # important because some components may be zero
         δε = sign.(ipd.lastΔε .+ κ)*δ
+        δε = ones(6)*δ
 
         Δε = zeros(6)
         for i=1:6
@@ -168,6 +170,12 @@ function calcD(mat::Mazars, ipd::MazarsIpData)
             Di = Δσ/Δε[i]
             D[:,i] = Di
         end
+        #for i=1:6
+            #k = mat.E/1000
+            #if abs(D[i,i]) < k
+                #D[i,i] += k*sign(D[i,i])
+            #end
+        #end
         return D
         #return (1.0 - ipd.φ)*mat.De 
         #Ds = (1.0 - ipd.φ)*mat.De 

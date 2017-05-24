@@ -177,8 +177,8 @@ function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=
     end
 
     # Fill arrays of prescribed dofs and unknown dofs
-    udofs = Array(Dof, 0)
-    pdofs = Array(Dof, 0)
+    udofs = Array{Dof}(0)
+    pdofs = Array{Dof}(0)
 
     for node in dom.nodes
         for dof in node.dofs
@@ -283,14 +283,14 @@ function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=
             ΔFin, R = solve_update_step(sdata, K, ΔUa, ΔUi, R)
             maxF = max(norm(Fin+ΔFin), maxF)
             #residue = calc_residue(ΔF, ΔFin, maxF, umap)
-            residue = maxabs( (ΔF-ΔFin)[umap] ) #*****
+            residue = maximum(abs, (ΔF-ΔFin)[umap] ) #*****
 
             # Other schemes
             if residue > tol && sch != :FE
                 ΔFin, R = solve_inc_scheme(sdata, K, ΔUa, ΔUi, R)
                 maxF = max(norm(Fin+ΔFin), maxF)
                 #residue = calc_residue(ΔF, ΔFin, maxF, umap)
-                residue = maxabs( (ΔF-ΔFin)[umap] ) #*****
+                residue = maximum(abs, (ΔF-ΔFin)[umap] ) #*****
             end
 
             # Update external forces vector
@@ -506,8 +506,8 @@ function solve_legacy!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::Abstra
     end
 
     # Fill array of dofs
-    udofs = Array(Dof, 0)
-    pdofs = Array(Dof, 0)
+    udofs = Array{Dof}(0)
+    pdofs = Array{Dof}(0)
 
     for node in dom.nodes
         for dof in node.dofs
@@ -594,7 +594,7 @@ function solve_legacy!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::Abstra
             #DFa += DFin
 
             lastres = residue
-            residue = maxabs(R)
+            residue = maximum(abs, R)
 
             if verbose
                 printcolor(:bold, "    it $it  ")

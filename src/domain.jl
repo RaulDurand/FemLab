@@ -90,7 +90,7 @@ function Domain(mesh::Mesh; filekey::AbstractString="out", stress_state=:general
     dom.nodes = [ Node(point, id=i) for (i,point) in enumerate(mesh.points)]
 
     # Setting elements
-    dom.elems = Array(Element,0)
+    dom.elems = Array{Element}(0)
     for (i,cell) in enumerate(mesh.cells)
         conn = [ p.id for p in cell.points ]
         elem = Element(cell.shape, dom.nodes[conn], ndim, cell.tag)
@@ -112,7 +112,7 @@ function Domain(mesh::Mesh; filekey::AbstractString="out", stress_state=:general
     end
 
     # Setting faces
-    dom.faces = Array(Face,0)
+    dom.faces = Array{Face}(0)
     for cell in mesh.faces
         conn = [ p.id for p in cell.points ]
         face = Face(cell.shape, dom.nodes[conn], ndim)
@@ -121,7 +121,7 @@ function Domain(mesh::Mesh; filekey::AbstractString="out", stress_state=:general
     end
 
     # Setting edges
-    dom.edges = Array(Edge,0)
+    dom.edges = Array{Edge}(0)
     for cell in mesh.edges
         conn = [ p.id for p in cell.points ]
         edge = Face(cell.shape, dom.nodes[conn], ndim)

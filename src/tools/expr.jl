@@ -69,7 +69,7 @@ function fix_comparison_arrays(expr::Expr)
         a = expr.args[2]
         b = expr.args[3]
         if symb == :(==)
-            return :(maximum(abs($a-$b)) < $tol)
+            return :(maximum(abs.($a-$b)) < $tol)
         end
         if symb == :(>=)
             return :(minimum($a) > maximum($b) - $tol)

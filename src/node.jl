@@ -155,9 +155,11 @@ function getindex(nodes::Array{Node,1}, cond::Expr)
         error("Node getindex: Invalid condition ", cond)
     end
 
-    result = Array(Node, 0)
+    result = Array{Node}(0)
     for node in nodes
-        if fun(node.X[1], node.X[2], node.X[3])
+        if @static VERSION>v"0.6.0-rc1.0" ? Base.invokelatest(fun, node.X[1], node.X[2], node.X[3]) : fun(node.X[1], node.X[2], node.X[3])
+        #if Base.invokelatest(fun, node.X[1], node.X[2], node.X[3])
+        #if fun(node.X[1], node.X[2], node.X[3])
             push!(result, node)
         end
     end

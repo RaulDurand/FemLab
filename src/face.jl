@@ -36,7 +36,7 @@ type Face
     end
 end
 
-typealias Edge Face
+const Edge=Face
 
 function getindex(faces::Array{Face,1}, cond::Expr)
     condm = fix_comparison_arrays(cond)
@@ -50,13 +50,13 @@ function getindex(faces::Array{Face,1}, cond::Expr)
         error("Faces getindex: Invalid condition ", cond)
     end
 
-    result = Array(Face,0)
+    result = Array{Face}(0)
     for face in faces
         coords = getcoords(face.nodes)
         x = coords[:,1]
         y = coords[:,2]
         z = coords[:,3]
-        if fun(x, y, z)
+        if @static VERSION>v"0.6.0-rc1.0" ? Base.invokelatest(fun, x, y, z) : fun(x, y, z)
             push!(result, face) 
         end
     end
