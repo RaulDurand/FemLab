@@ -48,3 +48,8 @@ set_bc(dom, disp_bc, force_bc)
 
 #save(tab_tnode , "tab_tnode.dat")
 #save(tab_tjoint, "tab_tjoint.dat")
+
+using PyPlot
+tab = tab_tjoint.table
+plot(tab[:ur], tab[:tau], marker="o")
+show()

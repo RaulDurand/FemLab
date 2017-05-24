@@ -25,52 +25,61 @@ type CEBJoint1DIpData<:IpData
     ndim::Int
     σ  ::Array{Float64,1}
     ε  ::Array{Float64,1}
-    τy ::Float64           # shear strength
-    unload::Bool
+    τy ::Float64      # max stress
+    sy ::Float64      # accumulated relative displacement
+    elastic::Bool
     function CEBJoint1DIpData(ndim=3)
         this = new(ndim)
         this.σ = zeros(3)
         this.ε = zeros(3)
-        this.τy     = 0.0
-        this.unload = true
+        this.τy = 0.0
+        this.sy = 0.0
+        this.elastic = false
         return this
     end
 end
 
 type CEBJoint1D<:AbsJoint1D
-    h ::Float64
-    ks::Float64
-    kn::Float64
-    s1::Float64
-    s2::Float64
-    s3::Float64
-    τres::Float64
+    τmax:: Float64
+    τres:: Float64
+    s1  :: Float64
+    s2  :: Float64
+    s3  :: Float64
+    α   :: Float64
+    ks  :: Float64
+    kn  :: Float64
+    h   :: Float64
 
     function CEBJoint1D(prms::Dict{Symbol,Float64})
         return  CEBJoint1D(;prms...)
     end
 
-    function CEBJoint1D(;ks=NaN, kn=NaN, TauR=NaN, s1=NaN, s2=NaN, s3=NaN, h=NaN, A=NaN, dm=NaN)
-        @assert ks>=0
-        @assert ks*s1>TauR
+    function CEBJoint1D(;TauM=NaN, TauR=NaN, s1=NaN, s2=NaN, s3=NaN, alpha=1.0, kn=NaN, ks=NaN, h=NaN, A=NaN, dm=NaN)
+        @assert s1>0
         @assert s2>s1
         @assert s3>s2
+        @assert alpha<=1.0
 
-        if isnan(kn) 
-            kn = ks
-        end
-        @assert kn>=0
-
-        if isnan(h) 
+        if isnan(h) # perimeter
             if A>0
-                h = 2.0*(A*pi)^0.5
+                h = 2.0*√(A*pi)
             else
                 h = pi*dm
             end
         end
         @assert h>0
 
-        this = new(h, ks, kn, s1, s2, s3, TauR)
+        if isnan(TauM)
+            TauM = ks*s1
+        end
+        @assert TauM>TauR
+
+        if isnan(kn)
+            kn = ks
+        end
+        @assert kn>0
+
+        this = new(TauM, TauR, s1, s2, s3, alpha, ks, kn, h)
         return this
     end
 end
@@ -78,35 +87,31 @@ end
 # Create a new instance of Ip data
 new_ipdata(mat::CEBJoint1D, ndim::Int) = CEBJoint1DIpData(ndim)
 
-function Tau(mat::CEBJoint1D, s::Float64)
-    ss = abs(s)
-    if ss<mat.s1
-        return mat.ks*s
-    elseif ss<mat.s2
-        return mat.ks*mat.s1*sign(s)
-    elseif ss<mat.s3
-        τmax = mat.ks*mat.s1
-        return (mat.τres + (mat.τres-τmax)/(mat.s3-mat.s2)*(ss-mat.s3))*sign(s)
-        
+function Tau(mat::CEBJoint1D, sy::Float64)
+    if sy<mat.s1
+        #@show mat.τmax
+        #@show mat.τmax*(sy/mat.s1)^mat.α
+        return mat.τmax*(sy/mat.s1)^mat.α
+    elseif sy<mat.s2
+        return mat.τmax
+    elseif sy<mat.s3
+        return (mat.τres + (mat.τres-mat.τmax)/(mat.s3-mat.s2)*(sy-mat.s3))
     else
-        return mat.τres*sign(s)
+        return mat.τres
     end
 end
 
-function deriv(mat::CEBJoint1D, ipd::CEBJoint1DIpData, s::Float64)
-    ss = abs(s)
-    
-    #check for unloading... !
-    #τ = ipd.σ[1]
-    #f = yield_func(mat, ipd, τ, ss)
+function deriv(mat::CEBJoint1D, ipd::CEBJoint1DIpData, sy::Float64)
+    if sy==0.0
+        sy = 0.01*mat.s1 # to avoid undefined derivative
+    end
 
-    if ss<mat.s1
-        return mat.ks
-    elseif ss<mat.s2
+    if sy<=mat.s1
+        return mat.τmax/mat.s1*(sy/mat.s1)^(mat.α-1)
+    elseif sy<mat.s2
         return 0.0
-    elseif ss<mat.s3
-        τmax = mat.ks*mat.s1
-        return (mat.τres-τmax)/(mat.s3-mat.s2)
+    elseif sy<mat.s3
+        return (mat.τres-mat.τmax)/(mat.s3-mat.s2)
     else
         return 0.0
     end
@@ -126,20 +131,11 @@ function set_state(ipd::CEBJoint1DIpData, sig=zeros(0), eps=zeros(0))
 end
 
 function calcD(mat::CEBJoint1D, ipd::CEBJoint1DIpData)
-
-    # inital value for ipd.τy
-    if ipd.τy==0.0
-        ipd.τy = mat.ks*mat.s1
+    if ipd.elastic
+        ks = mat.ks
+    else
+        ks = deriv(mat, ipd, ipd.sy)
     end
-
-    s  = abs(ipd.ε[1])
-    kh = deriv(mat, ipd, s)
-
-    #ks = ipd.unload? mat.ks : mat.ks*kh/(mat.ks + kh)
-    ks = ipd.unload? mat.ks : kh
-    #@show ipd.unload
-    #@show kh
-    #@show ks
 
     kn = mat.kn
     if ipd.ndim==2
@@ -168,32 +164,22 @@ function stress_update(mat::CEBJoint1D, ipd::CEBJoint1DIpData, Δε::Vect)
 
     if ftr<0.0
         τ = τtr 
-        ipd.unload = true
-        ftr  = yield_func(mat, ipd, τtr, abs(s+Δs) )
+        ipd.elastic = true
     else
-        τ   = Tau(mat, s+Δs)
-        Δτ  = τ - τini
-        Δse  = Δτ/ks
-        Δsp  = abs(Δs - Δse)
-        ipd.τy = min(ipd.τy, abs(Tau(mat, s+Δs)))
-        sf = s+Δs
-        if abs(s+Δs)<abs(s)
-            ipd.unload = true
-        else
-            ipd.unload = false
-        end
-        #ipd.unload = abs(ipd.ε[1]+Δs) - abs(s) >= 0.0
+        ipd.sy += abs(Δs)  # Δsy ??
+        ipd.τy  = Tau(mat, ipd.sy)
+        τ  = ipd.τy*sign(τtr)
+        Δτ = τ - τini
+        ipd.elastic = false
     end
-
-    # update ε
-    ipd.ε += Δε
 
     # calculate Δσ
     Δτ = τ - τini
     Δσ = kn*Δε
     Δσ[1] = Δτ
 
-    # update Δσ
+    # update ε and σ
+    ipd.ε += Δε
     ipd.σ += Δσ
 
     return Δσ
