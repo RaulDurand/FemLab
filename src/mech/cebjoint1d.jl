@@ -46,6 +46,7 @@ type CEBJoint1D<:AbsJoint1D
     s2  :: Float64
     s3  :: Float64
     α   :: Float64
+    β   :: Float64
     ks  :: Float64
     kn  :: Float64
     h   :: Float64
@@ -54,7 +55,7 @@ type CEBJoint1D<:AbsJoint1D
         return  CEBJoint1D(;prms...)
     end
 
-    function CEBJoint1D(;TauM=NaN, TauR=NaN, s1=NaN, s2=NaN, s3=NaN, alpha=NaN, kn=NaN, ks=NaN, h=NaN, A=NaN, dm=NaN)
+    function CEBJoint1D(;TauM=NaN, TauR=NaN, s1=NaN, s2=NaN, s3=NaN, alpha=NaN, beta=NaN, kn=NaN, ks=NaN, h=NaN, A=NaN, dm=NaN)
         @assert s1>0
         @assert s2>s1
         @assert s3>s2
@@ -78,10 +79,12 @@ type CEBJoint1D<:AbsJoint1D
         @assert TauM>TauR
 
         # Define alpha if not provided
-        if isnan(alpha)
-            alpha = 1.0
-        end
-        @assert alpha<=1.0
+        if isnan(alpha); alpha = 1.0 end
+        @assert 0.0<=alpha<=1.0
+
+        # Define beta if not provided
+        if isnan(beta); beta= 1.0 end
+        @assert beta>=0.0
 
         # Estimate kn if not provided
         if isnan(kn)
@@ -89,7 +92,7 @@ type CEBJoint1D<:AbsJoint1D
         end
         @assert kn>0
 
-        this = new(TauM, TauR, s1, s2, s3, alpha, ks, kn, h)
+        this = new(TauM, TauR, s1, s2, s3, alpha, beta, ks, kn, h)
         return this
     end
 end
@@ -99,13 +102,11 @@ new_ipdata(mat::CEBJoint1D, ndim::Int) = CEBJoint1DIpData(ndim)
 
 function Tau(mat::CEBJoint1D, sy::Float64)
     if sy<mat.s1
-        #@show mat.τmax
-        #@show mat.τmax*(sy/mat.s1)^mat.α
         return mat.τmax*(sy/mat.s1)^mat.α
     elseif sy<mat.s2
         return mat.τmax
     elseif sy<mat.s3
-        return (mat.τres + (mat.τres-mat.τmax)/(mat.s3-mat.s2)*(sy-mat.s3))
+        return mat.τmax - (mat.τmax-mat.τres)*((sy-mat.s2)/(mat.s3-mat.s2))^mat.β
     else
         return mat.τres
     end
@@ -120,11 +121,13 @@ function deriv(mat::CEBJoint1D, ipd::CEBJoint1DIpData, sy::Float64)
     if sy<=mat.s1
         return mat.τmax/mat.s1*(sy/mat.s1)^(mat.α-1)
     elseif sy<mat.s2
-        return 0.0
+        return mat.ks/1000
+        #return 0.0
     elseif sy<mat.s3
-        return (mat.τres-mat.τmax)/(mat.s3-mat.s2)
+        return -(mat.τmax-mat.τres)/(mat.s3-mat.s2)*((sy-mat.s2)/(mat.s3-mat.s2))^(mat.β-1)
     else
-        return 0.0
+        #return 0.0
+        return mat.ks/1000
     end
 end
 
@@ -159,7 +162,7 @@ function calcD(mat::CEBJoint1D, ipd::CEBJoint1DIpData)
     end
 end
 
-function yield_func(mat::CEBJoint1D, ipd::CEBJoint1DIpData, τ::Float64, s::Float64)
+function yield_func(mat::CEBJoint1D, ipd::CEBJoint1DIpData, τ::Float64)
     return abs(τ) - ipd.τy
 end
 
@@ -171,7 +174,7 @@ function stress_update(mat::CEBJoint1D, ipd::CEBJoint1DIpData, Δε::Vect)
     τtr  = τini + ks*Δs # elastic trial
     s    = ipd.ε[1]
 
-    ftr  = yield_func(mat, ipd, τtr, abs(s+Δs) )
+    ftr  = yield_func(mat, ipd, τtr)
 
     if ftr<0.0
         τ = τtr 

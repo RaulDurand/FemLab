@@ -2,6 +2,7 @@ abstract Monitor
 
 import Base.getindex
 export NodeTracker, NodesTracker, IpTracker, IpsTracker, FacesTracker, EdgesTracker
+export NodeMonitor, NodesMonitor, IpMonitor, IpsMonitor, FacesMonitor, EdgesMonitor
 
 type NodeTracker <: Monitor
     table::DTable
@@ -104,6 +105,13 @@ function save(monit::Monitor, filename::AbstractString; verbose=true, format="da
     if typeof(monit) in (NodeTracker, IpTracker, FacesTracker)
         save(monit.table, filename, verbose=verbose, format=format)
     else
-        save(monit.book , filename, verbose=verbose, format=format)
+        save(monit.book, filename, verbose=verbose, format=format)
     end
 end
+
+const NodeMonitor  = NodeTracker
+const NodesMonitor = NodesTracker
+const IpMonitor    = IpTracker
+const IpsMonitor   = IpsTracker
+const FacesMonitor = FacesTracker
+const EdgesMonitor = FacesTracker

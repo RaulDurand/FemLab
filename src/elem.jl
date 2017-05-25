@@ -20,8 +20,9 @@
 
 import Base.reset
 #export IpData
-export Element, Dof
+export Element, Dof, Ip
 export set_mat, get_nodes, get_ips, set_state, reset, getcoords
+export get_map, elem_RHS
 export min, max, sort
 export getvals
 export read_prms
@@ -134,13 +135,6 @@ function copy!(target::Material, source::Material)
     end
 end
 
-#@enum(ElemClass,
-#SOLID,
-#LINE,
-#JOINT,
-#JOINT1D,
-#EMBEDDED)
-
 
 # Type Element
 # ============
@@ -160,7 +154,6 @@ type Element
     active::Bool
     mat   ::Material
     ips   ::Array{Ip,1}
-    class ::Symbol  # Class of element: SOLID, LINE, JOINT, JOINT1D, EMBEDDED
     linked_elems::Array{Element,1}
 
     function Element(shape, nodes, ndim, tag="")
@@ -169,7 +162,7 @@ type Element
         this.ips = []
         this.linked_elems = []
         # Set the element class. For embedded elems, the class will be set by the Domain object.
-        this.class = shape_class(shape)
+        #this.class = shape.class
         this
     end
 end
@@ -197,24 +190,20 @@ end
 # Index operator for a collection of elements
 function getindex(elems::Array{Element,1}, s::Symbol)
     if s == :solids
-        cr = [ is_solid(elem.shape) for elem in elems]
-        return elems[cr]
+        return filter(elem -> elem.shape.class==SOLID_SHAPE, elems)
     end
     if s == :lines
-        cr = [ is_line(elem.shape) for elem in elems]
-        return elems[cr]
+        return filter(elem -> elem.shape.class==LINE_SHAPE, elems)
     end
     if s == :embedded
-        cr = [ is_line(elem.shape) && length(elem.linked_elems)>0 for elem in elems]
-        return elems[cr]
+        return filter(elem -> elem.shape.class==LINE_SHAPE && length(elem.linked_elems)>0, elems)
+        #return filter(elem -> elem.shape.class==EMBEDDED_SHAPE, elems)
     end
     if s == :joints1D
-        cr = [ is_joint1D(elem.shape) for elem in elems]
-        return elems[cr]
+        return filter(elem -> elem.shape.class==JOINT1D_SHAPE, elems)
     end
     if s == :joints
-        cr = [ is_joint(elem.shape) for elem in elems]
-        return elems[cr]
+        return filter(elem -> elem.shape.class==JOINT_SHAPE, elems)
     end
     if s == :nodes
         return get_nodes(elems)
@@ -288,9 +277,15 @@ config_dofs(elem::Element) = config_dofs(elem.mat, elem)
 Especifies the material model `mat` to be used to represent the behavior of an `Element` object `elem`.
 """
 function set_mat(elem::Element, mat::Material; nips::Int64=0)
-    # check if material is suitable for the element
-    if client_elem_class(mat) != elem.class
-        error("set_mat: Material $(typeof(mat)) is not suitable for element class $(elem.class)")
+    # check if material is suitable for the element TODO: Improve this!
+    embedded = elem.shape.class==LINE_SHAPE && length(elem.linked_elems)>0
+    if embedded && client_shape_class(mat) != EMBEDDED
+        error("set_mat: Material $(typeof(mat)) is not suitable for embedded elements")
+    end
+
+    # check if material is suitable for the element TODO: Improve this!
+    if client_shape_class(mat) != elem.shape.class && !embedded
+        error("set_mat: Material $(typeof(mat)) is not suitable for element class $(elem.shape.class)")
     end
 
     ipc =  get_ip_coords(elem.shape, nips)
@@ -312,21 +307,21 @@ function set_mat(elem::Element, mat::Material; nips::Int64=0)
     shape = elem.shape
 
     # fix for link elements
-    if is_joint1D(shape)
+    if shape.class==JOINT1D_SHAPE
         bar   = elem.linked_elems[2]
         C     = getcoords(bar)
         shape = bar.shape
     end
 
     # fix for joint elements
-    if is_joint(shape)
+    if shape.class==JOINT_SHAPE
         C     = C[1:div(end,2),:]
-        shape = get_basic_shape(shape)
+        shape = shape.basic_shape
     end 
 
     # interpolation
     for ip in elem.ips
-        N = shape_func(shape, ip.R)
+        N = shape.func(ip.R)
         ip.X = C'*N
         if length(ip.X)==2 # complete z=0.0 for 2D analyses
             ip.X = [ ip.X; 0.0 ]

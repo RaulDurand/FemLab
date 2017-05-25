@@ -100,17 +100,17 @@ function calc_σc(elem, R, Ch, Ct)
     # Mounting Ts matrix
     hook = elem.linked_elems[1]
     bar  = elem.linked_elems[2]
-    D = deriv_func(bar.shape, R)
+    D = bar.shape.deriv(R)
     J = D*Ct
     T = mount_T(J)
     Ts = zeros(6,6)
     rotation4(T, Ts)
 
     # Mounting M vector
-    N   = shape_func(bar.shape, R)
+    N   = bar.shape.func(R)
     Xip = (N'*Ct)[1,:]
-    R = inverse_map(hook.shape, Ch, Xip)
-    M = shape_func(hook.shape, R)
+    R   = inverse_map(hook.shape, Ch, Xip)
+    M   = hook.shape.func(R)
 
     # Mounting E matrix
     hook_nips = length(hook.ips)

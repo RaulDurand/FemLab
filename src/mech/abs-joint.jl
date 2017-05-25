@@ -23,7 +23,7 @@ export Joint
 abstract AbsJoint<:Mechanical
 
 # Return the class of element where this material can be used
-client_elem_class(mat::AbsJoint) = :JOINT
+client_shape_class(mat::AbsJoint) = JOINT_SHAPE
 
 function init_elem(elem::Element, mat::AbsJoint)
 
@@ -35,7 +35,7 @@ function init_elem(elem::Element, mat::AbsJoint)
     V1 = 0.0
     C1 = getcoords(e1)
     for ip in e1.ips
-        dNdR = deriv_func(e1.shape, ip.R)
+        dNdR = e1.shape.deriv(ip.R)
         J    = dNdR*C1
         detJ = det(J)
         V1  += detJ*ip.w
@@ -45,7 +45,7 @@ function init_elem(elem::Element, mat::AbsJoint)
     V2 = 0.0
     C2 = getcoords(e2)
     for ip in e2.ips
-        dNdR = deriv_func(e2.shape, ip.R)
+        dNdR = e2.shape.deriv(ip.R)
         J    = dNdR*C2
         detJ = det(J)
         V2  += detJ*ip.w
@@ -56,10 +56,10 @@ function init_elem(elem::Element, mat::AbsJoint)
     C = getcoords(elem)
     n = div(length(elem.nodes), 2)
     C = C[1:n, :]
-    bshape = get_basic_shape(elem.shape)
+    bshape = elem.shape.basic_shape
     for ip in elem.ips
         # compute shape Jacobian
-        dNdR = deriv_func(bshape, ip.R)
+        dNdR = bshape.deriv(ip.R)
         J    = dNdR*C
         detJ = norm2(J)
 
@@ -97,7 +97,7 @@ function elem_jacobian(mat::AbsJoint, elem::Element)
     ndim   = elem.ndim
     nnodes = length(elem.nodes)
     hnodes = div(nnodes, 2) # half the number of total nodes
-    bshape = get_basic_shape(elem.shape)
+    bshape = elem.shape.basic_shape
 
     C = getcoords(elem)[1:hnodes,:]
     B = zeros(ndim, nnodes*ndim)
@@ -109,8 +109,9 @@ function elem_jacobian(mat::AbsJoint, elem::Element)
 
     for ip in elem.ips
         # compute shape Jacobian
-        dNdR = deriv_func(bshape, ip.R)
-        N    = shape_func(bshape, ip.R)
+        N    = bshape.func(ip.R)
+        dNdR = bshape.deriv(ip.R)
+        
         @gemm J = dNdR*C
         detJ = norm2(J)
 
@@ -140,7 +141,7 @@ function update!(mat::AbsJoint, elem::Element, dU::Array{Float64,1})
     ndim   = elem.ndim
     nnodes = length(elem.nodes)
     hnodes = div(nnodes, 2) # half the number of total nodes
-    bshape = get_basic_shape(elem.shape)
+    bshape = elem.shape.basic_shape
     mat    = elem.mat
 
     dF = zeros(nnodes*ndim)
@@ -154,8 +155,8 @@ function update!(mat::AbsJoint, elem::Element, dU::Array{Float64,1})
 
     for ip in elem.ips
         # compute shape Jacobian
-        dNdR = deriv_func(bshape, ip.R)
-        N    = shape_func(bshape, ip.R)
+        N    = bshape.func(ip.R)
+        dNdR = bshape.deriv(ip.R)
         @gemm J = dNdR*C
         detJ = norm2(J)
 
@@ -191,7 +192,7 @@ function node_and_elem_vals(mat::AbsJoint, elem::Element)
 
     # Elem vals
     nips = length(elem.ips) 
-    E = extrapolator(get_basic_shape(elem.shape), nips)
+    E = extrapolator(elem.shape.basic_shape, nips)
 
     Sn = E*[ ip.data.σ[1] for ip in elem.ips ]
     Wn = E*[ ip.data.w[1] for ip in elem.ips ]

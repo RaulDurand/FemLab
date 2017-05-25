@@ -21,7 +21,7 @@
 abstract AbsSolid<:Mechanical
 
 # Return the class of element where this material can be used
-client_elem_class(mat::AbsSolid) = :SOLID
+client_shape_class(mat::AbsSolid) = SOLID_SHAPE
 
 
 function set_facet_bc(mat::AbsSolid, oelem::Element, face::Face, key::Symbol, val::Float64)
@@ -71,8 +71,8 @@ function set_facet_bc(mat::AbsSolid, oelem::Element, face::Face, key::Symbol, va
     for i=1:size(f_ips,1)
         R = vec(f_ips[i,:])
         w = R[end]
-        N = shape_func(fshape, R)
-        D = deriv_func(fshape, R)
+        N = fshape.func(R)
+        D = fshape.deriv(R)
         J = D*C
         nJ = norm2(J)
 
@@ -110,7 +110,7 @@ function setB(ndim::Int, dNdX::Matx, detJ::Float64, B::Matx)
         end
         if gl_stress_state==:axisymmetric # TODO: Check this
             for i in 1:nnodes
-                N = shape_func(elem.shape, R)
+                N =elem.shape.func(R)
                 j = i-1
                 r = R[0]
                 B[1,1+j*ndim] = dNdX[1,i]
@@ -152,7 +152,7 @@ function elem_jacobian(::AbsSolid, elem::Element)
     for ip in elem.ips
 
         # compute B matrix
-        dNdR = deriv_func(elem.shape, ip.R)
+        dNdR = elem.shape.deriv(ip.R)
         @gemm J = dNdR*C
         @gemm dNdX = inv(J)*dNdR
         detJ = det(J)
@@ -187,7 +187,7 @@ function update!(::AbsSolid, elem::Element, dU::Array{Float64,1})
     for ip in elem.ips
 
         # compute B matrix
-        dNdR = deriv_func(elem.shape, ip.R)
+        dNdR = elem.shape.deriv(ip.R)
         @gemm J = dNdR*C
         @gemm dNdX = inv(J)*dNdR
         detJ = det(J)

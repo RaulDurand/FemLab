@@ -4,8 +4,8 @@ using Base.Test
 bl  = Block3D( [0 0 0; 1.0 6.0 1.0], nx=1, ny=10, nz=1)
 bli = BlockInset( [0.5 3 0.5; 0.5 6.0 0.5], curvetype="polyline")
 
-mesh = Mesh(bl, bli, verbose=false)
-dom = Domain(mesh)
+msh = Mesh(bl, bli, verbose=false)
+dom = Domain(msh)
 
 set_mat(dom.elems[:solids], ElasticSolid(E=1.e4, nu=0.) )
 set_state(dom.elems[:solids], sig=[-100, -100, -100, 0., 0., 0.])
@@ -30,26 +30,23 @@ tab_tjoint = IpTracker(tjoint)
 set_trackers(dom, tab_tnode, tab_tjoint)
 
 ## CEB test
-scheme = "ME" 
+scheme = "FE" 
 disp_bc  = NodeBC( solid_nodes, ux=0, uy=0, uz=0)
 force_bc = NodeBC( hook_node, uy=-0.0015)
 set_bc(dom, disp_bc, force_bc)
-@test solve!(dom, nincs=10, scheme=scheme, verbose=true)
+@test solve!(dom, nincs=20, scheme=scheme, verbose=true)
 
 disp_bc  = NodeBC( solid_nodes, ux=0, uy=0, uz=0)
 force_bc = NodeBC( hook_node, uy=+0.0005)
 set_bc(dom, disp_bc, force_bc)
-@test solve!(dom, nincs=5, scheme=scheme, verbose=true)
+@test solve!(dom, nincs=10, scheme=scheme, verbose=true)
 
 disp_bc  = NodeBC( solid_nodes, ux=0, uy=0, uz=0)
 force_bc = NodeBC( hook_node, uy=-0.0045)
 set_bc(dom, disp_bc, force_bc)
-@test solve!(dom, nincs=10, scheme=scheme, verbose=true)
+@test solve!(dom, nincs=30, scheme=scheme, verbose=true)
 
-#save(tab_tnode , "tab_tnode.dat")
-#save(tab_tjoint, "tab_tjoint.dat")
-
-using PyPlot
-tab = tab_tjoint.table
-plot(tab[:ur], tab[:tau], marker="o")
-show()
+#using PyPlot
+#tab = tab_tjoint.table
+#plot(tab[:ur], tab[:tau], marker="o")
+#show()

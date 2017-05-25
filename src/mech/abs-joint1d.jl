@@ -22,7 +22,7 @@
 abstract AbsJoint1D<:Mechanical
 
 # Return the class of element where this material can be used
-client_elem_class(mat::AbsJoint1D) = :JOINT1D
+client_shape_class(mat::AbsJoint1D) = JOINT1D_SHAPE
 
 
 function mount_T(J::Matx)
@@ -85,12 +85,12 @@ function mountB(mat::AbsJoint1D, elem::Element, R, Ch, Ct, B)
     nnodes  = length(elem.nodes)
     ntnodes = length(bar.nodes)
     nbnodes = length(hook.nodes)
-    D = deriv_func(bar.shape, R)
+    D = bar.shape.deriv(R)
     J = D*Ct
     T = mount_T(J)
 
     # Mount NN matrix
-    N = shape_func(bar.shape, R)
+    N = bar.shape.func(R)
     NN = hcat([ Ni*eye(ndim) for Ni in N  ]...)
 
     # Mount MM matrix
@@ -98,7 +98,7 @@ function mountB(mat::AbsJoint1D, elem::Element, R, Ch, Ct, B)
     for i=1:ntnodes
         Xj = bar.nodes[i].X
         R  = inverse_map(hook.shape, Ch, Xj)
-        M  = shape_func(hook.shape, R)
+        M  = hook.shape.func(R)
         for Mi in M
             push!(stack, Mi*eye(ndim))
         end

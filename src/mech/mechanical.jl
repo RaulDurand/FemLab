@@ -18,7 +18,7 @@
 #    along with FemLab.  If not, see <http://www.gnu.org/licenses/>.         #
 ##############################################################################
 
-export set_mat
+export elem_jacobian
 
 abstract Mechanical<:Material
 

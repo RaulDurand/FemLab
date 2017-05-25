@@ -24,7 +24,7 @@ export EmbTruss
 abstract AbsEmbTruss<:Mechanical
 
 # Return the class of element where this material can be used
-client_elem_class(mat::AbsEmbTruss) = :EMBEDDED
+client_shape_class(mat::AbsEmbTruss) = EMBEDDED
 
 function config_dofs(::AbsEmbTruss, elem::Element)
     # No-op function.
@@ -46,7 +46,7 @@ function mountNN(mat::AbsEmbTruss, elem::Element)
 
     for j=1:m 
         R = inverse_map(solid.shape, Cs, elem.nodes[j].X)
-        N = shape_func(solid.shape, R)
+        N = solid.shape.func(R)
         for i=1:n
             for k=1:ndim
                 NN[(i-1)*ndim+k, (j-1)*ndim+k] = N[i]

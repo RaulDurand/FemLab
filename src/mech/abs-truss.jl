@@ -4,7 +4,7 @@ export Truss
 abstract AbsTruss<:Mechanical
 
 # Return the class of element where this material can be used
-client_elem_class(mat::AbsTruss) = :LINE
+client_shape_class(mat::AbsTruss) = LINE_SHAPE
 
 function elem_jacobian(mat::AbsTruss, elem::Element)
     ndim   = elem.ndim
@@ -16,7 +16,7 @@ function elem_jacobian(mat::AbsTruss, elem::Element)
     J  = Array{Float64}(1, ndim)
 
     for ip in elem.ips
-        dNdR = deriv_func(elem.shape, ip.R)
+        dNdR = elem.shape.deriv(ip.R)
         @gemm J = dNdR*C
         detJ = norm(J)
 
@@ -45,7 +45,7 @@ function update!(mat::AbsTruss, elem::Element, dU::Array{Float64,1})
     B  = zeros(1, nnodes*ndim)
     J  = Array{Float64}(1, ndim)
     for ip in elem.ips
-        dNdR = deriv_func(elem.shape, ip.R)
+        dNdR = elem.shape.deriv(ip.R)
         @gemm J = dNdR*C
         detJ = norm(J)
 

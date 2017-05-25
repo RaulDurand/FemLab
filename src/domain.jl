@@ -19,7 +19,7 @@
 ##############################################################################
 
 export Domain
-export set_monitors, set_trackers
+export set_monitors, update_monitors, set_trackers
 export get_node
 
 
@@ -100,10 +100,6 @@ function Domain(mesh::Mesh; filekey::AbstractString="out", stress_state=:general
 
     # Setting linked cells
     for (i,cell) in enumerate(mesh.cells)
-        # check for embedded elements
-        if is_line(cell.shape) && length(cell.linked_cells)>0
-            dom.elems[i].class = :EMBEDDED
-        end
         # setting linked elements
         for lcell in cell.linked_cells
             id = lcell.id
