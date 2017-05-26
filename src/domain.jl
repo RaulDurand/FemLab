@@ -511,7 +511,7 @@ function save(dom::Domain, filename::AbstractString; verbose=true, save_ips=fals
     # Write elem types
     println(f, "CELL_TYPES ", nelems)
     for elem in dom.elems
-        println(f, get_vtk_type(elem.shape))
+        println(f, elem.shape.vtk_type)
     end
     println(f)
 
@@ -525,6 +525,7 @@ function save(dom::Domain, filename::AbstractString; verbose=true, save_ips=fals
         necomps = length(elem_labels)
     else
         close(f)
+        verbose && print_with_color(:green, "  file $filename written (Domain)\n")
         return
     end
 
@@ -589,15 +590,13 @@ function save(dom::Domain, filename::AbstractString; verbose=true, save_ips=fals
     println(f, "SCALARS cell_type int 1")
     println(f, "LOOKUP_TABLE default")
     for elem in dom.elems
-        println(f, Int64(elem.shape), " ")
+        println(f, elem.shape.vtk_type, " ")
     end
     println(f, )
 
     close(f)
 
-    if verbose
-        printcolor(:green, "  file $filename written (Domain)\n")
-    end
+    verbose && print_with_color(:green, "  file $filename written (Domain)\n")
 
     # save ip information as vtk
     if has_data && save_ips
@@ -681,7 +680,7 @@ function save_dom_ips(dom::Domain, filename::AbstractString, verbose=true)
     close(f)
 
     if verbose
-        printcolor(:green, "  file $filename written (Domain)\n")
+        print_with_color(:green, "  file $filename written (Domain)\n")
     end
 end
 
@@ -755,7 +754,7 @@ function save2(dom::Domain, filename::AbstractString; verbose=true)
     # Write cell types
     println(f, "CELL_TYPES ", nelems)
     for elem in dom.elems
-        println(f, get_vtk_type(elem.shape))
+        println(f, elem.shape.vtk_type)
     end
     # Ips cell types
     vtk_vertex = 1
@@ -853,7 +852,7 @@ function save2(dom::Domain, filename::AbstractString; verbose=true)
     close(f)
 
     if verbose
-        printcolor(:green, "  file $filename written (Domain)\n")
+        print_with_color(:green, "  file $filename written (Domain)\n")
     end
 end
 

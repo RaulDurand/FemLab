@@ -14,6 +14,6 @@ bc1 = NodeBC( :(z==0), ux=0, uy=0, uz=0 )
 bc2 = FaceBC( :(z==1), uz=-10e-3)
 set_bc(dom, bc1, bc2)
 
-@test solve!(dom, auto=true, nincs=20, scheme="FE", maxits=2, precision=0.01, verbose=true)
+@test solve!(dom, auto=true, nincs=20, scheme="FE", maxits=2, precision=0.01, verbose=true, saveincs=false)
 
 

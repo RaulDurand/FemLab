@@ -54,7 +54,7 @@ end
 
 # Show basic information of an ip using print
 function show(io::IO, ip::Ip)
-    @printf io "Ip( X=%-12.4e    R=%-12.4e    ip_data_type=%s)" ip.X ip.R typeof(ip.data)
+    @printf io "Ip( X=%s    R=%s    ip_data_type=%s)" ip.X ip.R typeof(ip.data)
 end
 
 function show(io::IO, ips::Array{Ip,1})
