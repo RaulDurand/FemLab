@@ -89,7 +89,7 @@ include("globals.jl")
 include("node.jl")
 export Node, Dof, add_dof
 
-include("elem.jl")
+include("element.jl")
 export Element, Ip
 export set_mat, get_nodes, get_ips, set_state, reset, getcoords, getvals, get_map
 

@@ -155,14 +155,14 @@ Creates an 'Element' object for finite element analyses based on a
 `shape`, an array of `nodes` and the space dimension `ndim`.
 """
 type Element
-    id    ::Int
     shape ::ShapeType
-    tag   ::AbstractString
-    active::Bool
     nodes ::Array{Node,1}
+    ndim  ::Int
+    tag   ::AbstractString
+    id    ::Int
+    active::Bool
     ips   ::Array{Ip,1}
     mat   ::Material
-    ndim  ::Int
     linked_elems::Array{Element,1}
 
     function Element(shape, nodes, ndim, tag="")
