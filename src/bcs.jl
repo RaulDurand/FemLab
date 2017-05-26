@@ -20,8 +20,6 @@
 
 abstract BC
 
-export NodeBC, FaceBC, EdgeBC, set_bc
-
 type NodeBC <: BC
     expr ::Expr
     conds::Array
@@ -103,20 +101,19 @@ end
 
 # Define boundary conditions for a node
 """
-`set_bc(node, bcs...)`
+`apply_bc(node, bcs...)`
 
-Sets one or several boundary conditions `bcs` to a `node` object.
+Applies one or several boundary conditions `bcs` to a `node` object.
 In a mechanical analysis, essential and natural boundary conditions can be set using this function.
 For example:
 ```
 node = Node([1.0, 1.0, 1.0])
-set_bc(node, fx=10.0, uy=0.01)
+apply_bc(node, fx=10.0, uy=0.01)
 
 ```
 """
-function set_bc(node::Node; args...)
+function apply_bc(node::Node; args...)
     for (key,val) in args
-        #@show (key,val)
         if !haskey(node.dofdict, key); error("key ($key) not found in node ($(node.id)).") end
         dof = node.dofdict[key]
         if key==dof.sU
@@ -146,35 +143,33 @@ end
 
 # Define boundary conditions for a collection of nodes
 """
-`set_bc(nodes, bcs...)`
+`apply_bc(nodes, bcs...)`
 
-Sets one or several boundary conditions `bcs` to a set of Node objects `nodes`.
+Applies one or several boundary conditions `bcs` to a set of Node objects `nodes`.
 """
-function set_bc(nodes::Array{Node,1}; args...)
-    if length(nodes)==0
-        printcolor(:red, "Warning, applying boundary conditions to empty array of nodes\n")
-    end
+function apply_bc(nodes::Array{Node,1}; args...)
+    length(nodes)==0 && warn("Warning, applying boundary conditions to empty array of nodes\n")
 
     for node in nodes
-        set_bc(node; args...)
+        apply_bc(node; args...)
     end
 end
 
 # Define boundary conditions for a face
-function set_bc(face::Face; args...)
+function apply_bc(face::Face; args...)
     oelem = face.oelem # owner element
-    if oelem==nothing; error("Face with no owner element") end
+    oelem==nothing && error("Face with no owner element")
 
     for (key,val) in args
-        #@show (key,val)
-        set_facet_bc(oelem.mat, oelem, face, key, float(val))
+        apply_facet_bc(oelem.mat, oelem, face, key, float(val))
     end
 end
 
 # Define boundary conditions for a collection of faces
-function set_bc(faces::Array{Face,1}; args...)
-    if length(faces)==0; printcolor(:red, "Warning, applying boundary conditions to empty array of faces\n") end
+function apply_bc(faces::Array{Face,1}; args...)
+    length(faces)==0 && warn("Warning, applying boundary conditions to empty array of faces\n")
+
     for face in faces
-        set_bc(face; args...)
+        apply_bc(face; args...)
     end
 end

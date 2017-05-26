@@ -25,11 +25,6 @@ import Base.min
 import Base.sort
 import Base.show
 
-export Node
-export max, min, sort, reset
-export @get_nodes
-
-
 # Dof
 # ===
 
@@ -56,7 +51,14 @@ end
 
 # Show basic information of a dof using print
 function show(io::IO, dof::Dof)
-    @printf "Dof( eq_id=%s  %s=%-18.10e    %s=%-18.10e    bry_%s=%-18.10e   bry_%s=%-18.10e  presc=%s)" dof.eq_id   dof.sU dof.U dof.sF dof.F   dof.sU dof.bryU dof.sF dof.bryF dof.prescU
+    @printf io "Dof( eq_id=%s  %s=%-12.4e    %s=%-12.4e    bry_%s=%-12.4e   bry_%s=%-12.4e  presc=%s)" dof.eq_id   dof.sU dof.U dof.sF dof.F   dof.sU dof.bryU dof.sF dof.bryF dof.prescU
+end
+
+function show(io::IO, dofs::Array{Dof,1})
+    for dof in dofs
+        println(io, dof)
+    end
+    return nothing
 end
 
 
@@ -97,8 +99,22 @@ end
 # Show basic information of a node using print
 function show(io::IO, node::Node)
     X = node.X
-    sdofs = length(node.dofs)>0 ? "[...]" : "[]"
-    @printf "Node( id=%s X=[%-18.5e, %-18.5e, %-18.5e] tag=%s dofs=%s )" node.id X[1] X[2] X[3] node.tag sdofs
+    sdofs = "Dof"*string( [dof.sU for dof in node.dofs] )
+    @printf io "Node( id=%s X=[%-12.4e, %-12.4e, %-12.4e] tag=%s, dofs=%s )" node.id X[1] X[2] X[3] node.tag sdofs
+end
+
+function show(io::IO, nodes::Array{Node,1})
+    n = length(nodes)
+    maxn = 20
+    half = div(maxn,2)
+    idx = n<=maxn ? [1:n;] : [1:half; n-half+1:n]
+    for i in idx
+        println(io, nodes[i])
+        if n>maxn && i==half
+            println(io, "⋮")
+        end
+    end
+    return nothing
 end
 
 
@@ -195,27 +211,9 @@ end
 
 
 # Sort a collection of nodes in a given direction
-function sort(nodes::Array{Node,1}, dir::Symbol=:x, rev::Bool=false) 
+function sort(nodes::Array{Node,1}, dir::Symbol=:x; rev::Bool=false) 
     idx  = findfirst((:x, :y, :z), dir)
     idxs = sortperm([node.X[idx] for node in nodes], rev=rev)
     return nodes[idxs]
 end
 
-
-# Macro to filter nodes using a condition expression
-macro get_nodes(dom, expr)
-
-    # fix condition
-    cond = fix_comparison_scalar(expr)
-
-    # generate the filter function
-    func = quote
-        (X::Array{Float64,1}) -> begin x,y,z=X ; $(cond) end
-    end
-
-    quote
-        ff = $(esc(func))
-        tt = Bool[ ff(n.X) for n in $(esc(dom)).nodes ]
-        $(esc(dom)).nodes[ tt ]
-    end
-end

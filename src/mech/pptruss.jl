@@ -18,9 +18,6 @@
 #    along with FemLab.  If not, see <http://www.gnu.org/licenses/>.         #
 ##############################################################################
 
-
-export PPTruss
-
 type PPTrussIpData<:IpData
     ndim::Int
     σ::Float64

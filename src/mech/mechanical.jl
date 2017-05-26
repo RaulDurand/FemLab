@@ -18,8 +18,6 @@
 #    along with FemLab.  If not, see <http://www.gnu.org/licenses/>.         #
 ##############################################################################
 
-export elem_jacobian
-
 abstract Mechanical<:Material
 
 function config_dofs(::Mechanical, elem::Element)
@@ -55,9 +53,6 @@ end
 function elem_RHS(::Mechanical, elem::Element)
     # Appropriate for body forces
     return zeros(length(get_map(elem)))
-    #ndim   = elem.ndim
-    #nnodes = length(elem.nodes)
-    #return zeros(ndim*nnodes)
 end
 
 function update!(elem::Element, dU::Array{Float64,1})
@@ -67,35 +62,4 @@ end
 function elem_vals(mat::Mechanical, elem::Element)
     return Dict{Symbol, Float64}()
 end
-
-
-include("tensors.jl")
-
-# Models for solid elements (2D and 3D)
-include("abs-solid.jl")
-include("solid.jl")
-include("dp.jl")
-include("kotsovos.jl")
-include("mazars.jl")
-
-# Models for truss elements
-include("abs-truss.jl")
-include("truss.jl")
-include("pptruss.jl")
-
-# Models for embedded truss
-include("abs-embtruss.jl")
-include("embtruss.jl")
-include("embpptruss.jl")
-
-# Models for joint elements
-include("abs-joint.jl")
-include("joint.jl")
-include("mcjoint.jl")
-
-# Models for 1D joint elements
-include("abs-joint1d.jl")
-include("joint1d.jl")
-include("mcjoint1d.jl")
-include("cebjoint1d.jl")
 

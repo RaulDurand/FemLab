@@ -19,8 +19,6 @@
 ##############################################################################
 
 
-export CEBJoint1D
-
 type CEBJoint1DIpData<:IpData
     ndim::Int
     σ  ::Array{Float64,1}

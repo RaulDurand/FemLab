@@ -19,8 +19,6 @@
 ##############################################################################
 
 
-export EmbTruss
-
 abstract AbsEmbTruss<:Mechanical
 
 # Return the class of element where this material can be used

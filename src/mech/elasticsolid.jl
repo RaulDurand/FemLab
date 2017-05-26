@@ -18,6 +18,9 @@
 #    along with FemLab.  If not, see <http://www.gnu.org/licenses/>.         #
 ##############################################################################
 
+export ElasticSolid
+export set_state
+
 type ElasticSolidIpData<:IpData
     ndim::Int
     σ::Array{Float64,1}

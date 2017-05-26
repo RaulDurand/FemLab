@@ -19,17 +19,7 @@
 ##############################################################################
 
 import Base.reset
-#export IpData
-export Element, Dof, Ip
-export set_mat, get_nodes, get_ips, set_state, reset, getcoords
-export get_map, elem_RHS
-export min, max, sort
-export getvals
-export read_prms
 import Base.copy!
-export copy!
-#export @get_elems
-
 
 # Abstract type for IP data
 # =========================
@@ -55,11 +45,30 @@ type Ip
     data0::IpData  # Ip state at begin of increment
 
     function Ip(R::Array, w::Float64)
-        this   = new(vec(R), w)
-        this.X = Array{Float64}(3)
+        this    = new(vec(R), w)
+        this.X  = Array{Float64}(3)
         this.owner = nothing
         return this
     end
+end
+
+# Show basic information of an ip using print
+function show(io::IO, ip::Ip)
+    @printf io "Ip( X=%-12.4e    R=%-12.4e    ip_data_type=%s)" ip.X ip.R typeof(ip.data)
+end
+
+function show(io::IO, ips::Array{Ip,1})
+    n = length(ips)
+    maxn = 20
+    half = div(maxn,2)
+    idx  = n<=maxn ? [1:n;] : [1:half; n-half+1:n]
+    for i in idx
+        println(io, ips[i])
+        if n>maxn && i==half
+            println(io, "⋮")
+        end
+    end
+    return nothing
 end
 
 
@@ -146,25 +155,46 @@ Creates an 'Element' object for finite element analyses based on a
 `shape`, an array of `nodes` and the space dimension `ndim`.
 """
 type Element
-    shape ::ShapeType
-    nodes ::Array{Node,1}
-    ndim  ::Int
-    tag   ::AbstractString
     id    ::Int
+    shape ::ShapeType
+    tag   ::AbstractString
     active::Bool
-    mat   ::Material
+    nodes ::Array{Node,1}
     ips   ::Array{Ip,1}
+    mat   ::Material
+    ndim  ::Int
     linked_elems::Array{Element,1}
 
     function Element(shape, nodes, ndim, tag="")
-        this     = new(shape, nodes, ndim, tag)
+        this        = new(shape, nodes, ndim, tag)
         this.active = true
-        this.ips = []
+        this.ips    = []
         this.linked_elems = []
         # Set the element class. For embedded elems, the class will be set by the Domain object.
         #this.class = shape.class
         this
     end
+end
+
+# Show basic information of an element using print
+function show(io::IO, elem::Element)
+    snodes = "Node"*string([n.id for n in elem.nodes])
+    sips   = length(elem.ips)==0 ? "Ip[]" : "Ip[...]"
+    @printf io "Element( id=%s  shape=%s  tag=%s  active=%s  nodes=%s  ips=%s  mat=%s )" elem.id elem.shape.name elem.tag elem.active snodes sips typeof(elem.mat)
+end
+
+function show(io::IO, elems::Array{Element,1})
+    n = length(elems)
+    maxn = 20
+    half = div(maxn,2)
+    idx  = n<=maxn ? [1:n;] : [1:half; n-half+1:n]
+    for i in idx
+        println(io, elems[i])
+        if n>maxn && i==half
+            println(io, "⋮")
+        end
+    end
+    return nothing
 end
 
 function reset(elems::Array{Element,1})
@@ -197,7 +227,6 @@ function getindex(elems::Array{Element,1}, s::Symbol)
     end
     if s == :embedded
         return filter(elem -> elem.shape.class==LINE_SHAPE && length(elem.linked_elems)>0, elems)
-        #return filter(elem -> elem.shape.class==EMBEDDED_SHAPE, elems)
     end
     if s == :joints1D
         return filter(elem -> elem.shape.class==JOINT1D_SHAPE, elems)

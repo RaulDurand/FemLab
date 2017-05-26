@@ -24,7 +24,7 @@ abstract AbsSolid<:Mechanical
 client_shape_class(mat::AbsSolid) = SOLID_SHAPE
 
 
-function set_facet_bc(mat::AbsSolid, oelem::Element, face::Face, key::Symbol, val::Float64)
+function apply_facet_bc(mat::AbsSolid, oelem::Element, face::Face, key::Symbol, val::Float64)
     fnodes = face.nodes
     fshape = face.shape
     ndim   = oelem.ndim

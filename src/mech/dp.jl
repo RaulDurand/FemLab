@@ -18,9 +18,6 @@
 #    along with FemLab.  If not, see <http://www.gnu.org/licenses/>.         #
 ##############################################################################
 
-export DruckerPrager
-export set_state
-
 type DruckerPragerIpData<:IpData
     ndim::Int64
     σ::Tensor2

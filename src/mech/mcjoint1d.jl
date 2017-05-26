@@ -19,8 +19,6 @@
 ##############################################################################
 
 
-export MCJoint1D
-
 type MCJoint1DIpData<:IpData
     ndim::Int
     σ  ::Array{Float64,1}

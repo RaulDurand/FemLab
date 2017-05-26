@@ -36,35 +36,7 @@ set_mat, set_bc, clear_bc, solve!, save
 
 """
 module FemLab
-
-COLORS = Dict( 
-    :red     => "\x1b[31m",
-    :green   => "\x1b[32m",
-    :yellow  => "\x1b[33m",
-    :blue    => "\x1b[34m",
-    :magenta => "\x1b[35m",
-    :cyan    => "\x1b[36m",
-    :white   => "\x1b[37m",
-    :bold    => "\x1b[1m",
-    :normal  => "\x1b[0m",
-    )
-
-# Alias to print with color
-printcolor = print_with_color
-#function printcolor(col::Symbol, msg::AbstractString...)
-    #print(COLORS[col], msg..., COLORS[:normal])
-#end
-
-# Print bold with color
-function pbcolor(col::Symbol, msg::AbstractString...)
-    const BOLD    = "\x1b[1m"
-    const DEFAULT = "\x1b[0m"
-    if is_linux() print(BOLD) end
-    print_with_color(col, msg...)
-    if is_linux() print(DEFAULT) end
-end
-
-using Base
+using  Base, JSON
 
 # Code snippet from simonster
 # https://github.com/simonster/Reexport.jl
@@ -88,13 +60,13 @@ macro reexport(ex)
              [:(eval(Expr(:export, setdiff(names($(mod)), [mod])...))) for mod in modules]...))
 end
 
-#Use non-registered (jet) package FemMesh
+#Using non-registered (jet) package FemMesh
 #Pkg.installed("FemMesh") == nothing && Pkg.clone("https://github.com/RaulDurand/FemMesh")
 
 try
     eval(:(using FemMesh))
 catch err
-    println(err)
+    #println(err)
     Pkg.clone("https://github.com/RaulDurand/FemMesh")
 end
 
@@ -102,23 +74,44 @@ end
 import FemMesh.save # to be extended
 import FemMesh.update! # to be extended
 
-using JSON
-
-# Tools
+# Tools module
 include("tools/linalg.jl")
 include("tools/expr.jl")
 include("tools/table.jl")
+include("tools/tensors.jl")
+
+# generic exports
+export max, min, sort, reset, getindex, sort, copy!, show
 
 # Fem module
 include("globals.jl")
+
 include("node.jl")
+export Node, Dof, add_dof
+
 include("elem.jl")
+export Element, Ip
+export set_mat, get_nodes, get_ips, set_state, reset, getcoords, getvals, get_map
+
 include("face.jl")
+export Face
+
 include("bcs.jl")
+export NodeBC, FaceBC, EdgeBC, apply_bc
+
 include("monitor.jl")
+export NodeMonitor, NodesMonitor, IpMonitor, IpsMonitor, FacesMonitor, EdgesMonitor
+export NodeTracker, NodesTracker, IpTracker, IpsTracker, FacesTracker, EdgesTracker
+
 include("domain.jl")
-include("mech/mechanical.jl")
-include("mech/solver.jl")
-#include("seep/seep.jl")
+export set_bc, set_monitors, update_monitors, set_trackers
+
+
+# Mechanical module
+include("mech/include.jl")
+
+
+# Porous media flow module
+#include("seep/include.jl")
 
 end#module

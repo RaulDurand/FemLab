@@ -19,8 +19,6 @@
 ##############################################################################
 
 export Domain
-export set_monitors, update_monitors, set_trackers
-export get_node
 
 
 """
@@ -165,12 +163,12 @@ function dom_load_json(filename::AbstractString)
         if id>0
             delete!(bc, "id")
             args = Dict( Symbol(k) => v for (k,v) in  bc )
-            set_bc(dom.nodes[id]; args...)
+            apply_bc(dom.nodes[id]; args...)
         else
             cond = parse(bc["cond"])
             delete!(bc, "cond")
             args = Dict( Symbol(k) => v for (k,v) in  bc )
-            set_bc( dom.nodes[cond]; args...)
+            apply_bc( dom.nodes[cond]; args...)
         end
     end
 
@@ -184,7 +182,7 @@ function dom_load_json(filename::AbstractString)
         cond = parse(bc["cond"])
         delete!(bc, "cond")
         args = Dict( Symbol(k) => v for (k,v) in  bc )
-        set_bc( dom.faces[cond]; args...)
+        apply_bc( dom.faces[cond]; args...)
     end
 
     return dom
@@ -399,16 +397,16 @@ function node_and_elem_vals2(nodes::Array{Node,1}, elems::Array{Element,1})
 end
 
 
-function get_node(dom::Domain, coord::Array{Float64,1})
-    X = [ coord, 0.0 ][1:3]
-    tol     = 1.0e-8
-    for node in dom.nodes
-        if norm(X-node.X) < tol
-            return node
-        end
-    end
-    return nothing
-end
+#function get_node(dom::Domain, coord::Array{Float64,1})
+    #X = [ coord, 0.0 ][1:3]
+    #tol     = 1.0e-8
+    #for node in dom.nodes
+        #if norm(X-node.X) < tol
+            #return node
+        #end
+    #end
+    #return nothing
+#end
 
 function set_monitors(dom::Domain, ts::Monitor...)
     for t in ts

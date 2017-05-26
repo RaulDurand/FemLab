@@ -18,10 +18,6 @@
 #    along with FemLab.  If not, see <http://www.gnu.org/licenses/>.         #
 ##############################################################################
 
-export Face
-export @get_faces
-
-
 type Face
     shape::ShapeType
     nodes::Array{Node,1}
@@ -88,27 +84,4 @@ function getindex(faces::Array{Face,1}, s::Symbol)
         return get_nodes(faces)
     end
     error("Face getindex: Invalid symbol $s")
-end
-
-# Macro to filter faces using a condition expression
-macro get_faces(dom, expr)
-
-    # fix condition
-    cond = fix_comparison_arrays(expr)
-
-    # generate the filter function
-    func = quote
-        (f::Face) -> begin 
-            x = [ node.X[1] for node in f.nodes ]
-            y = [ node.X[2] for node in f.nodes ]
-            z = [ node.X[3] for node in f.nodes ]
-            $(cond) 
-        end
-    end
-
-    quote
-        ff = $(esc(func))
-        tt = Bool[ ff(f) for f in $(esc(dom)).faces]
-        $(esc(dom)).faces[ tt ]
-    end
 end

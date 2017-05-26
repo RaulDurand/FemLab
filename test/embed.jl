@@ -22,5 +22,5 @@ bc3 = FaceBC( :(z==1), tz=-1000 )
 
 set_bc(dom, bc1, bc2, bc3)
 
-@test solve!(dom, nincs=20, verbose=true, savesteps=false)
+@test solve!(dom, nincs=20, verbose=true, saveincs=false)
 

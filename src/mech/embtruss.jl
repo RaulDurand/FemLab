@@ -19,8 +19,6 @@
 ##############################################################################
 
 
-export EmbTruss
-
 type EmbTruss<:AbsEmbTruss
     trussmat::Truss  # uses the material for elastic truss
 

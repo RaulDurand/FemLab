@@ -137,15 +137,16 @@ end
 
 
 function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=true, scheme::String="FE", precision::Number=0.01,
-    tol::Number=0.0, reset_bc::Bool=true, verbose::Bool=true, autosave::Bool=false, savesteps::Bool=false, nout::Int=0, save_ips::Bool=false)
+    tol::Number=0.0, reset_bc::Bool=true, verbose::Bool=true, autosave::Bool=false, saveincs::Bool=false, nout::Int=0,
+    save_ips::Bool=false)::Bool
     
-    autosave && (savesteps = true)
+    autosave && (saveincs = true)
     !NR      && (nincs = 1)
-    (savesteps && nout==0) && (nout=10)  # default value for nout
-    savesteps = nout>0
+    (saveincs && nout==0) && (nout=10)  # default value for nout
+    saveincs = nout>0
 
     if verbose
-        pbcolor(:cyan,"FEM analysis:\n") 
+        print_with_color(:cyan,"FEM analysis:\n") 
         tic()
     end
 
@@ -163,17 +164,17 @@ function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=
 
     # Set boundary conditions at nodes
     for bc in dom.node_bcs
-        set_bc(bc.nodes; bc.conds...)
+        apply_bc(bc.nodes; bc.conds...)
     end
 
     # Boundary conditions at faces
     for bc in dom.face_bcs
-        set_bc(bc.faces; bc.conds...)
+        apply_bc(bc.faces; bc.conds...)
     end
 
     # Boundary conditions at edges
     for bc in dom.edge_bcs
-        set_bc(bc.edges; bc.conds...)
+        apply_bc(bc.edges; bc.conds...)
     end
 
     # Fill arrays of prescribed dofs and unknown dofs
@@ -214,24 +215,13 @@ function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=
     F  = [ dof.bryF for dof in dofs] # nodal and face boundary conditions
     F += RHS
 
-    # Scheme selection
-    sch = Symbol(scheme)
-    local solve_inc_scheme::Function
-
-    if     sch==:ME;      solve_inc_scheme = solve_step_ME
-    elseif sch==:Ralston; solve_inc_scheme = solve_step_Ralston
-    elseif sch==:RK3;     solve_inc_scheme = solve_step_RK3
-    elseif sch==:RK4;     solve_inc_scheme = solve_step_RK4
-    else   sch =:FE 
-    end
-
     # Solving process
     nu  = length(udofs)  # number of unknowns
     if verbose; println("  unknown dofs: $nu") end
 
     update_monitors(dom)    # Tracking nodes, ips, elements, etc.
 
-    if dom.nincs == 0 && savesteps 
+    if dom.nincs == 0 && saveincs 
         save(dom, dom.filekey * "-0.vtk", verbose=false, save_ips=save_ips)
         verbose && print_with_color(:green, "  $(dom.filekey)-0.vtk file written (Domain)\n")
     end
@@ -247,8 +237,10 @@ function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=
     # Incremental analysis
     T   = 0.0
     dT  = 1.0/nincs
+
     dTs = 1.0/nout   # increment for saving vtk file
     Ts  = dTs        # T for next vtk file saving
+
     μdT = 1e-9       # minimum dT
     inc = 1
     iout = dom.nouts
@@ -258,7 +250,7 @@ function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=
     sdata = MecSolverData(dom, ips, tol, verbose, umap, pmap, ndofs)
 
     while T < 1.0 - μdT
-        if verbose; printcolor(:blue, "  increment $inc from T=$(round(T,10)) to T=$(round(T+dT,10)) (dT=$(round(dT,10))):\n") end
+        if verbose; print_with_color(:blue, "  increment $inc from T=$(round(T,10)) to T=$(round(T+dT,10)) (dT=$(round(dT,10))):\n") end
         ΔU, ΔF = dT*U, dT*F     # increment vectors
         R      = copy(ΔF)       # residual
         local ΔFin              # internal forces vector for current increment
@@ -285,9 +277,9 @@ function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=
             #residue = calc_residue(ΔF, ΔFin, maxF, umap)
             residue = maximum(abs, (ΔF-ΔFin)[umap] ) #*****
 
-            # Other schemes
-            if residue > tol && sch != :FE
-                ΔFin, R = solve_inc_scheme(sdata, K, ΔUa, ΔUi, R)
+            # use ME scheme
+            if residue > tol && scheme == "ME"
+                ΔFin, R = solve_step_ME(sdata, K, ΔUa, ΔUi, R)
                 maxF = max(norm(Fin+ΔFin), maxF)
                 #residue = calc_residue(ΔF, ΔFin, maxF, umap)
                 residue = maximum(abs, (ΔF-ΔFin)[umap] ) #*****
@@ -302,7 +294,7 @@ function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=
             R[pmap] .= 0.0  # Zero at prescribed positions
 
             if verbose
-                printcolor(:bold, "    it $it  ")
+                print_with_color(:bold, "    it $it  ")
                 @printf("residue: %-10.4e", residue)
                 println()
             end
@@ -331,7 +323,7 @@ function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=
 
             update_monitors(dom) # Tracking nodes, ips, elements, etc.
             Tn = T + dT
-            if Tn>=Ts && savesteps
+            if Tn>=Ts && saveincs
                 iout += 1
                 save(dom, dom.filekey * "-$iout.vtk", verbose=false, save_ips=save_ips)
                 Ts = Tn - mod(Tn, dTs) + dTs
@@ -346,11 +338,11 @@ function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=
                 verbose && println("    increment failed.")
                 dT *= 0.5
                 if dT < μdT
-                    printcolor(:red, "solve!: solver did not converge\n",)
+                    print_with_color(:red, "solve!: solver did not converge\n",)
                     return false
                 end
             else
-                printcolor(:red, "solve!: solver did not converge\n",)
+                print_with_color(:red, "solve!: solver did not converge\n",)
                 return false
             end
         end
@@ -384,7 +376,6 @@ function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=
     return true
 
 end
-
 
 function solve_update_step(sdata::MecSolverData, K, ΔUa::Vect, ΔUi::Vect, R::Vect)
     ndofs = sdata.ndofs
@@ -426,230 +417,3 @@ function solve_step_ME(sdata::MecSolverData, K1, ΔUa::Vect, ΔUi::Vect, R::Vect
 
     return ΔFin, R
 end
-
-function solve_step_RK4(sdata::MecSolverData, K1, ΔUa::Vect, ΔUi::Vect, R::Vect)
-    # Predictor step:
-    ΔUi05 = ΔUi/2
-    R05   = R/2
-    ΔFin, R = solve_update_step(sdata, K1, ΔUa, ΔUi05, R05)
-
-    K2 = mount_K(sdata)
-    ΔFin, R = solve_update_step(sdata, K2, ΔUa, ΔUi05, R05)
-
-    K3 = mount_K(sdata)
-    ΔFin, R = solve_update_step(sdata, K3, ΔUa, ΔUi, R)
-
-    K4 = mount_K(sdata)
-    K  = 1/6*K1 + 1/3*K2 + 1/3*K3 + 1/6*K4
-    ΔFin, R = solve_update_step(sdata, K, ΔUa, ΔUi, R)
-    
-    return ΔFin, R
-end
-
-
-function solve_step_RK3(sdata::MecSolverData, K1, ΔUa::Vect, ΔUi::Vect, R::Vect)
-    # Predictor step:
-    ΔUi05 = ΔUi/2
-    R05   = R/2
-    ΔFin, R = solve_update_step(sdata, K1, ΔUa, ΔUi05, R05)
-
-    K2  = mount_K(sdata)
-    K22 = 2*K2-K1
-    ΔFin, R = solve_update_step(sdata, K22, ΔUa, ΔUi, R)
-
-    K3 = mount_K(sdata)
-    K  = (1/6)*K1 + (4/6)*K2 + (1/6)*K3
-    ΔFin, R = solve_update_step(sdata, K, ΔUa, ΔUi, R)
-
-    return ΔFin, R
-end
-
-
-function solve_step_Ralston(sdata::MecSolverData, K1, ΔUa::Vect, ΔUi::Vect, R::Vect)
-    # Predictor step:
-    ΔUi23 = 2/3*ΔUi
-    R23   = 2/3*R
-    ΔFin, R = solve_update_step(sdata, K1, ΔUa, ΔUi23, R23)
-
-    K2 = mount_K(sdata)
-    K  = 0.25*K1 + 0.75*K2
-    ΔFin, R = solve_update_step(sdata, K, ΔUa, ΔUi, R)
-
-    return ΔFin, R
-end
-
-
-function solve_legacy!(dom::Domain; nincs::Int=1, maxits::Int=50, scheme::AbstractString="FE", precision::Number=0.01, reset_bc::Bool=true, verbose::Bool=true, autosave::Bool=false, save_ips::Bool=false)
-
-    if verbose; pbcolor(:cyan,"FEM analysis:\n") end
-
-    # check if all elements have material defined
-    count = 0
-    for elem in dom.elems
-        if !isdefined(elem, :mat)
-            count += 1
-        end
-    end
-    count > 0 && error("There are $count elements without material definition\n")
-
-    # Set boundary conditions
-    for bc in dom.node_bcs
-        set_bc(bc.nodes; bc.conds...)
-    end
-
-    for bc in dom.face_bcs
-        set_bc(bc.faces; bc.conds...)
-    end
-
-    for bc in dom.edge_bcs
-        set_bc(bc.edges; bc.conds...)
-    end
-
-    # Fill array of dofs
-    udofs = Array{Dof}(0)
-    pdofs = Array{Dof}(0)
-
-    for node in dom.nodes
-        for dof in node.dofs
-            if dof.prescU
-                push!(pdofs, dof)
-            else
-                push!(udofs, dof) 
-            end
-        end
-    end
-
-    dofs  = vcat(udofs, pdofs)
-    ndofs = length(dofs)
-
-    # Set equation id
-    for (i,dof) in enumerate(dofs)
-        dof.eq_id = i
-    end
-    
-    # Fill arrays of prescribed dofs and unknown dofs
-    presc = [ dof.prescU for dof in dofs ]
-    pdofs = dofs[ presc]
-    udofs = dofs[!presc]
-    umap  = [dof.eq_id for dof in udofs]
-    pmap  = [dof.eq_id for dof in pdofs]
-
-    # Get array with all integration points
-    ips = [ ip for elem in dom.elems for ip in elem.ips ]
-
-    # Global RHS vector 
-    RHS = mount_RHS(dom::Domain, ndofs::Int64, 0.0)
-
-    # Global U F vectors
-    U  = [ dof.bryU for dof in dofs]
-    F  = [ dof.bryF for dof in dofs] # nodal and face boundary conditions
-    F += RHS
-
-    # Solving process
-    nu  = length(udofs)
-    verbose && println("  unknowns dofs: $nu")
-    λ = 1.0/nincs
-
-    DU, DF  = λ*U, λ*F
-    residue = 0.0
-    remountK = true   # Warning: use of remountK is bug prone!
-    update_monitors(dom) # Tracking nodes, ips, elements, etc.
-
-    if autosave
-        save(dom, dom.filekey * "-0" * ".vtk", verbose=false, save_ips=save_ips)
-    end
-
-    for inc=1:nincs
-        verbose && printcolor(:blue, "  increment $inc/$nincs:\n")
-        DU, DF = λ*U, λ*F
-        R      = copy(DF) # residual
-        local DFin, DUa
-
-        #DFa    = zeros(ndofs)
-        DUa    = zeros(ndofs)
-        nbigger= 0
-        remountK = true
-
-        converged = false
-        for it=1:maxits
-            if it>1; DU = zeros(ndofs) end
-
-            verbose && print("    assembling... \r")
-            K = mount_K(dom)
-
-            verbose && print("    solving...   \r")
-            solve_inc(K, DU, R, umap, pmap)   # Changes DU and R
-
-            verbose && print("    updating... \r")
-            DUa += DU
-
-            # Get internal forces and update data at integration points
-            DFin  = zeros(ndofs)
-            for elem in dom.elems
-                update!(elem, DU, DFin) # updates DFin
-            end
-
-            DF[pmap] = DFin[pmap]  # Updates reactions
-            R    = R - DFin
-            #DFa += DFin
-
-            lastres = residue
-            residue = maximum(abs, R)
-
-            if verbose
-                printcolor(:bold, "    it $it  ")
-                @printf("residue: %-15.4e", residue)
-                println()
-            end
-
-            # Check for convergence
-            if residue > lastres; nbigger+=1 end
-            if residue<precision; converged = true ; break end
-            if nbigger>15;        converged = false; break end
-            if isnan(residue);    converged = false; break end
-        end
-
-        # Tracking
-        if converged
-            # Store converged state at ips
-            for ip in ips
-                ip.data0 = deepcopy(ip.data)
-            end
-
-            # Update nodal variables at dofs
-            for (i,dof) in enumerate(dofs)
-                dof.U += DUa[i]
-                dof.F += DFin[i]
-            end
-            update_monitors(dom) # Tracking nodes, ips, elements, etc.
-            autosave && save(dom, dom.filekey * "-$inc" * ".vtk", verbose=false, save_ips=save_ips)
-        end
-
-        if !converged
-            printcolor(:red, "solve!: solver did not converge\n",)
-            return false
-        end
-    end
-
-    if verbose && autosave
-        printcolor(:green, "  $(dom.filekey)..vtk files written (Domain)\n")
-    end
-
-    # Reset boundary conditions at end of stage
-    if reset_bc
-        for node in dom.nodes
-            for dof in node.dofs
-                dof.bryU = 0.0
-                dof.bryF = 0.0
-                dof.prescU = false
-            end
-        end
-    end
-
-    return true
-
-end
-
-
-
-precompile(solve!,(Domain,))

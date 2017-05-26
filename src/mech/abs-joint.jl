@@ -19,7 +19,6 @@
 ##############################################################################
 
 
-export Joint
 abstract AbsJoint<:Mechanical
 
 # Return the class of element where this material can be used

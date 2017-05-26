@@ -18,9 +18,6 @@
 #    along with FemLab.  If not, see <http://www.gnu.org/licenses/>.         #
 ##############################################################################
 
-export Kotsovos
-export set_state
-
 type KotsovosIpData<:IpData
     ndim::Int64
     σ::Tensor2

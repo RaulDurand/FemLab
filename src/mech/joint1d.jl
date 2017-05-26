@@ -19,8 +19,6 @@
 ##############################################################################
 
 
-export Joint1D
-
 type Joint1DIpData<:IpData
     ndim::Int
     sig ::Array{Float64,1}

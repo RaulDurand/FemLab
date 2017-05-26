@@ -1,6 +1,4 @@
 
-export Truss
-
 abstract AbsTruss<:Mechanical
 
 # Return the class of element where this material can be used

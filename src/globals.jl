@@ -22,4 +22,4 @@
 export gl_stress_state, gl_thickness
 
 gl_stress_state = :general #  :plane_stress :plane_strain :three_dimensional :axys_symmetric
-gl_thickness = 1.0    #  :thickness for plane_stress analyses
+gl_thickness = 1.0         #  :thickness for plane_stress analyses
