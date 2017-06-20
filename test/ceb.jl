@@ -27,9 +27,9 @@ mon_joint_ips = IpsMonitor(joint_ips)
 
 
 tnode     = bar_nodes[end]
-tab_tnode = NodeTracker(tnode)
+tab_tnode = NodeMonitor(tnode)
 
-tjoint     = dom.elems[:joints1D][end]
+tjoint     = dom.elems[:joints1D][end][:ips][1]
 mon_tjoint = IpMonitor(tjoint)
 
 set_monitors(dom, tab_tnode, mon_tjoint, mon_joint_ips)

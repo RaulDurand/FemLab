@@ -1,11 +1,11 @@
 
 export Truss
 
-type TrussIpData<:IpData
+mutable struct TrussIpState<:IpState
     ndim::Int
     σ::Float64
     ε::Float64
-    function TrussIpData(ndim::Int=3)
+    function TrussIpState(ndim::Int=3)
         this = new(ndim)
         this.σ = 0.0
         this.ε = 0.0
@@ -13,7 +13,7 @@ type TrussIpData<:IpData
     end
 end
 
-type Truss<:AbsTruss
+mutable struct Truss<:AbsTruss
     E::Float64
     A::Float64
 
@@ -30,14 +30,14 @@ type Truss<:AbsTruss
 end
 
 # Create a new instance of Ip data
-new_ipdata(mat::Truss, ndim::Int) = TrussIpData(ndim)
+new_ip_state(mat::Truss, ndim::Int) = TrussIpState(ndim)
 
-function set_state(ipd::TrussIpData, σ=NaN, ε=NaN)
+function set_state(ipd::TrussIpState, σ=NaN, ε=NaN)
     if !isnan(σ); ipd.σ = σ end
     if !isnan(ε); ipd.ε = ε end
 end
 
-function stress_update(mat::Truss, ipd::TrussIpData, Δε::Float64)
+function stress_update(mat::Truss, ipd::TrussIpState, Δε::Float64)
     E  = mat.E
     Δσ = mat.E*Δε
     ipd.ε += Δε
@@ -45,7 +45,7 @@ function stress_update(mat::Truss, ipd::TrussIpData, Δε::Float64)
     return Δσ
 end
 
-function getvals(mat::Truss, ipd::TrussIpData)
+function ip_state_vals(mat::Truss, ipd::TrussIpState)
     return Dict(
       :sa => ipd.σ,
       :ea => ipd.ε,
@@ -53,7 +53,7 @@ function getvals(mat::Truss, ipd::TrussIpData)
       :A  => mat.A )
 end
 
-function calcD(mat::Truss, ips::TrussIpData)
+function calcD(mat::Truss, ips::TrussIpState)
     return mat.E
 end
 

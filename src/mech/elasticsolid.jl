@@ -21,11 +21,11 @@
 export ElasticSolid
 export set_state
 
-type ElasticSolidIpData<:IpData
+mutable struct ElasticSolidIpState<:IpState
     ndim::Int
     σ::Array{Float64,1}
     ε::Array{Float64,1}
-    function ElasticSolidIpData(ndim=3) 
+    function ElasticSolidIpState(ndim=3) 
         this = new(ndim)
         this.σ = zeros(6)
         this.ε = zeros(6)
@@ -33,7 +33,7 @@ type ElasticSolidIpData<:IpData
     end
 end
 
-type ElasticSolid<:AbsSolid
+mutable struct ElasticSolid<:AbsSolid
     E ::Float64
     nu::Float64
     De::Tensor4
@@ -53,9 +53,9 @@ type ElasticSolid<:AbsSolid
 end
 
 # Create a new instance of Ip data
-new_ipdata(mat::ElasticSolid, ndim::Int) = ElasticSolidIpData(ndim)
+new_ip_state(mat::ElasticSolid, ndim::Int) = ElasticSolidIpState(ndim)
 
-function set_state(ipd::ElasticSolidIpData; sig=zeros(0), eps=zeros(0))
+function set_state(ipd::ElasticSolidIpState; sig=zeros(0), eps=zeros(0))
     sq2 = √2.0
     mdl = [1, 1, 1, sq2, sq2, sq2]
     if length(sig)==6
@@ -117,18 +117,18 @@ function setDe(E::Number, nu::Number, De::Array{Float64,2})
 end
 =#
 
-function calcD(mat::ElasticSolid, ipd::ElasticSolidIpData)
+function calcD(mat::ElasticSolid, ipd::ElasticSolidIpState)
     return mat.De
 end
 
-function stress_update(mat::ElasticSolid, ipd::ElasticSolidIpData, dε::Array{Float64,1})
+function stress_update(mat::ElasticSolid, ipd::ElasticSolidIpState, dε::Array{Float64,1})
     dσ = mat.De*dε
     ipd.ε += dε
     ipd.σ += dσ
     return dσ
 end
 
-function getvals(mat::ElasticSolid, ipd::ElasticSolidIpData)
+function ip_state_vals(mat::ElasticSolid, ipd::ElasticSolidIpState)
     σ  = ipd.σ
     ε  = ipd.ε
     ndim = ipd.ndim

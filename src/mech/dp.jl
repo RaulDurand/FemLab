@@ -18,13 +18,13 @@
 #    along with FemLab.  If not, see <http://www.gnu.org/licenses/>.         #
 ##############################################################################
 
-type DruckerPragerIpData<:IpData
+mutable struct DruckerPragerIpState<:IpState
     ndim::Int64
     σ::Tensor2
     ε::Tensor2
     εpa::Float64
     Δγ::Float64
-    function DruckerPragerIpData(ndim=3) 
+    function DruckerPragerIpState(ndim=3) 
         this = new(ndim)
         this.σ   = zeros(6)
         this.ε   = zeros(6)
@@ -34,7 +34,7 @@ type DruckerPragerIpData<:IpData
     end
 end
 
-type DruckerPrager<:AbsSolid
+mutable struct DruckerPrager<:AbsSolid
     E::Float64
     ν::Float64
     α::Float64
@@ -60,14 +60,14 @@ type DruckerPrager<:AbsSolid
 end
 
 # Create a new instance of Ip data
-new_ipdata(mat::DruckerPrager, ndim::Int) = DruckerPragerIpData(ndim)
+new_ip_state(mat::DruckerPrager, ndim::Int) = DruckerPragerIpState(ndim)
 
 function nlE(fc::Float64, εc::Float64, ε::Array{Float64,1})
     εv = abs(sum(ε[1:3]))
     return 2*fc*(εc-εv)/εc^2
 end
 
-function set_state(ipd::DruckerPragerIpData; sig=zeros(0), eps=zeros(0))
+function set_state(ipd::DruckerPragerIpState; sig=zeros(0), eps=zeros(0))
     if length(sig)==6
         ipd.σ[:] = sig.*V2M
     else
@@ -80,7 +80,7 @@ function set_state(ipd::DruckerPragerIpData; sig=zeros(0), eps=zeros(0))
     end
 end
 
-function yield_func(mat::DruckerPrager, ipd::DruckerPragerIpData, σ::Tensor2)
+function yield_func(mat::DruckerPrager, ipd::DruckerPragerIpState, σ::Tensor2)
     j1  = J1(σ)
     j2d = J2D(σ)
     α,κ = mat.α, mat.κ
@@ -89,7 +89,7 @@ function yield_func(mat::DruckerPrager, ipd::DruckerPragerIpData, σ::Tensor2)
     return α*j1 + √j2d - κ - H*εpa
 end
 
-function calcD(mat::DruckerPrager, ipd::DruckerPragerIpData)
+function calcD(mat::DruckerPrager, ipd::DruckerPragerIpState)
     α   = mat.α
     H   = mat.H
     De  = mat.De
@@ -113,7 +113,7 @@ function calcD(mat::DruckerPrager, ipd::DruckerPragerIpData)
     return De - inner(De,Nu) ⊗ inner(V,De) / (inner(V,De,Nu) + H)
 end
 
-function stress_update(mat::DruckerPrager, ipd::DruckerPragerIpData, Δε::Array{Float64,1})
+function stress_update(mat::DruckerPrager, ipd::DruckerPragerIpState, Δε::Array{Float64,1})
     σini   = ipd.σ
     σtr    = ipd.σ + inner(mat.De, Δε)
     ftr    = yield_func(mat, ipd, σtr)
@@ -151,7 +151,7 @@ function stress_update(mat::DruckerPrager, ipd::DruckerPragerIpData, Δε::Array
     return Δσ
 end
 
-function getvals(mat::DruckerPrager, ipd::DruckerPragerIpData)
+function ip_state_vals(mat::DruckerPrager, ipd::DruckerPragerIpState)
     σ  = ipd.σ
     ε  = ipd.ε
     ndim = ipd.ndim

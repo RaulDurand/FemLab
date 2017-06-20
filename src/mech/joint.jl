@@ -19,12 +19,12 @@
 ##############################################################################
 
 
-type JointIpData<:IpData
+mutable struct JointIpState<:IpState
     ndim::Int
     σ   ::Array{Float64,1}
     w   ::Array{Float64,1}
     h   ::Float64
-    function JointIpData(ndim=3)
+    function JointIpState(ndim=3)
         this = new(ndim)
         this.σ   = zeros(3)
         this.w = zeros(3)
@@ -33,7 +33,7 @@ type JointIpData<:IpData
     end
 end
 
-type Joint<:AbsJoint
+mutable struct Joint<:AbsJoint
     E::Float64
     ν::Float64
     α::Float64
@@ -52,9 +52,9 @@ type Joint<:AbsJoint
 end
 
 # Create a new instance of Ip data
-new_ipdata(mat::Joint, ndim::Int) = JointIpData(ndim)
+new_ip_state(mat::Joint, ndim::Int) = JointIpState(ndim)
 
-function set_state(ipd::JointIpData, sig=zeros(0), w=zeros(0))
+function set_state(ipd::JointIpState, sig=zeros(0), w=zeros(0))
     if length(sig)==3
         ipd.σ[:] = sig
     else
@@ -67,7 +67,7 @@ function set_state(ipd::JointIpData, sig=zeros(0), w=zeros(0))
     end
 end
 
-function mountD(mat::Joint, ipd::JointIpData)
+function mountD(mat::Joint, ipd::JointIpState)
     G  = mat.E/(1.0+mat.ν)/2.0
     kn = mat.E*mat.α/ipd.h
     ks =     G*mat.α/ipd.h
@@ -81,7 +81,7 @@ function mountD(mat::Joint, ipd::JointIpData)
     end
 end
 
-function stress_update(mat::Joint, ipd::JointIpData, Δu)
+function stress_update(mat::Joint, ipd::JointIpState, Δu)
     D  = mountD(mat, ipd)
     Δσ = D*Δu
 
@@ -90,7 +90,7 @@ function stress_update(mat::Joint, ipd::JointIpData, Δu)
     return Δσ
 end
 
-function getvals(mat::Joint, ipd::JointIpData)
+function ip_state_vals(mat::Joint, ipd::JointIpState)
     if ipd.ndim == 2
         return Dict(
           :w1  => ipd.w[1] ,

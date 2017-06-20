@@ -18,90 +18,99 @@
 #    along with FemLab.  If not, see <http://www.gnu.org/licenses/>.         #
 ##############################################################################
 
-abstract BC
+abstract type BC end
 
-type NodeBC <: BC
+
+###############################################################################
+# Concrete structures for Boudary Conditions
+
+
+mutable struct NodesBC <: BC
     expr ::Expr
     conds::Array
     nodes::Array{Node,1}
 
-    function NodeBC(expr::Expr; conds::Array...)
-        this = new()
-        this.expr = expr
-        this.conds = conds
-        this.nodes = []
-        return this
+    function NodesBC(expr::Expr; conds::Array...)
+        return new(expr, conds, [])
     end
 
-    function NodeBC(nodes::Array{Node,1}; conds::Any...)
-        this = new()
-        this.expr = :()
-        this.nodes = nodes
-        this.conds = conds
-        return this
+    function NodesBC(nodes::Array{Node,1}; conds::Any...)
+        return new(:(), conds, nodes)
     end
 
-    function NodeBC(node::Node; conds::Any...)
-        return NodeBC( [node]; conds... )
+    function NodesBC(node::Node; conds::Any...)
+        return NodesBC( [node]; conds... )
     end
 
 end
 
-type FaceBC <: BC
-    expr ::Expr
-    conds::Array
+abstract type FacetsBC<:BC end
+
+mutable struct FacesBC<:FacetsBC
+    expr  ::Expr
+    conds ::Array
     faces::Array{Face,1}
 
-    function FaceBC(expr::Expr; conds::Array...)
-        this = new()
-        this.expr = expr
-        this.conds = conds
-        return this
+    function FacesBC(expr::Expr; conds::Array...)
+        return new(expr, conds, [])
     end
 
-    function FaceBC(faces::Array{Face,1}; conds::Any...)
-        this = new()
-        this.expr = :()
-        this.faces = faces
-        this.conds = conds
-        return this
+    function FacesBC(faces::Array{Face,1}; conds::Any...)
+        return new(:(), conds, faces)
     end
 
-    function FaceBC(face::Face; conds::Any...)
-        return FaceBC( [face]; conds... )
+    function FacesBC(face::Face; conds::Any...)
+        return new(:(), conds, [face])
     end
 end
 
-type EdgeBC <: BC
-    expr ::Expr
-    conds::Array
+mutable struct EdgesBC<:FacetsBC
+    expr  ::Expr
+    conds ::Array
     edges::Array{Edge,1}
 
-    function EdgeBC(expr::Expr; conds::Array...)
-        this = new()
-        this.expr = expr
-        this.conds = conds
-        return this
+    function EdgesBC(expr::Expr; conds::Array...)
+        return new(expr, conds, [])
     end
 
-    function EdgeBC(edges::Array{Edge,1}; conds::Any...)
-        this = new()
-        this.expr = :()
-        this.edges = edges
-        this.conds = conds
-        return this
+    function EdgesBC(edges::Array{Edge,1}; conds::Any...)
+        return new(:(), conds, edges)
     end
 
-    function EdgeBC(edge::Edge; conds::Any...)
-        return EdgeBC( [edge]; conds... )
+    function EdgesBC(edge::Edge; conds::Any...)
+        return new(:(), conds, [edge])
     end
 end
 
 
+# For compatibility with older versions
+NodeBC = NodesBC
+FaceBC = FacesBC
+EdgeBC = EdgesBC
 
-# Define boundary conditions for a node
+
+###############################################################################
+# Functions to setup boundary conditions
+
+function setup_bc!(bc::NodesBC, domain)
+    if bc.expr != :(); bc.nodes = domain.nodes[bc.expr] end
+end
+
+function setup_bc!(bc::FacesBC, domain)
+    if bc.expr != :(); bc.faces = domain.faces[bc.expr] end
+end
+
+function setup_bc!(bc::EdgesBC, domain)
+    if bc.expr != :(); bc.edges = domain.edges[bc.expr] end
+end
+
+
+###############################################################################
+# Functions to apply boundary conditions
+
+
 """
-`apply_bc(node, bcs...)`
+`apply_bc(bc::NodesBC)`
 
 Applies one or several boundary conditions `bcs` to a `node` object.
 In a mechanical analysis, essential and natural boundary conditions can be set using this function.
@@ -112,15 +121,32 @@ apply_bc(node, fx=10.0, uy=0.01)
 
 ```
 """
-function apply_bc(node::Node; args...)
-    for (key,val) in args
-        if !haskey(node.dofdict, key); error("key ($key) not found in node ($(node.id)).") end
-        dof = node.dofdict[key]
-        if key==dof.sU
-            dof.prescU = true
-            dof.bryU  = val
-        else
-            dof.bryF += val
+function apply_bc(bc::NodesBC)
+    length(bc.nodes)==0 && warn("Warning, applying boundary conditions to empty array of nodes")
+    for node in bc.nodes
+        for (key,val) in bc.conds
+            if !haskey(node.dofdict, key); error("key ($key) not found in node ($(node.id)).") end
+            dof = node.dofdict[key]
+            if key==dof.sU
+                dof.prescU = true
+                dof.bryU  = val
+            else
+                dof.bryF += val
+            end
+        end
+    end
+end
+
+
+function apply_bc{T<:FacetsBC}(bc::T)
+    facets = T==FacesBC ? bc.faces : bc.edges
+    length(facets)==0 && warn("$T: applying boundary conditions to empty array of facets")
+    for facet in facets
+        oelem = facet.oelem # owner element
+        oelem==nothing && error("Facet with no owner element")
+
+        for (key,val) in bc.conds
+            apply_facet_bc(oelem.mat, oelem, facet, key, float(val))
         end
     end
 end
@@ -141,35 +167,3 @@ function clear_bc(node::Node)
     end
 end
 
-# Define boundary conditions for a collection of nodes
-"""
-`apply_bc(nodes, bcs...)`
-
-Applies one or several boundary conditions `bcs` to a set of Node objects `nodes`.
-"""
-function apply_bc(nodes::Array{Node,1}; args...)
-    length(nodes)==0 && warn("Warning, applying boundary conditions to empty array of nodes\n")
-
-    for node in nodes
-        apply_bc(node; args...)
-    end
-end
-
-# Define boundary conditions for a face
-function apply_bc(face::Face; args...)
-    oelem = face.oelem # owner element
-    oelem==nothing && error("Face with no owner element")
-
-    for (key,val) in args
-        apply_facet_bc(oelem.mat, oelem, face, key, float(val))
-    end
-end
-
-# Define boundary conditions for a collection of faces
-function apply_bc(faces::Array{Face,1}; args...)
-    length(faces)==0 && warn("Warning, applying boundary conditions to empty array of faces\n")
-
-    for face in faces
-        apply_bc(face; args...)
-    end
-end

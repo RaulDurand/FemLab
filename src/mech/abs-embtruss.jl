@@ -19,19 +19,20 @@
 ##############################################################################
 
 
-abstract AbsEmbTruss<:Mechanical
+abstract type AbsEmbTruss<:Mechanical end
 
 # Return the class of element where this material can be used
 client_shape_class(mat::AbsEmbTruss) = EMBEDDED
 
-function config_dofs(::AbsEmbTruss, elem::Element)
+function elem_config_dofs(::AbsEmbTruss, elem::Element)
     # No-op function.
     # The solid linked element will set the required dofs.
 end
 
-function get_map(::AbsEmbTruss, elem::Element)
+function elem_map(mat::AbsEmbTruss, elem::Element)
     # Return the map from the solid linked element
-    return get_map(elem.linked_elems[1])
+    linked = elem.linked_elems[1]
+    return elem_map(linked.mat, linked)  #TODO: solve the case when the linked elem has more dofs e.g. temperature.
 end
 
 function mountNN(mat::AbsEmbTruss, elem::Element)
@@ -40,7 +41,7 @@ function mountNN(mat::AbsEmbTruss, elem::Element)
     n  = length(solid.nodes)
     m  = length(elem.nodes)
     NN = zeros(ndim*n, ndim*m)
-    Cs = getcoords(solid)
+    Cs = elem_coords(solid)
 
     for j=1:m 
         R = inverse_map(solid.shape, Cs, elem.nodes[j].X)
@@ -54,21 +55,21 @@ function mountNN(mat::AbsEmbTruss, elem::Element)
     return NN
 end
 
-function elem_jacobian(mat::AbsEmbTruss, elem::Element)
-    Kb = elem_jacobian(mat.trussmat, elem)
+function elem_stiffness(mat::AbsEmbTruss, elem::Element)
+    Kb = elem_stiffness(mat.trussmat, elem)
     NN = mountNN(mat, elem)
     return NN*Kb*NN' 
 end
 
-function update!(mat::AbsEmbTruss, elem::Element, dU::Array{Float64,1})
+function elem_dF!(mat::AbsEmbTruss, elem::Element, dU::Array{Float64,1})
     NN   = mountNN(mat, elem)
     dUtr = NN'*dU
-    dFtr = update!(mat.trussmat, elem, dUtr)
+    dFtr = elem_dF!(mat.trussmat, elem, dUtr)
     dF   = NN*dFtr
     return dF
 end
 
-function node_and_elem_vals(mat::AbsEmbTruss, elem::Element)
+function elem_and_node_vals(mat::AbsEmbTruss, elem::Element)
     ndim = elem.ndim
     node_vals = Dict{Symbol, Array{Float64,1}}()
     elem_vals = Dict{Symbol, Float64}()
@@ -94,7 +95,7 @@ function node_and_elem_vals(mat::AbsEmbTruss, elem::Element)
     end
 
     # Elem vals
-    all_ip_vals = [ getvals(mat, ip.data) for ip in elem.ips ]
+    all_ip_vals = [ ip_state_vals(mat, ip.data) for ip in elem.ips ]
 
     # completing with axial forces
     A = mat.trussmat.A

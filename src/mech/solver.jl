@@ -19,9 +19,8 @@
 ##############################################################################
 
 export solve!
-export solve_legacy!
 
-type MecSolverData
+mutable struct MecSolverData
     dom::Domain
     ips::Array{Ip,1}
     tol::Float64
@@ -38,8 +37,8 @@ function mount_K(sdata::MecSolverData)
     R, C, V = Int64[], Int64[], Float64[]
 
     for elem in sdata.dom.elems
-        Ke  = elem_jacobian(elem)
-        map = get_map(elem)
+        Ke  = elem_stiffness(elem.mat, elem)
+        map = elem_map(elem.mat, elem)
         nr, nc = size(Ke)
         for i=1:nr
             for j=1:nc
@@ -65,9 +64,9 @@ end
 function mount_RHS(dom::Domain, ndofs::Int64, Δt::Float64)
     RHS = zeros(ndofs)
     for elem in dom.elems
-        map      = get_map(elem)
+        map      = elem_map(elem.mat, elem)
         #RHS[map] = elem_RHS(elem, Δt::Float64)
-        RHS[map] = elem_RHS(elem)
+        RHS[map] = elem_RHS(elem.mat, elem)
     end
     return RHS
 end
@@ -146,7 +145,7 @@ function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=
     saveincs = nout>0
 
     if verbose
-        print_with_color(:cyan,"FEM analysis:\n") 
+        print_with_color(:cyan,"FEM analysis:\n", bold=true) 
         tic()
     end
 
@@ -162,36 +161,18 @@ function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=
     end
     count > 0 && error("There are $count active elements without material definition\n")
 
-    # Set boundary conditions at nodes
-    for bc in dom.node_bcs
-        apply_bc(bc.nodes; bc.conds...)
+    # Calculate and apply boundary conditions
+    for bc in dom.bcs
+        apply_bc(bc)
     end
 
-    # Boundary conditions at faces
-    for bc in dom.face_bcs
-        apply_bc(bc.faces; bc.conds...)
-    end
+    # Arrays of prescribed dofs and unknown dofs
+    dofs  = [dof for node in dom.nodes for dof in node.dofs]
+    presc = [dof.prescU for dof in dofs]
+    pdofs = dofs[presc]
+    udofs = dofs[.!presc]
 
-    # Boundary conditions at edges
-    for bc in dom.edge_bcs
-        apply_bc(bc.edges; bc.conds...)
-    end
-
-    # Fill arrays of prescribed dofs and unknown dofs
-    udofs = Array{Dof}(0)
-    pdofs = Array{Dof}(0)
-
-    for node in dom.nodes
-        for dof in node.dofs
-            if dof.prescU
-                push!(pdofs, dof) 
-            else
-                push!(udofs, dof) 
-            end
-        end
-    end
-
-    # Get array with all dofs
+    # Redefine tha array of dofs to list first the unknown ones
     dofs  = vcat(udofs, pdofs)
     ndofs = length(dofs)
 
@@ -208,7 +189,7 @@ function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=
     ips = [ ip for elem in aelems for ip in elem.ips ]
 
     # Global RHS vector 
-    RHS = mount_RHS(dom::Domain, ndofs::Int64, 0.0)
+    RHS = mount_RHS(dom, ndofs, 0.0)
 
     # Global U and F vectors
     U  = [ dof.bryU for dof in dofs]
@@ -219,7 +200,7 @@ function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=
     nu  = length(udofs)  # number of unknowns
     if verbose; println("  unknown dofs: $nu") end
 
-    update_monitors(dom)    # Tracking nodes, ips, elements, etc.
+    update_monitors!(dom)    # Tracking nodes, ips, elements, etc.
 
     if dom.nincs == 0 && saveincs 
         save(dom, dom.filekey * "-0.vtk", verbose=false, save_ips=save_ips)
@@ -250,7 +231,7 @@ function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=
     sdata = MecSolverData(dom, ips, tol, verbose, umap, pmap, ndofs)
 
     while T < 1.0 - μdT
-        if verbose; print_with_color(:blue, "  increment $inc from T=$(round(T,10)) to T=$(round(T+dT,10)) (dT=$(round(dT,10))):\n") end
+        if verbose; print_with_color(111, "  increment $inc from T=$(round(T,5)) to T=$(round(T+dT,5)) (dT=$(round(dT,10))):\n") end
         ΔU, ΔF = dT*U, dT*F     # increment vectors
         R      = copy(ΔF)       # residual
         local ΔFin              # internal forces vector for current increment
@@ -321,7 +302,7 @@ function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=
                 dof.F += ΔFin[i]
             end
 
-            update_monitors(dom) # Tracking nodes, ips, elements, etc.
+            update_monitors!(dom) # Tracking nodes, ips, elements, etc.
             Tn = T + dT
             if Tn>=Ts && saveincs
                 iout += 1
@@ -394,9 +375,9 @@ function solve_update_step(sdata::MecSolverData, K, ΔUa::Vect, ΔUi::Vect, R::V
     ΔFin = zeros(ndofs)
     ΔUt  = ΔUa + ΔUi
     for elem in elems  
-        map = get_map(elem)
+        map = elem_map(elem.mat, elem)
         dU  = ΔUt[map]
-        dF = update!(elem.mat, elem, dU) # gets internal force
+        dF = elem_dF!(elem.mat, elem, dU) # gets internal force
         ΔFin[map] += dF
     end
 
@@ -417,3 +398,4 @@ function solve_step_ME(sdata::MecSolverData, K1, ΔUa::Vect, ΔUi::Vect, R::Vect
 
     return ΔFin, R
 end
+

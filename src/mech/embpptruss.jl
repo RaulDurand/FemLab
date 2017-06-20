@@ -19,7 +19,7 @@
 ##############################################################################
 
 
-type EmbPPTruss<:AbsEmbTruss
+mutable struct EmbPPTruss<:AbsEmbTruss
     trussmat::PPTruss  # uses the material for elastic truss
 
     function EmbPPTruss(prms::Dict{Symbol,Float64})
@@ -34,19 +34,19 @@ type EmbPPTruss<:AbsEmbTruss
 end
 
 # Create a new instance of Ip data
-new_ipdata(mat::EmbPPTruss, ndim::Int) = PPTrussIpData(ndim)
+new_ip_state(mat::EmbPPTruss, ndim::Int) = PPTrussIpState(ndim)
 
-# Obs. Not need to define function set_state because it uses Truss model with PPTrussIpData
+# Obs. Not need to define function set_state because it uses Truss model with PPTrussIpState
 
-function stress_update(mat::EmbPPTruss, ipd::PPTrussIpData, Δε::Float64)
+function stress_update(mat::EmbPPTruss, ipd::PPTrussIpState, Δε::Float64)
     return stress_update(mat.trussmat, ipd, Δε)
 end
 
-function getvals(mat::EmbPPTruss, ipd::PPTrussIpData)
-    return getvals(mat.trussmat, ipd)
+function ip_state_vals(mat::EmbPPTruss, ipd::PPTrussIpState)
+    return ip_state_vals(mat.trussmat, ipd)
 end
 
-function calcD(mat::EmbPPTruss, ips::PPTrussIpData)
+function calcD(mat::EmbPPTruss, ips::PPTrussIpState)
     return mat.trussmat.E
 end
 

@@ -19,14 +19,14 @@
 ##############################################################################
 
 
-type CEBJoint1DIpData<:IpData
+mutable struct CEBJoint1DIpState<:IpState
     ndim::Int
     σ  ::Array{Float64,1}
     ε  ::Array{Float64,1}
     τy ::Float64      # max stress
     sy ::Float64      # accumulated relative displacement
     elastic::Bool
-    function CEBJoint1DIpData(ndim=3)
+    function CEBJoint1DIpState(ndim=3)
         this = new(ndim)
         this.σ = zeros(3)
         this.ε = zeros(3)
@@ -37,7 +37,7 @@ type CEBJoint1DIpData<:IpData
     end
 end
 
-type CEBJoint1D<:AbsJoint1D
+mutable struct CEBJoint1D<:AbsJoint1D
     τmax:: Float64
     τres:: Float64
     s1  :: Float64
@@ -96,7 +96,7 @@ type CEBJoint1D<:AbsJoint1D
 end
 
 # Create a new instance of Ip data
-new_ipdata(mat::CEBJoint1D, ndim::Int) = CEBJoint1DIpData(ndim)
+new_ip_state(mat::CEBJoint1D, ndim::Int) = CEBJoint1DIpState(ndim)
 
 function Tau(mat::CEBJoint1D, sy::Float64)
     if sy<mat.s1
@@ -110,7 +110,7 @@ function Tau(mat::CEBJoint1D, sy::Float64)
     end
 end
 
-function deriv(mat::CEBJoint1D, ipd::CEBJoint1DIpData, sy::Float64)
+function deriv(mat::CEBJoint1D, ipd::CEBJoint1DIpState, sy::Float64)
     if sy==0.0
         const S1_FACTOR = 0.01
         sy = S1_FACTOR*mat.s1   # to avoid undefined derivative
@@ -129,20 +129,20 @@ function deriv(mat::CEBJoint1D, ipd::CEBJoint1DIpData, sy::Float64)
     end
 end
 
-function set_state(ipd::CEBJoint1DIpData, sig=zeros(0), eps=zeros(0))
+function set_state(ipd::CEBJoint1DIpState, sig=zeros(0), eps=zeros(0))
     if length(sig)==3
         ipd.σ[:] = sig
     else
-        if length(sig)!=0; error("CEBJoint1DIpData: Wrong size for stress array: $sig") end
+        if length(sig)!=0; error("CEBJoint1DIpState: Wrong size for stress array: $sig") end
     end
     if length(eps)==3
         ipd.ε[:] = eps
     else
-        if length(eps)!=0; error("CEBJoint1DIpData: Wrong size for strain array: $eps") end
+        if length(eps)!=0; error("CEBJoint1DIpState: Wrong size for strain array: $eps") end
     end
 end
 
-function calcD(mat::CEBJoint1D, ipd::CEBJoint1DIpData)
+function calcD(mat::CEBJoint1D, ipd::CEBJoint1DIpState)
     if ipd.elastic
         ks = mat.ks
     else
@@ -160,17 +160,16 @@ function calcD(mat::CEBJoint1D, ipd::CEBJoint1DIpData)
     end
 end
 
-function yield_func(mat::CEBJoint1D, ipd::CEBJoint1DIpData, τ::Float64)
+function yield_func(mat::CEBJoint1D, ipd::CEBJoint1DIpState, τ::Float64)
     return abs(τ) - ipd.τy
 end
 
-function stress_update(mat::CEBJoint1D, ipd::CEBJoint1DIpData, Δε::Vect)
+function stress_update(mat::CEBJoint1D, ipd::CEBJoint1DIpState, Δε::Vect)
     ks = mat.ks
     kn = mat.kn
     Δs = Δε[1]      # relative displacement
     τini = ipd.σ[1] # initial shear stress
     τtr  = τini + ks*Δs # elastic trial
-    s    = ipd.ε[1]
 
     ftr  = yield_func(mat, ipd, τtr)
 
@@ -198,7 +197,7 @@ function stress_update(mat::CEBJoint1D, ipd::CEBJoint1DIpData, Δε::Vect)
     return Δσ
 end
 
-function getvals(mat::CEBJoint1D, ipd::CEBJoint1DIpData)
+function ip_state_vals(mat::CEBJoint1D, ipd::CEBJoint1DIpState)
     return Dict(
       :ur   => ipd.ε[1] ,
       :tau  => ipd.σ[1] ,

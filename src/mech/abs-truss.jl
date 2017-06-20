@@ -1,14 +1,14 @@
 
-abstract AbsTruss<:Mechanical
+abstract type AbsTruss<:Mechanical end
 
 # Return the class of element where this material can be used
 client_shape_class(mat::AbsTruss) = LINE_SHAPE
 
-function elem_jacobian(mat::AbsTruss, elem::Element)
+function elem_stiffness(mat::AbsTruss, elem::Element)
     ndim   = elem.ndim
     nnodes = length(elem.nodes)
     A = mat.A
-    C = getcoords(elem)
+    C = elem_coords(elem)
     K = zeros(nnodes*ndim, nnodes*ndim)
     B = zeros(1, nnodes*ndim)
     J  = Array{Float64}(1, ndim)
@@ -33,13 +33,13 @@ function elem_jacobian(mat::AbsTruss, elem::Element)
     return K
 end
 
-function update!(mat::AbsTruss, elem::Element, dU::Array{Float64,1})
+function elem_dF!(mat::AbsTruss, elem::Element, dU::Array{Float64,1})
     ndim   = elem.ndim
     nnodes = length(elem.nodes)
     A      = mat.A
 
     dF = zeros(nnodes*ndim)
-    C  = getcoords(elem)
+    C  = elem_coords(elem)
     B  = zeros(1, nnodes*ndim)
     J  = Array{Float64}(1, ndim)
     for ip in elem.ips
@@ -65,7 +65,7 @@ function update!(mat::AbsTruss, elem::Element, dU::Array{Float64,1})
 
 end
 
-function node_and_elem_vals(mat::AbsTruss, elem::Element)
+function elem_and_node_vals(mat::AbsTruss, elem::Element)
     ndim = elem.ndim
     node_vals = Dict{Symbol, Array{Float64,1}}()
     elem_vals = Dict{Symbol, Float64}()
@@ -75,7 +75,7 @@ function node_and_elem_vals(mat::AbsTruss, elem::Element)
     end
 
     # Elem vals
-    all_ip_vals = [ getvals(mat, ip.data) for ip in elem.ips ]
+    all_ip_vals = [ ip_state_vals(mat, ip.data) for ip in elem.ips ]
     # completing with axial forces
     for ip_val in all_ip_vals
         ip_val[:A ] = mat.A

@@ -18,7 +18,7 @@
 #    along with FemLab.  If not, see <http://www.gnu.org/licenses/>.         #
 ##############################################################################
 
-type KotsovosIpData<:IpData
+mutable struct KotsovosIpState<:IpState
     ndim::Int64
     σ::Tensor2
     ε::Tensor2
@@ -27,7 +27,7 @@ type KotsovosIpData<:IpData
     V1::Array{Float64,1} # first  crack direction
     V2::Array{Float64,1} # second crack direction
     V3::Array{Float64,1} # third  crack direction
-    function KotsovosIpData(ndim=3) 
+    function KotsovosIpState(ndim=3) 
         this = new(ndim)
         this.σ   = zeros(6)
         this.ε   = zeros(6)
@@ -40,7 +40,7 @@ type KotsovosIpData<:IpData
     end
 end
 
-type Kotsovos<:AbsSolid
+mutable struct Kotsovos<:AbsSolid
     E::Float64
     nu::Float64
     β::Float64
@@ -69,9 +69,9 @@ type Kotsovos<:AbsSolid
 end
 
 # Create a new instance of Ip data
-new_ipdata(mat::Kotsovos, ndim::Int) = KotsovosIpData(ndim)
+new_ip_state(mat::Kotsovos, ndim::Int) = KotsovosIpState(ndim)
 
-function set_state(ipd::KotsovosIpData; sig=zeros(0), eps=zeros(0))
+function set_state(ipd::KotsovosIpState; sig=zeros(0), eps=zeros(0))
     if length(sig)==6
         ipd.σ[:] = sig.*V2M
     else
@@ -84,14 +84,14 @@ function set_state(ipd::KotsovosIpData; sig=zeros(0), eps=zeros(0))
     end
 end
 
-function calcD(mat::Kotsovos, ipd::KotsovosIpData)
+function calcD(mat::Kotsovos, ipd::KotsovosIpState)
     if ipd.ncracks == 0
         ipd.D = mat.De # defines D as elastic for this ip
     end
     return ipd.D
 end
 
-function get_basicD(mat::Kotsovos, ipd::KotsovosIpData)
+function get_basicD(mat::Kotsovos, ipd::KotsovosIpState)
     ncracks = ipd.ncracks
     nu = mat.nu
     β  = mat.β
@@ -130,7 +130,7 @@ function get_basicD(mat::Kotsovos, ipd::KotsovosIpData)
     return D
 end
 
-function stress_update(mat::Kotsovos, ipd::KotsovosIpData, Δε::Array{Float64,1})
+function stress_update(mat::Kotsovos, ipd::KotsovosIpState, Δε::Array{Float64,1})
     # initial stress
     σini = ipd.σ
     #initial number of cracks
@@ -225,7 +225,7 @@ function elem_vals(mat::Kotsovos, elem::Element)
     )
 end
 
-function getvals(mat::Kotsovos, ipd::KotsovosIpData)
+function ip_state_vals(mat::Kotsovos, ipd::KotsovosIpState)
     σ  = ipd.σ
     ε  = ipd.ε
     ndim = ipd.ndim

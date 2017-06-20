@@ -18,13 +18,13 @@
 #    along with FemLab.  If not, see <http://www.gnu.org/licenses/>.         #
 ##############################################################################
 
-abstract AbsSolid<:Mechanical
+abstract type AbsSolid<:Mechanical end
 
 # Return the class of element where this material can be used
 client_shape_class(mat::AbsSolid) = SOLID_SHAPE
 
 
-function apply_facet_bc(mat::AbsSolid, oelem::Element, face::Face, key::Symbol, val::Float64)
+function apply_facet_bc(mat::AbsSolid, oelem::Element, face::Facet, key::Symbol, val::Float64)
     fnodes = face.nodes
     fshape = face.shape
     ndim   = oelem.ndim
@@ -55,7 +55,7 @@ function apply_facet_bc(mat::AbsSolid, oelem::Element, face::Face, key::Symbol, 
     nfnodes = length(fnodes)
 
     # Calculate the face coordinates matrix
-    C = getcoords(fnodes, ndim)
+    C = nodes_coords(fnodes, ndim)
 
     # Calculate the vector with values to apply
     V = zeros(ndim)
@@ -137,11 +137,11 @@ function setB(ndim::Int, dNdX::Matx, detJ::Float64, B::Matx)
     return detJ
 end
 
-function elem_jacobian(::AbsSolid, elem::Element)
+function elem_stiffness(::AbsSolid, elem::Element)
     ndim   = elem.ndim
     nnodes = length(elem.nodes)
     mat    = elem.mat
-    C = getcoords(elem)
+    C = elem_coords(elem)
     K = zeros(nnodes*ndim, nnodes*ndim)
     B = zeros(6, nnodes*ndim)
 
@@ -168,14 +168,12 @@ function elem_jacobian(::AbsSolid, elem::Element)
     return K
 end
 
-function update!(::AbsSolid, elem::Element, dU::Array{Float64,1})
+function elem_dF!(::AbsSolid, elem::Element, dU::Array{Float64,1})
     ndim   = elem.ndim
     nnodes = length(elem.nodes)
-    #map    = get_map(elem)
     mat    = elem.mat
 
     dF = zeros(nnodes*ndim)
-    #dU = DU[map]
     B  = zeros(6, nnodes*ndim)
 
     DB = Array{Float64}(6, nnodes*ndim)
@@ -183,7 +181,7 @@ function update!(::AbsSolid, elem::Element, dU::Array{Float64,1})
     dNdX = Array{Float64}(ndim, nnodes)
     Δε = zeros(6)
 
-    C = getcoords(elem)
+    C = elem_coords(elem)
     for ip in elem.ips
 
         # compute B matrix
@@ -203,7 +201,7 @@ function update!(::AbsSolid, elem::Element, dU::Array{Float64,1})
     return dF
 end
 
-function node_and_elem_vals(mat::AbsSolid, elem::Element)
+function elem_and_node_vals(mat::AbsSolid, elem::Element)
     ndim = elem.ndim
     node_vals = Dict{Symbol, Array{Float64,1}}()
     e_vals = Dict{Symbol, Float64}()
@@ -213,7 +211,7 @@ function node_and_elem_vals(mat::AbsSolid, elem::Element)
     end
 
     # values from integration points
-    all_ip_vals = [ getvals(mat, ip.data) for ip in elem.ips ]
+    all_ip_vals = [ ip_state_vals(mat, ip.data) for ip in elem.ips ]
     labels      = keys(all_ip_vals[1])
     nips        = length(elem.ips) 
 
@@ -230,7 +228,7 @@ function node_and_elem_vals(mat::AbsSolid, elem::Element)
         node_vals[key] = N[:,i]
     end
 
-    e_vals = elem_vals(mat, elem)
+    #e_vals = elem_vals(mat, elem)
 
     return node_vals, e_vals
 

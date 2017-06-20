@@ -18,14 +18,14 @@
 #    along with FemLab.  If not, see <http://www.gnu.org/licenses/>.         #
 ##############################################################################
 
-type PPTrussIpData<:IpData
+mutable struct PPTrussIpState<:IpState
     ndim::Int
     σ::Float64
     ε::Float64
     εpa::Float64
     Δγ ::Float64
 
-    function PPTrussIpData(ndim=3)
+    function PPTrussIpState(ndim=3)
         this = new(ndim)
         this.σ = 0.0
         this.ε = 0.0
@@ -35,7 +35,7 @@ type PPTrussIpData<:IpData
     end
 end
 
-type PPTruss<:AbsTruss
+mutable struct PPTruss<:AbsTruss
     E::Float64
     A::Float64
     σy0::Float64
@@ -55,19 +55,19 @@ type PPTruss<:AbsTruss
 end
 
 # Create a new instance of Ip data
-new_ipdata(mat::PPTruss, ndim::Int) = PPTrussIpData(ndim)
+new_ip_state(mat::PPTruss, ndim::Int) = PPTrussIpState(ndim)
 
-function set_state(ipd::PPTrussIpData, σ=NaN, ε=NaN)
+function set_state(ipd::PPTrussIpState, σ=NaN, ε=NaN)
     if !isnan(σ); ipd.σ = σ end
     if !isnan(ε); ipd.ε = ε end
 end
 
-function yield_func(mat::PPTruss, ipd::PPTrussIpData, σ::Float64)
+function yield_func(mat::PPTruss, ipd::PPTrussIpState, σ::Float64)
     σya = mat.σy0 + mat.H*ipd.εpa
     return abs(σ) - σya
 end
 
-function calcD(mat::PPTruss, ipd::PPTrussIpData)
+function calcD(mat::PPTruss, ipd::PPTrussIpState)
     if ipd.Δγ == 0.0
         return mat.E
     else
@@ -76,7 +76,7 @@ function calcD(mat::PPTruss, ipd::PPTrussIpData)
     end
 end
 
-function stress_update(mat::PPTruss, ipd::PPTrussIpData, Δε::Float64)
+function stress_update(mat::PPTruss, ipd::PPTrussIpState, Δε::Float64)
     E, H = mat.E, mat.H
     σini = ipd.σ
     σtr    = σini + E*Δε
@@ -91,7 +91,7 @@ function stress_update(mat::PPTruss, ipd::PPTrussIpData, Δε::Float64)
 end
 
 #=
-function getvals(ipd::PPTrussIpData)
+function ip_state_vals(ipd::PPTrussIpState)
     return Dict(
       :sa => ipd.σ,
       :ea => ipd.ε,
@@ -101,7 +101,7 @@ function getvals(ipd::PPTrussIpData)
 end
 =#
 
-function getvals(mat::PPTruss, ipd::PPTrussIpData)
+function ip_state_vals(mat::PPTruss, ipd::PPTrussIpState)
     return Dict(
       :sa => ipd.σ,
       :ea => ipd.ε,

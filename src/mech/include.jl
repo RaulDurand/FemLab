@@ -1,6 +1,6 @@
 
 include("mechanical.jl")
-export config_dofs, init_elem, elem_jacobian, get_map, elem_RHS, update!, elem_vals
+export elem_config_dofs, elem_init, elem_stiffness, elem_map, elem_RHS, elem_dF!, elem_and_node_vals
 export set_state
 
 # Models for solid elements (2D and 3D)
@@ -39,3 +39,5 @@ export AbsJoint1D, Joint1D, MCJoint1D, CEBJoint1D
 include("solver.jl")
 export solve!, MecSolverData
 
+include("abs-beam.jl")
+include("beam.jl")

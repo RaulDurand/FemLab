@@ -19,11 +19,11 @@
 ##############################################################################
 
 
-type Joint1DIpData<:IpData
+mutable struct Joint1DIpState<:IpState
     ndim::Int
     sig ::Array{Float64,1}
     eps ::Array{Float64,1}
-    function Joint1DIpData(ndim=3)
+    function Joint1DIpState(ndim=3)
         this = new(ndim)
         this.sig = zeros(3)
         this.eps = zeros(3)
@@ -31,7 +31,7 @@ type Joint1DIpData<:IpData
     end
 end
 
-type Joint1D<:AbsJoint1D
+mutable struct Joint1D<:AbsJoint1D
     ks::Float64
     kn::Float64
     h ::Float64    # section perimeter
@@ -63,9 +63,9 @@ type Joint1D<:AbsJoint1D
 end
 
 # Create a new instance of Ip data
-new_ipdata(mat::Joint1D, ndim::Int) = Joint1DIpData(ndim)
+new_ip_state(mat::Joint1D, ndim::Int) = Joint1DIpState(ndim)
 
-function set_state(ipd::Joint1DIpData, sig=zeros(0), eps=zeros(0))
+function set_state(ipd::Joint1DIpState, sig=zeros(0), eps=zeros(0))
     if length(sig)==3
         ipd.sig[:] = sig
     else
@@ -78,7 +78,7 @@ function set_state(ipd::Joint1DIpData, sig=zeros(0), eps=zeros(0))
     end
 end
 
-function calcD(mat::Joint1D, ipd::Joint1DIpData)
+function calcD(mat::Joint1D, ipd::Joint1DIpState)
     ks = mat.ks
     kn = mat.kn
     if ipd.ndim==2
@@ -92,7 +92,7 @@ function calcD(mat::Joint1D, ipd::Joint1DIpData)
 end
 
 
-function stress_update(mat::Joint1D, ipd::Joint1DIpData, deps)
+function stress_update(mat::Joint1D, ipd::Joint1DIpState, deps)
     D = calcD(mat, ipd)
     dsig = D*deps
 
@@ -101,7 +101,7 @@ function stress_update(mat::Joint1D, ipd::Joint1DIpData, deps)
     return dsig
 end
 
-function getvals(mat::Joint1D, ipd::Joint1DIpData)
+function ip_state_vals(mat::Joint1D, ipd::Joint1DIpState)
     return Dict(
       :ur   => ipd.eps[1] ,
       :tau  => ipd.sig[1] )

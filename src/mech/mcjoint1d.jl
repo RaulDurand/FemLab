@@ -19,14 +19,14 @@
 ##############################################################################
 
 
-type MCJoint1DIpData<:IpData
+mutable struct MCJoint1DIpState<:IpState
     ndim::Int
     σ  ::Array{Float64,1}
     ε  ::Array{Float64,1}
     ωpa::Float64
     Δγ :: Float64
     σc :: Float64
-    function MCJoint1DIpData(ndim=3)
+    function MCJoint1DIpState(ndim=3)
         this = new(ndim)
         this.σ = zeros(3)
         this.ε = zeros(3)
@@ -37,7 +37,7 @@ type MCJoint1DIpData<:IpData
     end
 end
 
-type MCJoint1D<:AbsJoint1D
+mutable struct MCJoint1D<:AbsJoint1D
     ks::Float64
     kn::Float64
     h ::Float64
@@ -79,18 +79,18 @@ type MCJoint1D<:AbsJoint1D
 end
 
 # Create a new instance of Ip data
-new_ipdata(mat::MCJoint1D, ndim::Int) = MCJoint1DIpData(ndim)
+new_ip_state(mat::MCJoint1D, ndim::Int) = MCJoint1DIpState(ndim)
 
-function set_state(ipd::MCJoint1DIpData, sig=zeros(0), eps=zeros(0))
+function set_state(ipd::MCJoint1DIpState, sig=zeros(0), eps=zeros(0))
     if length(sig)==3
         ipd.σ[:] = sig
     else
-        if length(sig)!=0; error("MCJoint1DIpData: Wrong size for stress array: $sig") end
+        if length(sig)!=0; error("MCJoint1DIpState: Wrong size for stress array: $sig") end
     end
     if length(eps)==3
         ipd.ε[:] = eps
     else
-        if length(eps)!=0; error("MCJoint1DIpData: Wrong size for strain array: $eps") end
+        if length(eps)!=0; error("MCJoint1DIpState: Wrong size for strain array: $eps") end
     end
 end
 
@@ -128,7 +128,7 @@ function calc_σc(elem, R, Ch, Ct)
 
 end
 
-function update!(mat::MCJoint1D, elem::Element, dU::Array{Float64,1})
+function elem_dF!(mat::MCJoint1D, elem::Element, dU::Array{Float64,1})
     ndim   = elem.ndim
     nnodes = length(elem.nodes)
     mat    = elem.mat
@@ -138,8 +138,8 @@ function update!(mat::MCJoint1D, elem::Element, dU::Array{Float64,1})
 
     hook = elem.linked_elems[1]
     bar  = elem.linked_elems[2]
-    Ct   = getcoords(bar)
-    Ch   = getcoords(hook)
+    Ct   = elem_coords(bar)
+    Ch   = elem_coords(hook)
     for ip in elem.ips
         detJ = mountB(elem.mat, elem, ip.R, Ch, Ct, B)
         D    = calcD(mat, ip.data)
@@ -155,7 +155,7 @@ function update!(mat::MCJoint1D, elem::Element, dU::Array{Float64,1})
 end
 
 
-function calcD(mat::MCJoint1D, ipd::MCJoint1DIpData)
+function calcD(mat::MCJoint1D, ipd::MCJoint1DIpState)
     ks = ipd.Δγ==0.0? mat.ks : mat.ks*mat.kh/(mat.ks + mat.kh)
     kn = mat.kn
     if ipd.ndim==2
@@ -168,7 +168,7 @@ function calcD(mat::MCJoint1D, ipd::MCJoint1DIpData)
     end
 end
 
-function yield_func(mat::MCJoint1D, ipd::MCJoint1DIpData, τ::Float64)
+function yield_func(mat::MCJoint1D, ipd::MCJoint1DIpState, τ::Float64)
     σc = ipd.σc>0? 0.0 : abs(ipd.σc)
     c  = mat.c
     kh = mat.kh
@@ -176,7 +176,7 @@ function yield_func(mat::MCJoint1D, ipd::MCJoint1DIpData, τ::Float64)
     return f = abs(τ) - (c + kh*ipd.ωpa + μ*σc)
 end
 
-function stress_update(mat::MCJoint1D, ipd::MCJoint1DIpData, Δε::Vect)
+function stress_update(mat::MCJoint1D, ipd::MCJoint1DIpState, Δε::Vect)
     ks = mat.ks
     kn = mat.kn
     kh = mat.kh
@@ -209,7 +209,7 @@ function stress_update(mat::MCJoint1D, ipd::MCJoint1DIpData, Δε::Vect)
     return Δσ
 end
 
-function getvals(mat::MCJoint1D, ipd::MCJoint1DIpData)
+function ip_state_vals(mat::MCJoint1D, ipd::MCJoint1DIpState)
     τmax = mat.c + abs(ipd.σc)*mat.μ
     return Dict(
       :ur   => ipd.ε[1] ,

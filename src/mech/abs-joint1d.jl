@@ -19,7 +19,7 @@
 ##############################################################################
 
 
-abstract AbsJoint1D<:Mechanical
+abstract type AbsJoint1D<:Mechanical end
 
 # Return the class of element where this material can be used
 client_shape_class(mat::AbsJoint1D) = JOINT1D_SHAPE
@@ -110,13 +110,13 @@ function mountB(mat::AbsJoint1D, elem::Element, R, Ch, Ct, B)
     return detJ
 end
 
-function elem_jacobian(mat::AbsJoint1D, elem::Element)
+function elem_stiffness(mat::AbsJoint1D, elem::Element)
     ndim   = elem.ndim
     nnodes = length(elem.nodes)
     hook = elem.linked_elems[1]
     bar  = elem.linked_elems[2]
-    Ch = getcoords(hook)
-    Ct = getcoords(bar)
+    Ch = elem_coords(hook)
+    Ct = elem_coords(bar)
 
     K  = zeros(nnodes*ndim, nnodes*ndim)
     B  = zeros(ndim, nnodes*ndim)
@@ -133,21 +133,19 @@ function elem_jacobian(mat::AbsJoint1D, elem::Element)
     return K
 end
 
-function update!(mat::AbsJoint1D, elem::Element, dU::Array{Float64,1})
+function elem_dF!(mat::AbsJoint1D, elem::Element, dU::Array{Float64,1})
     ndim   = elem.ndim
     nnodes = length(elem.nodes)
     mat    = elem.mat
-    #map    = get_map(elem)
 
     dF = zeros(nnodes*ndim)
-    #dU = DU[map]
     B  = zeros(ndim, nnodes*ndim)
     deps = zeros(ndim)
 
     hook = elem.linked_elems[1]
     bar  = elem.linked_elems[2]
-    Ct   = getcoords(bar)
-    Ch   = getcoords(hook)
+    Ct   = elem_coords(bar)
+    Ch   = elem_coords(hook)
     for ip in elem.ips
         detJ = mountB(elem.mat, elem, ip.R, Ch, Ct, B)
         D    = calcD(mat, ip.data)
@@ -161,7 +159,7 @@ function update!(mat::AbsJoint1D, elem::Element, dU::Array{Float64,1})
     return dF
 end
 
-function node_and_elem_vals(mat::AbsJoint1D, elem::Element)
+function elem_and_node_vals(mat::AbsJoint1D, elem::Element)
     ndim = elem.ndim
     node_vals = Dict{Symbol, Array{Float64,1}}()
     elem_vals = Dict{Symbol, Float64}()
@@ -171,7 +169,7 @@ function node_and_elem_vals(mat::AbsJoint1D, elem::Element)
     end
 
     # Elem vals
-    all_ip_vals = [ getvals(mat, ip.data) for ip in elem.ips ]
+    all_ip_vals = [ ip_state_vals(mat, ip.data) for ip in elem.ips ]
     labels      = keys(all_ip_vals[1])
     nips        = length(elem.ips) 
 

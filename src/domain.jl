@@ -45,18 +45,16 @@ Creates an `Domain` object based on a Mesh object `mesh` and represents the geom
 `filekey` : An string object that is used as part of the filename of resulting analyses files
 
 """
-type Domain
+mutable struct Domain
     ndim ::Int
     nodes::Array{Node,1}
     elems::Array{Element,1}
     faces::Array{Face,1}
     edges::Array{Edge,1}
-    node_bcs::Array{BC, 1}
-    face_bcs::Array{BC, 1}
-    edge_bcs::Array{BC, 1}
+    bcs::Array{BC,1}
     filekey::AbstractString
 
-    trackers::Array{Monitor,1}
+    monitors::Array{Monitor,1}
     nincs::Integer
     nouts::Integer
     ndofs::Integer
@@ -64,12 +62,10 @@ type Domain
     function Domain(;filekey::AbstractString="out")
         this = new()
 
-        this.node_bcs = []
-        this.face_bcs = []
-        this.edge_bcs = []
-        this.filekey = filekey
+        this.bcs      = []
+        this.filekey  = filekey
 
-        this.trackers = []
+        this.monitors = []
         this.nincs    = 0
         this.ndofs    = 0
         this.nouts    = 0
@@ -118,7 +114,7 @@ function Domain(mesh::Mesh; filekey::AbstractString="out", stress_state=:general
     dom.edges = Array{Edge}(0)
     for cell in mesh.edges
         conn = [ p.id for p in cell.points ]
-        edge = Face(cell.shape, dom.nodes[conn], ndim)
+        edge = Edge(cell.shape, dom.nodes[conn], ndim)
         edge.oelem = dom.elems[cell.ocell.id]
         push!(dom.edges, edge)
     end
@@ -205,26 +201,25 @@ end
 
 
 function set_bc(dom::Domain, bcs::BC...)
-    dom.node_bcs = []
-    dom.face_bcs = []
-    dom.edge_bcs = []
+    dom.bcs = []
     for bc in bcs
-        ty = typeof(bc)
+        setup_bc!(bc, dom)
+        push!(dom.bcs, bc)
+    end
+end
 
-        if ty == NodeBC
-            if bc.expr != :()  bc.nodes = dom.nodes[bc.expr] end
-            push!(dom.node_bcs, bc)
-        end
+function set_monitors(dom::Domain, monitors::Monitor...)
+    dom.monitors = []
+    for mon in monitors
+        setup_monitor!(mon, dom)
+        push!(dom.monitors, mon)
+    end
+end
+set_trackers = set_monitors
 
-        if ty == FaceBC
-            if bc.expr != :()  bc.faces = dom.faces[bc.expr] end
-            push!(dom.face_bcs, bc)
-        end
-
-        if ty == EdgeBC
-            if bc.expr != :()  bc.edges = dom.edges[bc.expr] end
-            push!(dom.edge_bcs, bc)
-        end
+function update_monitors!(dom::Domain)
+    for monitor in dom.monitors
+        update_monitor!(monitor)
     end
 end
 
@@ -265,7 +260,7 @@ function state_restore(elems::Array{Element,1})
 end
 
 
-function node_and_elem_vals(nodes::Array{Node,1}, elems::Array{Element,1})
+function all_node_and_elem_vals(nodes::Array{Node,1}, elems::Array{Element,1})
 
     # Calculate max number of node and elem labes
     matset  = Set{Material}()
@@ -274,7 +269,7 @@ function node_and_elem_vals(nodes::Array{Node,1}, elems::Array{Element,1})
     for elem in elems
         if !(elem.mat in matset)
             # getting values from current element
-            node_vals, elem_vals = node_and_elem_vals(elem.mat, elem)
+            node_vals, elem_vals = elem_and_node_vals(elem.mat, elem)
             union!(nlabels, keys(node_vals))
             union!(elabels, keys(elem_vals))
             push!(matset, elem.mat)
@@ -295,7 +290,7 @@ function node_and_elem_vals(nodes::Array{Node,1}, elems::Array{Element,1})
     # In elements
     for elem in elems
         # getting values from current element
-        node_vals, elem_vals = node_and_elem_vals(elem.mat, elem)
+        node_vals, elem_vals = elem_and_node_vals(elem.mat, elem)
 
         # filling nodal values and node repetitions
         for (key, values) in node_vals
@@ -339,7 +334,7 @@ function node_and_elem_vals2(nodes::Array{Node,1}, elems::Array{Element,1})
     for elem in elems
         if !(elem.mat in matset)
             # getting values from current element
-            node_vals, elem_vals = node_and_elem_vals(elem.mat, elem)
+            node_vals, elem_vals = elem_and_node_vals(elem.mat, elem)
             union!(nlabels, keys(node_vals))
             union!(elabels, keys(elem_vals))
             push!(matset, elem.mat)
@@ -359,7 +354,7 @@ function node_and_elem_vals2(nodes::Array{Node,1}, elems::Array{Element,1})
     # In elements
     for elem in elems
         # getting values from current element
-        node_vals, elem_vals = node_and_elem_vals(elem.mat, elem)
+        node_vals, elem_vals = elem_and_node_vals(elem.mat, elem)
 
         # filling nodal values and node repetitions
         for (key, values) in node_vals
@@ -394,79 +389,6 @@ function node_and_elem_vals2(nodes::Array{Node,1}, elems::Array{Element,1})
     elem_keys = [ elabels... ]
 
     return Node_vals, node_keys, Elem_vals, elem_keys
-end
-
-
-#function get_node(dom::Domain, coord::Array{Float64,1})
-    #X = [ coord, 0.0 ][1:3]
-    #tol     = 1.0e-8
-    #for node in dom.nodes
-        #if norm(X-node.X) < tol
-            #return node
-        #end
-    #end
-    #return nothing
-#end
-
-function set_monitors(dom::Domain, ts::Monitor...)
-    for t in ts
-        push!(dom.trackers, t)
-    end
-end
-set_trackers = set_monitors
-
-function update_monitors(dom::Domain)
-    for trk in dom.trackers
-        ty = typeof(trk)
-
-        if ty == NodeTracker
-            vals = getvals(trk.node)
-            push!(trk.table, vals)
-        elseif ty == NodesTracker
-            table = DTable()
-            for node in trk.nodes
-                vals = getvals(node)
-                push!(table, vals)
-            end
-            push!(trk.book, table)
-        elseif ty == FacesTracker
-            tableU = DTable()
-            tableF = DTable()
-            for node in trk.nodes
-                valsU  = Dict( dof.sU::Symbol => dof.U::Float64 for dof in node.dofs )
-                valsF  = Dict( dof.sF::Symbol => dof.F::Float64 for dof in node.dofs )
-                push!(tableF, valsF)
-                push!(tableU, valsU)
-            end
-
-            valsU = Dict( key => mean(tableU[key]) for key in keys(tableU) ) # gets the average of essential values
-            valsF = Dict( key => sum(tableF[key])  for key in keys(tableF) ) # gets the sum for each component
-            vals  = merge(valsU, valsF)
-            push!(trk.table, vals)
-        elseif ty == IpTracker
-            vals = getvals(trk.ip.owner.mat, trk.ip.data)
-            push!(trk.table, vals)
-        elseif ty == IpsTracker
-            table = DTable()
-            for ip in trk.ips
-                vals = getvals(ip)
-                push!(table, vals)
-            end
-            push!(trk.book, table)
-        end
-
-    end
-
-    # Update tracked files
-    for trk in dom.trackers
-        if trk.filename != ""
-            try
-                save(trk, trk.filename, verbose=false)
-            catch
-                warn("Problem writing file ", trk.filename)
-            end
-        end
-    end
 end
 
 
@@ -520,7 +442,7 @@ function save(dom::Domain, filename::AbstractString; verbose=true, save_ips=fals
 
     if has_data
         # Get node and elem values
-        node_vals, node_labels, elem_vals, elem_labels = node_and_elem_vals(dom.nodes, dom.elems)
+        node_vals, node_labels, elem_vals, elem_labels = all_node_and_elem_vals(dom.nodes, dom.elems)
         nncomps = length(node_labels)
         necomps = length(elem_labels)
     else
@@ -660,7 +582,7 @@ function save_dom_ips(dom::Domain, filename::AbstractString, verbose=true)
     # Get values at ips
     table = DTable()
     for ip in ips
-        push!(table, getvals(ip))
+        push!(table, ip_vals(ip))
     end
 
     # Write point data
@@ -765,7 +687,7 @@ function save2(dom::Domain, filename::AbstractString; verbose=true)
 
     if has_data
         # Get node and elem values
-        node_vals, node_labels, elem_vals, elem_labels = node_and_elem_vals(dom.nodes, dom.elems)
+        node_vals, node_labels, elem_vals, elem_labels = all_node_and_elem_vals(dom.nodes, dom.elems)
         nncomps = length(node_labels)
         necomps = length(elem_labels)
     else
@@ -809,7 +731,7 @@ function save2(dom::Domain, filename::AbstractString; verbose=true)
     # Get values at ips
     table = DTable()
     for ip in ips
-        push!(table, getvals(ip))
+        push!(table, ip_vals(ip))
     end
 
     # Write ip scalar data TODO
@@ -870,7 +792,7 @@ function save(nodes::Array{Node,1}, filename::AbstractString; dir::Symbol=:nodir
     for node in nodes
         dist += norm(node.X - X0)
         X0    = node.X
-        vals  = getvals(node)
+        vals  = node_vals(node)
         vals[:dist] = dist
         vals[:x]    = node.X[1]
         vals[:y]    = node.X[2]
@@ -900,7 +822,7 @@ function save(ips::Array{Ip,1}, filename::AbstractString; offset::Float64=0.0, d
         for node in ips
             dist += norm(node.X - X0)
             X0    = node.X
-            vals  = getvals(ip.data)
+            vals  = ip_state_vals(ip.data)
             vals[:dist] = dist
             vals[:x]    = ip.X[1]
             vals[:y]    = ip.X[2]
@@ -952,7 +874,7 @@ function save(ips::Array{Ip,1}, filename::AbstractString; offset::Float64=0.0, d
         # Get values at ips
         table = DTable()
         for ip in ips
-            push!(table, getvals(ip))
+            push!(table, ip_vals(ip))
         end
 
         # Write point data
@@ -969,21 +891,10 @@ function save(ips::Array{Ip,1}, filename::AbstractString; offset::Float64=0.0, d
             println(f, )
         end
 
-        # Write cell data
-        println(f, "CELL_DATA ", nips)
-
-        # Write owner elem type
-        println(f, "SCALARS cell_shape_tag int 1")
-        println(f, "LOOKUP_TABLE default")
-        for ip in ips
-            print(f, get_shape_tag(ip.owner.shape), " ")
-        end
-        println(f, )
-
         close(f)
 
         if verbose
-            println("  file $filename written (Domain)")
+            print_with_color(:green, "  file $filename written (Domain Ips)\n")
         end
     end
 end

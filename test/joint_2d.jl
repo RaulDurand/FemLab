@@ -16,8 +16,6 @@ set_mat(dom.elems[:joints], MCJoint(E=E, nu=0.2, ft=2.4e3, mu=1.4, alpha=1.0, wc
 
 # Tracking
 midjoint = dom.elems[:joints][:(x==0.1)][1][:ips][2]
-#midjointdat = IpTracker(midjoint, "midjoint.dat")
-#set_trackers(dom, midjointdat)
 
 # Boundary conditions
 bc1 = FaceBC( :(x==0), ux=0, uy=0 )

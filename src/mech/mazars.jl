@@ -18,7 +18,7 @@
 #    along with FemLab.  If not, see <http://www.gnu.org/licenses/>.         #
 ##############################################################################
 
-type MazarsIpData<:IpData
+mutable struct MazarsIpState<:IpState
     ndim::Int64
     σ::Tensor2
     ε::Tensor2
@@ -28,7 +28,7 @@ type MazarsIpData<:IpData
     φ::Float64  # damage
     ε̅max::Float64
     D::Array{Float64,2}
-    function MazarsIpData(ndim=3) 
+    function MazarsIpState(ndim=3) 
         this = new(ndim)
         this.σ = zeros(6)
         this.ε = zeros(6)
@@ -40,7 +40,7 @@ type MazarsIpData<:IpData
     end
 end
 
-type Mazars<:AbsSolid
+mutable struct Mazars<:AbsSolid
     E ::Float64
     nu::Float64
     ε̅0::Float64
@@ -71,9 +71,9 @@ type Mazars<:AbsSolid
 end
 
 # Create a new instance of Ip data
-new_ipdata(mat::Mazars, ndim::Int) = MazarsIpData(ndim)
+new_ip_state(mat::Mazars, ndim::Int) = MazarsIpState(ndim)
 
-function set_state(ipd::MazarsIpData; sig=zeros(0), eps=zeros(0))
+function set_state(ipd::MazarsIpState; sig=zeros(0), eps=zeros(0))
     if length(sig)==6
         ipd.σ[:] = sig.*V2M
     else
@@ -92,7 +92,7 @@ pos(x) = (abs(x)+x)/2.0
 neg(x) = (-abs(x)+x)/2.0
 
 
-function calcD2(mat::Mazars, ipd::MazarsIpData)
+function calcD2(mat::Mazars, ipd::MazarsIpState)
     # There is something wrong with the derivatives here
 
     if ipd.φ <= 0.0
@@ -139,7 +139,7 @@ function calcD2(mat::Mazars, ipd::MazarsIpData)
 end
 
 
-function calcDsecante(mat::Mazars, ipd::MazarsIpData)
+function calcDsecante(mat::Mazars, ipd::MazarsIpState)
     if ipd.φ <= 0.0
         return mat.De
     else
@@ -148,16 +148,15 @@ function calcDsecante(mat::Mazars, ipd::MazarsIpData)
     end
 end
 
-function calcD(mat::Mazars, ipd::MazarsIpData)
+function calcD(mat::Mazars, ipd::MazarsIpState)
     if ipd.φ <= 0.0
         return mat.De
     else
         D = zeros(6,6)
         δ = mat.ε̅0/20  # 20 seems to work better
-        #δ = mat.ε̅0/10  # 20 seems to work better
         κ = 1.0e-15    # important because some components may be zero
         δε = sign.(ipd.lastΔε .+ κ)*δ
-        δε = ones(6)*δ
+        #δε = ones(6)*δ
 
         Δε = zeros(6)
         for i=1:6
@@ -167,21 +166,12 @@ function calcD(mat::Mazars, ipd::MazarsIpData)
             Di = Δσ/Δε[i]
             D[:,i] = Di
         end
-        #for i=1:6
-            #k = mat.E/1000
-            #if abs(D[i,i]) < k
-                #D[i,i] += k*sign(D[i,i])
-            #end
-        #end
         return D
-        #return (1.0 - ipd.φ)*mat.De 
-        #Ds = (1.0 - ipd.φ)*mat.De 
-        #return 0.*D + 1*Ds # Required to avoid singular matrix
     end
 end
 
 
-function mazars_Δσ(mat::Mazars, ipd::MazarsIpData, Δε::Vect)::Vect
+function mazars_Δσ(mat::Mazars, ipd::MazarsIpState, Δε::Vect)::Vect
     # Auxiliary function to aid the calculation of numerical D matrix
     ε = ipd.ε + Δε    # Total strain
     εp = principal(ε) # Principal stresses tensor
@@ -230,7 +220,7 @@ function mazars_Δσ(mat::Mazars, ipd::MazarsIpData, Δε::Vect)::Vect
 end
 
 
-function stress_update(mat::Mazars, ipd::MazarsIpData, Δε::Array{Float64,1})
+function stress_update(mat::Mazars, ipd::MazarsIpState, Δε::Array{Float64,1})
     if !isnan(Δε[1])
         ipd.lastΔε = copy(Δε)
     end
@@ -290,7 +280,7 @@ function stress_update(mat::Mazars, ipd::MazarsIpData, Δε::Array{Float64,1})
     return Δσ 
 end
 
-function getvals(mat::Mazars, ipd::MazarsIpData)
+function ip_state_vals(mat::Mazars, ipd::MazarsIpState)
     σ  = ipd.σ
     ε  = ipd.ε
     ndim = ipd.ndim
@@ -331,9 +321,9 @@ function getvals(mat::Mazars, ipd::MazarsIpData)
       end
 end
 
-function node_and_elem_vals(mat::Mazars, elem::Element)
+function elem_and_node_vals(mat::Mazars, elem::Element)
     # call generic method from AbsSolid
-    node_vals, e_vals = invoke(node_and_elem_vals, (AbsSolid, Element), mat, elem)
+    node_vals, e_vals = invoke(elem_and_node_vals, Tuple{AbsSolid, Element}, mat, elem)
 
     # vector with nodal damage values
     D = node_vals[:dam] 

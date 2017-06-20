@@ -19,7 +19,7 @@
 ##############################################################################
 
 
-type MCJointIpData<:IpData
+mutable struct MCJointIpState<:IpState
     ndim::Int
     σ  ::Array{Float64,1}
     w  ::Array{Float64,1}
@@ -27,7 +27,7 @@ type MCJointIpData<:IpData
     upa::Float64  # max plastic displacement
     Δλ ::Float64  # plastic multiplier
     h  ::Float64  # element size
-    function MCJointIpData(ndim=3)
+    function MCJointIpState(ndim=3)
         this = new(ndim)
         this.σ = zeros(ndim)
         this.w = zeros(ndim)
@@ -39,7 +39,7 @@ type MCJointIpData<:IpData
     end
 end
 
-type MCJoint<:AbsJoint
+mutable struct MCJoint<:AbsJoint
     E  ::Float64  # Young's modulus
     ν  ::Float64  # Poisson ratio
     σmax0::Float64  # tensile strength
@@ -59,9 +59,9 @@ type MCJoint<:AbsJoint
 end
 
 # Create a new instance of Ip data
-new_ipdata(mat::MCJoint, ndim::Int) = MCJointIpData(ndim)
+new_ip_state(mat::MCJoint, ndim::Int) = MCJointIpState(ndim)
 
-function set_state(ipd::MCJointIpData, sig=zeros(0), eps=zeros(0))
+function set_state(ipd::MCJointIpState, sig=zeros(0), eps=zeros(0))
     @assert(false)
 end
 
@@ -83,7 +83,7 @@ function calc_a_b(mat::MCJoint, upa)
     return a, b
 end
 
-function calc_kn_ks(ipd::MCJointIpData, mat::MCJoint)
+function calc_kn_ks(ipd::MCJointIpState, mat::MCJoint)
     αmin = 1.0
     α = max(mat.α - (mat.α - αmin)/mat.ws*ipd.upa, αmin) 
     kn = mat.E*α/ipd.h
@@ -93,7 +93,7 @@ function calc_kn_ks(ipd::MCJointIpData, mat::MCJoint)
 end
 
 
-function yield_func(mat::MCJoint, ipd::MCJointIpData, σ::Array{Float64,1}, upa)
+function yield_func(mat::MCJoint, ipd::MCJointIpState, σ::Array{Float64,1}, upa)
     a, b = calc_a_b(mat, upa)
     σmax = a - b*upa
     if ipd.ndim==3
@@ -104,7 +104,7 @@ function yield_func(mat::MCJoint, ipd::MCJointIpData, σ::Array{Float64,1}, upa)
 end
 
 
-function yield_derivs(mat::MCJoint, ipd::MCJointIpData, σ::Array{Float64,1})
+function yield_derivs(mat::MCJoint, ipd::MCJointIpState, σ::Array{Float64,1})
     if ipd.ndim==3
         τ = √(σ[2]^2 + σ[3]^2)
         if τ==0.0
@@ -123,7 +123,7 @@ function yield_derivs(mat::MCJoint, ipd::MCJointIpData, σ::Array{Float64,1})
 end
 
 
-function potential_derivs_test(mat::MCJoint, ipd::MCJointIpData, σ::Array{Float64,1}, upa)
+function potential_derivs_test(mat::MCJoint, ipd::MCJointIpState, σ::Array{Float64,1}, upa)
     a, b = calc_a_b(mat, upa)
     σmax = a - upa*b
     if ipd.ndim==3
@@ -172,7 +172,7 @@ function potential_derivs_test(mat::MCJoint, ipd::MCJointIpData, σ::Array{Float
     end
 end
 
-function potential_derivs(mat::MCJoint, ipd::MCJointIpData, σ::Array{Float64,1}, upa)
+function potential_derivs(mat::MCJoint, ipd::MCJointIpState, σ::Array{Float64,1}, upa)
     a, b = calc_a_b(mat, upa)
     σmax = a - upa*b
     if ipd.ndim==3
@@ -241,7 +241,7 @@ function potential_derivs(mat::MCJoint, ipd::MCJointIpData, σ::Array{Float64,1}
 end
 
 
-function mountD(mat::MCJoint, ipd::MCJointIpData)
+function mountD(mat::MCJoint, ipd::MCJointIpState)
     kn, ks = calc_kn_ks(ipd, mat)
     #kn = mat.E*mat.α/ipd.h
     #G  = mat.E/(2.0*(1.0+mat.ν))
@@ -274,7 +274,7 @@ function mountD(mat::MCJoint, ipd::MCJointIpData)
 end
 
 
-function find_intersection(mat::MCJoint, ipd::MCJointIpData, F1::Float64, F2::Float64, σ0::Array{Float64,1}, Δσ::Array{Float64,1})
+function find_intersection(mat::MCJoint, ipd::MCJointIpState, F1::Float64, F2::Float64, σ0::Array{Float64,1}, Δσ::Array{Float64,1})
     @assert(F1*F2<0.0)
 
     α  = 0.0
@@ -328,7 +328,7 @@ function SecantRoot(f::Function, x0::Float64, x1::Float64, eps::Float64=1e-6)
 end
 
 
-function stress_update(mat::MCJoint, ipd::MCJointIpData, Δw::Array{Float64,1})
+function stress_update(mat::MCJoint, ipd::MCJointIpState, Δw::Array{Float64,1})
     σini = copy(ipd.σ)
     μ    = mat.μ
 
@@ -470,7 +470,7 @@ end
 
 
 
-function getvals(mat::MCJoint, ipd::MCJointIpData)
+function ip_state_vals(mat::MCJoint, ipd::MCJointIpState)
     if ipd.ndim == 2
         return Dict(
           :w1  => ipd.w[1] ,

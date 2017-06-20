@@ -19,11 +19,5 @@ bc3 = NodeBC( :(x==1 && y==0), ux=0.003)
 
 set_bc(dom, bc1, bc2, bc3)
 
-#tnode  = NodeTracker(dom.nodes[3])
-#tnodes = NodesTracker(dom.nodes)
-#set_trackers(dom, tnode, tnodes)
-
 @test solve!(dom, nincs=10, verbose=true)
 
-#save(tnode, "tab.dat")
-#save(tnodes, "tnodes.dat")

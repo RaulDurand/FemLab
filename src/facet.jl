@@ -18,7 +18,9 @@
 #    along with FemLab.  If not, see <http://www.gnu.org/licenses/>.         #
 ##############################################################################
 
-type Face
+abstract type Facet end
+
+mutable struct Face<:Facet
     shape::ShapeType
     nodes::Array{Node,1}
     ndim ::Integer
@@ -32,9 +34,23 @@ type Face
     end
 end
 
-const Edge=Face
 
-function getindex(faces::Array{Face,1}, cond::Expr)
+mutable struct Edge<:Facet
+    shape::ShapeType
+    nodes::Array{Node,1}
+    ndim ::Integer
+    oelem::Union{Element,Void}
+    isedge::Bool
+    function Edge(shape, nodes, ndim)
+        this = new(shape, nodes, ndim)
+        this.oelem  = nothing
+        this.isedge = false
+        return this
+    end
+end
+
+
+function getindex{T<:Facet}(facets::Array{T,1}, cond::Expr)
     condm = fix_comparison_arrays(cond)
    
     funex = :( (x,y,z) -> x*y*z )
@@ -43,45 +59,45 @@ function getindex(faces::Array{Face,1}, cond::Expr)
     try
         fun   = eval(funex)
     catch
-        error("Faces getindex: Invalid condition ", cond)
+        error("Facet getindex: Invalid condition ", cond)
     end
 
-    result = Array{Face}(0)
-    for face in faces
-        coords = getcoords(face.nodes)
+    result = Array{T}(0)
+    for facet in facets
+        coords = nodes_coords(facet.nodes)
         x = coords[:,1]
         y = coords[:,2]
         z = coords[:,3]
         if @static VERSION>v"0.6.0-rc1.0" ? Base.invokelatest(fun, x, y, z) : fun(x, y, z)
-            push!(result, face) 
+            push!(result, facet) 
         end
     end
 
     if length(result) == 0
-        printcolor(:red, "Warning: No faces found that match: $cond\n")
+        warn("No facets found that match: $cond\n")
     end
 
     return result
 end
 
-getindex(faces::Array{Face,1}, cond::AbstractString) = getindex(faces, parse(cond))
+#getindex{T<:Facet}(facets::Array{T,1}, cond::AbstractString) = getindex(facets, parse(cond))
 
 
-# Get all nodes from a collection of faces
-function get_nodes(faces::Array{Face,1})
+# Get all nodes from a collection of facets
+function get_nodes{T<:Facet}(facets::Array{T,1})
     nodes = Set{Node}()
-    for face in faces
-        for node in face.nodes
+    for facet in facets
+        for node in facet.nodes
             push!(nodes, node)
         end
     end
     return [node for node in nodes]
 end
 
-# Index operator for a collection of faces
-function getindex(faces::Array{Face,1}, s::Symbol)
+# Index operator for a collection of facets
+function getindex{T<:Facet}(facets::Array{T,1}, s::Symbol)
     if s == :nodes
-        return get_nodes(faces)
+        return get_nodes(facets)
     end
-    error("Face getindex: Invalid symbol $s")
+    error("Facet getindex: Invalid symbol $s")
 end

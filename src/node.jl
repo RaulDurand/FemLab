@@ -20,10 +20,9 @@
 
 import Base.reset
 import Base.getindex
-import Base.max
-import Base.min
+import Base.maximum
+import Base.minimum
 import Base.sort
-import Base.show
 
 # Dof
 # ===
@@ -34,7 +33,7 @@ import Base.show
 Creates an object that represents a Degree of Freedom in a finite element analysis.
 `Node` objects include a field called `dofs` which is an array of `Dof` objects.
 """
-type Dof
+mutable struct Dof
     sU    ::Symbol  # essential bc name
     sF    ::Symbol  # natural bc name
     U     ::Float64 # essential value
@@ -46,19 +45,6 @@ type Dof
     function Dof(sU::Symbol, sF::Symbol) 
         new(sU, sF, 0.0, 0.0, 0.0, 0.0, 0, false)
     end
-end
-
-
-# Show basic information of a dof using print
-function show(io::IO, dof::Dof)
-    @printf io "Dof( eq_id=%s  %s=%-12.4e    %s=%-12.4e    bry_%s=%-12.4e   bry_%s=%-12.4e  presc=%s)" dof.eq_id   dof.sU dof.U dof.sF dof.F   dof.sU dof.bryU dof.sF dof.bryF dof.prescU
-end
-
-function show(io::IO, dofs::Array{Dof,1})
-    for dof in dofs
-        println(io, dof)
-    end
-    return nothing
 end
 
 
@@ -76,7 +62,7 @@ vector that represents the node coordinates.
 `tag` : A string tag
 `dofs`: An array of `Dof` objects
 """
-type Node
+mutable struct Node
     X       ::Array{Float64,1}
     tag     ::AbstractString
     id      ::Int
@@ -94,29 +80,6 @@ type Node
         Node([point.x, point.y, point.z], tag=tag, id=id)
     end
 end
-
-
-# Show basic information of a node using print
-function show(io::IO, node::Node)
-    X = node.X
-    sdofs = "Dof"*string( [dof.sU for dof in node.dofs] )
-    @printf io "Node( id=%s X=[%-12.4e, %-12.4e, %-12.4e] tag=%s, dofs=%s )" node.id X[1] X[2] X[3] node.tag sdofs
-end
-
-function show(io::IO, nodes::Array{Node,1})
-    n = length(nodes)
-    maxn = 20
-    half = div(maxn,2)
-    idx = n<=maxn ? [1:n;] : [1:half; n-half+1:n]
-    for i in idx
-        println(io, nodes[i])
-        if n>maxn && i==half
-            println(io, "⋮")
-        end
-    end
-    return nothing
-end
-
 
 # Reset node information
 function reset(nodes::Array{Node,1})
@@ -148,7 +111,7 @@ end
 
 
 # Get node values in a dictionary
-function getvals(node::Node)
+function node_vals(node::Node)
     coords = Dict( :x => node.X[1], :y => node.X[2], :z => node.X[3] )
     uvals  = Dict( dof.sU => dof.U for dof in node.dofs )
     fvals  = Dict( dof.sF => dof.F for dof in node.dofs )
@@ -181,7 +144,7 @@ function getindex(nodes::Array{Node,1}, cond::Expr)
     end
 
     if length(result) == 0
-        printcolor(:red, "Warning: No nodes found that match: $cond\n")
+        warn("No nodes found that match: $cond\n")
     end
 
     return result
@@ -191,20 +154,20 @@ getindex(nodes::Array{Node,1}, cond::AbstractString) = getindex(nodes, parse(con
 
 
 # Get node coordinates for an collection of nodes as a matrix
-function getcoords(nodes::Array{Node,1}, ndim=3)
+function nodes_coords(nodes::Array{Node,1}, ndim=3)
     nnodes = length(nodes)
     [ nodes[i].X[j] for i=1:nnodes, j=1:ndim]
 end
 
 
 # Get the maximum value of a given coordinate for the whole collection of nodes
-function max(nodes::Array{Node,1}, dir::Symbol) 
+function maximum(nodes::Array{Node,1}, dir::Symbol) 
     idx = findfisrt((:x, :y, :z), dir)
     maximum([node.X[idx] for node in nodes])
 end
 
 
-function min(nodes::Array{Node,1}, dir::Symbol) 
+function minimum(nodes::Array{Node,1}, dir::Symbol) 
     idx = findfisrt((:x, :y, :z), dir)
     minimum([node.X[idx] for node in nodes])
 end

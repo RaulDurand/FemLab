@@ -21,132 +21,20 @@
 import Base.reset
 import Base.copy!
 
-# Abstract type for IP data
-# =========================
 
-abstract IpData
+@enum(ElemClass,
+TRUSS_ELEM    = 1,
+FRAME_ELEM    = 2,
+SOLID_ELEM    = 3,
+JOINT_ELEM    = 4,
+JOINT1D_ELEM  = 5,
+EMBEDDED_ELEM = 6
+)
 
-#  Ip
-# ====
-
-"""
-`Ip(R, w)`
-
-Creates an `Ip` object that represents an Integration Point in finite element analyses.
-`R` is a vector with the integration point local coordinates and `w` is the corresponding integration weight.
-"""
-type Ip
-    R    ::Array{Float64,1}
-    w    ::Float64
-    X    ::Array{Float64,1}
-    id   ::Int
-    owner::Any    # Element
-    data ::IpData  # Ip current state
-    data0::IpData  # Ip state at begin of increment
-
-    function Ip(R::Array, w::Float64)
-        this    = new(vec(R), w)
-        this.X  = Array{Float64}(3)
-        this.owner = nothing
-        return this
-    end
-end
-
-# Show basic information of an ip using print
-function show(io::IO, ip::Ip)
-    @printf io "Ip( X=%s    R=%s    ip_data_type=%s)" ip.X ip.R typeof(ip.data)
-end
-
-function show(io::IO, ips::Array{Ip,1})
-    n = length(ips)
-    maxn = 20
-    half = div(maxn,2)
-    idx  = n<=maxn ? [1:n;] : [1:half; n-half+1:n]
-    for i in idx
-        println(io, ips[i])
-        if n>maxn && i==half
-            println(io, "⋮")
-        end
-    end
-    return nothing
-end
-
-
-# Get ip values in a dictionary
-function getvals(ip::Ip)
-    coords = Dict( :x => ip.X[1], :y => ip.X[2], :z => ip.X[3] )
-    vals   = getvals(ip.owner.mat, ip.data)
-    return merge(coords, vals)
-end
-
-# Index operator for a ip collection using expression
-function getindex(ips::Array{Ip,1}, cond::Expr) 
-    condm = fix_comparison_scalar(cond)
-    funex = :( (x,y,z) -> x*y*z )
-    funex.args[2].args[2] = condm
-    fun = nothing
-    try
-        fun   = eval(funex)
-    catch
-        error("Ip getindex: Invalid condition ", cond)
-    end
-
-    result = Array{Ip}(0)
-    for ip in ips
-        if @static VERSION>v"0.6.0-rc1.0" ? Base.invokelatest(fun, ip.X[1], ip.X[2], ip.X[3]) : fun(ip.X[1], ip.X[2], ip.X[3])
-            push!(result, ip)
-        end
-    end
-    return result
-end
-
-getindex(ips::Array{Ip,1}, cond::AbstractString) = getindex(ips, parse(cond))
-
-# Get the maximum value of a given coordinate for the whole collection of ips
-function max(ips::Array{Ip,1}, dir::Symbol) 
-    idx = findfisrt((:x, :y, :z), dir)
-    maximum([ip.X[idx] for ip in ips])
-end
-
-function min(ips::Array{Ip,1}, dir::Symbol) 
-    idx = findfisrt((:x, :y, :z), dir)
-    minimum([ip.X[idx] for ip in ips])
-end
-
-# Sort a collection of ips in a given direction
-function sort(ips::Array{Ip,1}, dir::Symbol=:x, rev::Bool=false) 
-    idx  = findfirst((:x, :y, :z), dir)
-    idxs = sortperm([ip.X[idx] for ip in ips], rev=rev)
-    return ips[idxs]
-end
-
-
-
-# Abstract type for material
-# ==========================
-
-abstract Material
-
-function copy!(target::Material, source::Material)
-    @show("Hi - I am not used")
-    # source and target must be of the same type
-    T = typeof(source)
-    for fld in fieldnames(source)
-        if filedtype(T, fld) <: Array
-            if isdefined(target,fld)
-                getfield(target, fld)[:] = getfield(source, fld)[:]
-            else
-                setfield!(target, fld, copy(getfield(source, fld)))
-            end
-        else
-            setfield!(target, fld, getfield(source, fld))
-        end
-    end
-end
-
-
-# Type Element
-# ============
+# Export
+for s in instances(ElemClass)
+    @eval export $(Symbol(s))
+end 
 
 """
 `Element(shape, nodes, ndim, [tag="",])`
@@ -154,7 +42,7 @@ end
 Creates an 'Element' object for finite element analyses based on a
 `shape`, an array of `nodes` and the space dimension `ndim`.
 """
-type Element
+mutable struct Element
     shape ::ShapeType
     nodes ::Array{Node,1}
     ndim  ::Int
@@ -176,27 +64,6 @@ type Element
     end
 end
 
-# Show basic information of an element using print
-function show(io::IO, elem::Element)
-    snodes = "Node"*string([n.id for n in elem.nodes])
-    sips   = length(elem.ips)==0 ? "Ip[]" : "Ip[...]"
-    @printf io "Element( id=%s  shape=%s  tag=%s  active=%s  nodes=%s  ips=%s  mat=%s )" elem.id elem.shape.name elem.tag elem.active snodes sips typeof(elem.mat)
-end
-
-function show(io::IO, elems::Array{Element,1})
-    n = length(elems)
-    maxn = 20
-    half = div(maxn,2)
-    idx  = n<=maxn ? [1:n;] : [1:half; n-half+1:n]
-    for i in idx
-        println(io, elems[i])
-        if n>maxn && i==half
-            println(io, "⋮")
-        end
-    end
-    return nothing
-end
-
 function reset(elems::Array{Element,1})
     # Resets data at integration points
     ndim = elems[1].ndim
@@ -205,6 +72,129 @@ function reset(elems::Array{Element,1})
             ip.data = typeof(ip.data)(ndim)
         end
     end
+end
+
+# Get the element coordinates matrix
+function elem_coords(elem::Element)
+    nnodes = length(elem.nodes)
+    ndim   = elem.ndim
+    return [ elem.nodes[i].X[j] for i=1:nnodes, j=1:ndim]
+end
+
+
+
+"""
+`set_mat(elem, mat, [nips=0])`
+
+Especifies the material model `mat` to be used to represent the behavior of an `Element` object `elem`.
+"""
+function set_mat(elem::Element, mat::Material; nips::Int64=0)
+    # check if material is suitable for the element TODO: Improve this!
+    embedded = elem.shape.class==LINE_SHAPE && length(elem.linked_elems)>0
+    if embedded && client_shape_class(mat) != EMBEDDED
+        error("set_mat: Material $(typeof(mat)) is not suitable for embedded elements")
+    end
+
+    # check if material is suitable for the element TODO: Improve this!
+    if client_shape_class(mat) != elem.shape.class && !embedded
+        error("set_mat: Material $(typeof(mat)) is not suitable for element class $(elem.shape.class)")
+    end
+
+    ipc =  get_ip_coords(elem.shape, nips)
+    nips = size(ipc,1)
+
+    resize!(elem.ips, nips)
+    elem.mat = mat
+    for i=1:nips
+        R = ipc[i,1:3]
+        w = ipc[i,4]
+        elem.ips[i] = Ip(R, w)
+        elem.ips[i].id = i
+        elem.ips[i].data = new_ip_state(mat, elem.ndim)
+        elem.ips[i].owner = elem
+    end
+
+    # finding ips global coordinates
+    C     = elem_coords(elem)
+    shape = elem.shape
+
+    # fix for link elements
+    if shape.class==JOINT1D_SHAPE
+        bar   = elem.linked_elems[2]
+        C     = elem_coords(bar)
+        shape = bar.shape
+    end
+
+    # fix for joint elements
+    if shape.class==JOINT_SHAPE
+        C     = C[1:div(end,2),:]
+        shape = shape.basic_shape
+    end 
+
+    # interpolation
+    for ip in elem.ips
+        N = shape.func(ip.R)
+        ip.X = C'*N
+        if length(ip.X)==2 # complete z=0.0 for 2D analyses
+            ip.X = [ ip.X; 0.0 ]
+        end
+    end
+
+    # configure degrees of freedom
+    elem_config_dofs(mat, elem)
+
+    # initialize element
+    elem_init(mat, elem)
+end
+
+
+
+"""
+`set_mat(elems, mat, [nips=0])`
+
+Especifies the material model `mat` to be used to represent the behavior of a set of `Element` objects `elems`.
+"""
+function set_mat(elems::Array{Element,1}, mat::Material; nips::Int64=0)
+    if length(elems)==0
+        warn("Defining material model $(typeof(mat)) for an empty array of elements.\n")
+    end
+    for elem in elems
+        set_mat(elem, mat, nips=nips)
+    end
+end
+
+
+# Define the state at all integration points in a collection of elements
+function set_state(elems::Array{Element,1}; args...)
+    for elem in elems
+        for ip in elem.ips
+            set_state(ip.data; args...)
+        end
+    end
+end
+
+
+# Get all nodes from a collection of elements
+function get_nodes(elems::Array{Element,1})
+    nodes = Set{Node}()
+    for elem in elems
+        for node in elem.nodes
+            push!(nodes, node)
+        end
+    end
+    return [node for node in nodes]
+end
+
+
+# Get all ips from a collection of elements
+function get_ips(elems::Array{Element,1})
+    ips = Ip[]
+    for elem in elems
+        for ip in elem.ips
+            push!(ips, ip)
+        end
+    end
+    return ips
 end
 
 # Index operator for an element
@@ -217,6 +207,7 @@ function getindex(elem::Element, s::Symbol)
     end
     error("Element getindex: Invalid symbol $s")
 end
+
 # Index operator for a collection of elements
 function getindex(elems::Array{Element,1}, s::Symbol)
     if s == :solids
@@ -256,7 +247,7 @@ function getindex(elems::Array{Element,1}, cond::Expr)
 
     result = Array{Element}(0)
     for elem in elems
-        coords = getcoords(elem.nodes)
+        coords = nodes_coords(elem.nodes)
         x = coords[:,1]
         y = coords[:,2]
         z = coords[:,3]
@@ -283,179 +274,3 @@ function getindex(elems::Array{Element,1}, cond::AbstractString)
     return getindex(elems, parse(cond))
 end
 
-# Get the element coordinates matrix
-function getcoords(elem::Element)
-    nnodes = length(elem.nodes)
-    ndim   = elem.ndim
-    return [ elem.nodes[i].X[j] for i=1:nnodes, j=1:ndim]
-end
-
-function getconns(elem::Element)
-    return [ node.id for node in elem.nodes ]
-end
-
-
-# Dispatcher: Configure all dofs in an element according to material
-config_dofs(elem::Element) = config_dofs(elem.mat, elem)
-
-
-# Define material properties for an element
-"""
-`set_mat(elem, mat, [nips=0])`
-
-Especifies the material model `mat` to be used to represent the behavior of an `Element` object `elem`.
-"""
-function set_mat(elem::Element, mat::Material; nips::Int64=0)
-    # check if material is suitable for the element TODO: Improve this!
-    embedded = elem.shape.class==LINE_SHAPE && length(elem.linked_elems)>0
-    if embedded && client_shape_class(mat) != EMBEDDED
-        error("set_mat: Material $(typeof(mat)) is not suitable for embedded elements")
-    end
-
-    # check if material is suitable for the element TODO: Improve this!
-    if client_shape_class(mat) != elem.shape.class && !embedded
-        error("set_mat: Material $(typeof(mat)) is not suitable for element class $(elem.shape.class)")
-    end
-
-    ipc =  get_ip_coords(elem.shape, nips)
-    nips = size(ipc,1)
-
-    resize!(elem.ips, nips)
-    elem.mat = mat
-    for i=1:nips
-        R = ipc[i,1:3]
-        w = ipc[i,4]
-        elem.ips[i] = Ip(R, w)
-        elem.ips[i].id = i
-        elem.ips[i].data = new_ipdata(mat, elem.ndim)
-        elem.ips[i].owner = elem
-    end
-
-    # finding ips global coordinates
-    C     = getcoords(elem)
-    shape = elem.shape
-
-    # fix for link elements
-    if shape.class==JOINT1D_SHAPE
-        bar   = elem.linked_elems[2]
-        C     = getcoords(bar)
-        shape = bar.shape
-    end
-
-    # fix for joint elements
-    if shape.class==JOINT_SHAPE
-        C     = C[1:div(end,2),:]
-        shape = shape.basic_shape
-    end 
-
-    # interpolation
-    for ip in elem.ips
-        N = shape.func(ip.R)
-        ip.X = C'*N
-        if length(ip.X)==2 # complete z=0.0 for 2D analyses
-            ip.X = [ ip.X; 0.0 ]
-        end
-    end
-
-    # configure degrees of freedom
-    config_dofs(elem)
-
-    # initialize element
-    init_elem(elem, mat)
-end
-
-
-# Define material properties for a collection of elements
-"""
-`set_mat(elems, mat, [nips=0])`
-
-Especifies the material model `mat` to be used to represent the behavior of a set of `Element` objects `elems`.
-"""
-function set_mat(elems::Array{Element,1}, mm::Material; nips::Int64=0)
-    if length(elems)==0
-        warn("Defining material model ($(string(typeof(mm)))) for an empty array of elements.\n")
-    end
-    for elem in elems
-        set_mat(elem, mm, nips=nips)
-    end
-end
-
-
-# Reads material parameters from a json file
-function read_prms(filename::AbstractString)
-
-    # read file
-    file = open(filename, "r")
-    data = JSON.parse(file)
-    close(file)
-
-    # parse materials
-    mats_prms = Dict{AbstractString, Any}()
-    for d in data
-        name = d["name"]
-        keys = d["prms"]
-        vals = d["vals"]
-        prms = Dict{Symbol, Float64}( symbol(k) => v for (k,v) in zip(keys, vals) )
-        mats_prms[name] = prms
-    end
-
-    return mats_prms
-end
-
-
-# Define the state at all integration points in a collection of elements
-function set_state(elems::Array{Element,1}; args...)
-    for elem in elems
-        for ip in elem.ips
-            set_state(ip.data; args...)
-        end
-    end
-end
-
-
-# Get all nodes from a collection of elements
-function get_nodes(elems::Array{Element,1})
-    nodes = Set{Node}()
-    for elem in elems
-        for node in elem.nodes
-            push!(nodes, node)
-        end
-    end
-    return [node for node in nodes]
-end
-
-
-# Get all ips from a collection of elements
-function get_ips(elems::Array{Element,1})
-    ips = Ip[]
-    for elem in elems
-        for ip in elem.ips
-            push!(ips, ip)
-        end
-    end
-    return ips
-end
-
-#=
-# Macro to filter elems using a condition expression
-macro get_elems(dom, expr)
-
-    # fix condition
-    cond = fix_comparison_arrays(expr)
-
-    # generate the filter function
-    func = quote
-        (elem::Element) -> begin 
-            x = [ node.X[1] for node in elem.nodes ]
-            y = [ node.X[2] for node in elem.nodes ]
-            z = [ node.X[3] for node in elem.nodes ]
-            $(cond) 
-        end
-    end
-
-    quote
-        ff = $(esc(func))
-        tt = Bool[ ff(elem) for elem in $(esc(dom)).elems]
-        $(esc(dom)).elems[ tt ]
-    end
-end =#

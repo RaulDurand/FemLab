@@ -9,7 +9,7 @@ mesh = Mesh(bl, verbose=false)
 dom = Domain(mesh)
 set_mat(dom.elems, DruckerPrager(E=100., nu=0.25, alpha=0.05, kappa=0.1) )
 
-ip_dat = IpTracker(dom.elems[1])
+ip_dat = IpMonitor(dom.elems[1][:ips][1])
 set_trackers(dom, ip_dat)
 
 # boundary conditions

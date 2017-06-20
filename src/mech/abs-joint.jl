@@ -19,12 +19,12 @@
 ##############################################################################
 
 
-abstract AbsJoint<:Mechanical
+abstract type AbsJoint<:Mechanical end
 
 # Return the class of element where this material can be used
 client_shape_class(mat::AbsJoint) = JOINT_SHAPE
 
-function init_elem(elem::Element, mat::AbsJoint)
+function elem_init(mat::AbsJoint, elem::Element)
 
     # Get linked elements
     e1 = elem.linked_elems[1]
@@ -32,7 +32,7 @@ function init_elem(elem::Element, mat::AbsJoint)
 
     # Volume from first linked element
     V1 = 0.0
-    C1 = getcoords(e1)
+    C1 = elem_coords(e1)
     for ip in e1.ips
         dNdR = e1.shape.deriv(ip.R)
         J    = dNdR*C1
@@ -42,7 +42,7 @@ function init_elem(elem::Element, mat::AbsJoint)
 
     # Volume from second linked element
     V2 = 0.0
-    C2 = getcoords(e2)
+    C2 = elem_coords(e2)
     for ip in e2.ips
         dNdR = e2.shape.deriv(ip.R)
         J    = dNdR*C2
@@ -52,7 +52,7 @@ function init_elem(elem::Element, mat::AbsJoint)
 
     # Area of joint element
     A = 0.0
-    C = getcoords(elem)
+    C = elem_coords(elem)
     n = div(length(elem.nodes), 2)
     C = C[1:n, :]
     bshape = elem.shape.basic_shape
@@ -92,13 +92,13 @@ function matrixT(J::Matrix{Float64})
     end
 end
 
-function elem_jacobian(mat::AbsJoint, elem::Element)
+function elem_stiffness(mat::AbsJoint, elem::Element)
     ndim   = elem.ndim
     nnodes = length(elem.nodes)
     hnodes = div(nnodes, 2) # half the number of total nodes
     bshape = elem.shape.basic_shape
 
-    C = getcoords(elem)[1:hnodes,:]
+    C = elem_coords(elem)[1:hnodes,:]
     B = zeros(ndim, nnodes*ndim)
     K = zeros(nnodes*ndim, nnodes*ndim)
 
@@ -136,7 +136,7 @@ function elem_jacobian(mat::AbsJoint, elem::Element)
     return K
 end
 
-function update!(mat::AbsJoint, elem::Element, dU::Array{Float64,1})
+function elem_dF!(mat::AbsJoint, elem::Element, dU::Array{Float64,1})
     ndim   = elem.ndim
     nnodes = length(elem.nodes)
     hnodes = div(nnodes, 2) # half the number of total nodes
@@ -144,7 +144,7 @@ function update!(mat::AbsJoint, elem::Element, dU::Array{Float64,1})
     mat    = elem.mat
 
     dF = zeros(nnodes*ndim)
-    C = getcoords(elem)[1:hnodes,:]
+    C = elem_coords(elem)[1:hnodes,:]
     B = zeros(ndim, nnodes*ndim)
 
     DB = zeros(ndim, nnodes*ndim)
@@ -180,7 +180,7 @@ function update!(mat::AbsJoint, elem::Element, dU::Array{Float64,1})
     return dF
 end
 
-function node_and_elem_vals(mat::AbsJoint, elem::Element)
+function elem_and_node_vals(mat::AbsJoint, elem::Element)
     ndim = elem.ndim
     node_vals = Dict{Symbol, Array{Float64,1}}()
     elem_vals = Dict{Symbol, Float64}()
@@ -205,7 +205,7 @@ function node_and_elem_vals(mat::AbsJoint, elem::Element)
     #node_vals[:up] = [ Up; Up ]
     #node_vals[:tau] = [ T; T ]
 
-    #all_ip_vals = [ getvals(mat, ip.data) for ip in elem.ips ]
+    #all_ip_vals = [ ip_state_vals(mat, ip.data) for ip in elem.ips ]
     #labels      = keys(all_ip_vals[1])
     #nips        = length(elem.ips) 
 

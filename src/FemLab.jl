@@ -18,7 +18,6 @@
 #    along with FemLab.  If not, see <http://www.gnu.org/licenses/>.         #
 ##############################################################################
 
-#VERSION >= v"0.4.0-dev+6521" && __precompile__()
 __precompile__() 
 
 """
@@ -36,29 +35,7 @@ set_mat, set_bc, clear_bc, solve!, save
 
 """
 module FemLab
-using  Base, JSON
-
-# Code snippet from simonster
-# https://github.com/simonster/Reexport.jl
-macro reexport(ex)
-    isa(ex, Expr) && (ex.head == :module ||
-                      ex.head == :using ||
-                      (ex.head == :toplevel &&
-                       all(e->isa(e, Expr) && e.head == :using, ex.args))) ||
-        error("@reexport: syntax error")
-
-    if ex.head == :module
-        modules = Any[ex.args[2]]
-        ex = Expr(:toplevel, ex, Expr(:using, :., ex.args[2]))
-    elseif ex.head == :using
-        modules = Any[ex.args[end]]
-    else
-        modules = Any[e.args[end] for e in ex.args]
-    end
-
-    esc(Expr(:toplevel, ex,
-             [:(eval(Expr(:export, setdiff(names($(mod)), [mod])...))) for mod in modules]...))
-end
+using  Base, JSON, Reexport
 
 #Using non-registered (jet) package FemMesh
 #Pkg.installed("FemMesh") == nothing && Pkg.clone("https://github.com/RaulDurand/FemMesh")
@@ -89,22 +66,31 @@ include("globals.jl")
 include("node.jl")
 export Node, Dof, add_dof
 
+include("ip.jl")
+export Ip, ip_vals, maximum, minimum, sort
+
+include("material.jl")
+export Material, read_prms
+
 include("element.jl")
-export Element, Ip
+export Element
 export set_mat, get_nodes, get_ips, set_state, reset, getcoords, getvals, get_map
 
-include("face.jl")
-export Face
+include("facet.jl")
+export Facet, Face, Edge
 
 include("bcs.jl")
 export NodeBC, FaceBC, EdgeBC, apply_bc
 
-include("monitor.jl")
+include("monitors.jl")
 export NodeMonitor, NodesMonitor, IpMonitor, IpsMonitor, FacesMonitor, EdgesMonitor
 export NodeTracker, NodesTracker, IpTracker, IpsTracker, FacesTracker, EdgesTracker
 
 include("domain.jl")
 export set_bc, set_monitors, update_monitors, set_trackers
+
+include("io.jl")
+export show
 
 
 # Mechanical module
