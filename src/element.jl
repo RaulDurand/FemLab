@@ -251,7 +251,8 @@ function getindex(elems::Array{Element,1}, cond::Expr)
         x = coords[:,1]
         y = coords[:,2]
         z = coords[:,3]
-        if @static VERSION>v"0.6.0-rc1.0" ? Base.invokelatest(fun, x, y, z) : fun(x, y, z)
+        #if @static VERSION>v"0.6.0-rc1.0" ? Base.invokelatest(fun, x, y, z) : fun(x, y, z)
+        if Base.invokelatest(fun, x, y, z)
             push!(result, elem) 
         end
     end

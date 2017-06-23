@@ -136,9 +136,8 @@ function getindex(nodes::Array{Node,1}, cond::Expr)
 
     result = Array{Node}(0)
     for node in nodes
-        if @static VERSION>v"0.6.0-rc1.0" ? Base.invokelatest(fun, node.X[1], node.X[2], node.X[3]) : fun(node.X[1], node.X[2], node.X[3])
-        #if Base.invokelatest(fun, node.X[1], node.X[2], node.X[3])
-        #if fun(node.X[1], node.X[2], node.X[3])
+        #if @static VERSION>v"0.6.0-rc1.0" ? Base.invokelatest(fun, node.X[1], node.X[2], node.X[3]) : fun(node.X[1], node.X[2], node.X[3])
+        if Base.invokelatest(fun, node.X[1], node.X[2], node.X[3])
             push!(result, node)
         end
     end
@@ -161,20 +160,20 @@ end
 
 
 # Get the maximum value of a given coordinate for the whole collection of nodes
-function maximum(nodes::Array{Node,1}, dir::Symbol) 
+function maximum(nodes::Array{Node,1}, dir::Symbol=:x)
     idx = findfisrt((:x, :y, :z), dir)
     maximum([node.X[idx] for node in nodes])
 end
 
 
-function minimum(nodes::Array{Node,1}, dir::Symbol) 
+function minimum(nodes::Array{Node,1}, dir::Symbol=:x)
     idx = findfisrt((:x, :y, :z), dir)
     minimum([node.X[idx] for node in nodes])
 end
 
 
 # Sort a collection of nodes in a given direction
-function sort(nodes::Array{Node,1}, dir::Symbol=:x; rev::Bool=false) 
+function sort(nodes::Array{Node,1}; dir::Symbol=:x, rev::Bool=false)
     idx  = findfirst((:x, :y, :z), dir)
     idxs = sortperm([node.X[idx] for node in nodes], rev=rev)
     return nodes[idxs]

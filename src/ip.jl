@@ -62,7 +62,8 @@ function getindex(ips::Array{Ip,1}, cond::Expr)
 
     result = Array{Ip}(0)
     for ip in ips
-        if @static VERSION>v"0.6.0-rc1.0" ? Base.invokelatest(fun, ip.X[1], ip.X[2], ip.X[3]) : fun(ip.X[1], ip.X[2], ip.X[3])
+        #if @static VERSION>v"0.6.0-rc1.0" ? Base.invokelatest(fun, ip.X[1], ip.X[2], ip.X[3]) : fun(ip.X[1], ip.X[2], ip.X[3])
+        if Base.invokelatest(fun, ip.X[1], ip.X[2], ip.X[3])
             push!(result, ip)
         end
     end
