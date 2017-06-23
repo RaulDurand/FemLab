@@ -21,7 +21,7 @@
 
 import Base.getindex
 import Base.keys
-export DTable, DBook, push!, keys, getindex, save, loadtable
+export DTable, DBook, push!, keys, getindex, save, loadtable, loadbook
 
 
 # DTable object
@@ -42,7 +42,7 @@ type DTable
             nh = length(header)
             nf = size(matrix,2)
             if nh != nf; error("DTable: header and data fields do not match") end
-            this.data = [ matrix[1:end,i] for i=1:nh]
+            this.data = [ matrix[:,i] for i=1:nh]
         end
         this.dict = Dict( k=>v for (k,v) in zip(header, this.data) )
         return this
@@ -110,31 +110,27 @@ function getindex(book::DBook, index::Int64)
 end
 
 
-function save(table::DTable, filename::AbstractString; verbose=true, format="")
+function save(table::DTable, filename::String; verbose=true)
+    format = split(filename*".", ".")[2]
     f  = open(filename, "w")
-    nc = length(table.dict)   # number of fields (columns)
+    nc = length(table.dict)     # number of fields (columns)
     nr = length(table.data[1])  # number of rows
-
-    basename, ext = splitext(filename)
-    if format==""
-        format = (ext == "")? "dat" : ext[2:end]
-    end
 
     if format=="dat"
         # map for ordered header
-        symbols = collect(keys(table.dict))
-        dmap = [ tup[2] for tup in sort(collect(zip(symbols, 1:nc))) ]
+        ord_header = sort(collect(keys(table.dict)))
+        ord_table  = [ table[key] for key in ord_header ]
 
         # print header
         for i=1:nc
-            @printf(f, "%18s", symbols[dmap[i]])
+            @printf(f, "%18s", ord_header[i])
             print(f, i!=nc? "\t" : "\n")
         end
 
         # print values
         for i=1:nr
             for j=1:nc
-                @printf(f, "%18.10e", table.data[dmap[j]][i])
+                @printf(f, "%18.10e", ord_table[j][i])
                 print(f, j!=nc? "\t" : "\n")
             end
         end
@@ -156,7 +152,8 @@ function save(table::DTable, filename::AbstractString; verbose=true, format="")
 end
 
 
-function save(book::DBook, filename::AbstractString; verbose=true, format="dat")
+function save(book::DBook, filename::String; verbose::Bool=true)
+    format = split(filename*".", ".")[2]
     f  = open(filename, "w") 
 
     if format=="json"
@@ -171,34 +168,29 @@ function save(book::DBook, filename::AbstractString; verbose=true, format="dat")
     end
 
     if format=="dat" # saves only the last table
-        #save(book.tables[end], filename, verbose=false)
-        #if verbose  print_with_color(:green, "  file $filename written (DBook)\n") end
-
         f  = open(filename, "w")
 
-        basename, ext = splitext(filename)
-        if format==""
-            format = (ext == "")? "dat" : ext[2:end]
-        end
+        for (k,table) in enumerate(book.tables)
+            # print table label
+            nitems = length(table.data[1])
+            print(f, "Table (snapshot=$k, items=$nitems)\n")
 
-        for table in book.tables
-            symbols = collect(keys(table.dict))
             nc = length(table.dict)     # number of fields (columns)
             nr = length(table.data[1])  # number of rows
 
-            # map for ordered header
-            dmap = [ tup[2] for tup in sort(collect(zip(symbols, 1:nc))) ]
+            ord_header = sort(collect(keys(table.dict)))
+            ord_table  = [ table[key] for key in ord_header ]
 
             # print header
             for i=1:nc
-                @printf(f, "%18s", symbols[dmap[i]])
+                @printf(f, "%18s", ord_header[i])
                 print(f, i!=nc? "\t" : "\n")
             end
 
             # print values
             for i=1:nr
                 for j=1:nc
-                    @printf(f, "%18.10e", table.data[dmap[j]][i])
+                    @printf(f, "%18.10e", ord_table[j][i])
                     print(f, j!=nc? "\t" : "\n")
                 end
             end
@@ -206,7 +198,7 @@ function save(book::DBook, filename::AbstractString; verbose=true, format="dat")
         end
 
         close(f)
-        if verbose  print_with_color(:green, "  file $filename written\n") end
+        verbose && print_with_color(:green, "  file $filename written\n")
 
         return
     end
@@ -214,10 +206,37 @@ function save(book::DBook, filename::AbstractString; verbose=true, format="dat")
 end
 
 
-function loadtable(filename::AbstractString)
-    data, headstr = readdlm(filename, '\t',header=true)
-    header = Symbol[ Symbol(strip(field)) for field in vec(headstr) ]
+function loadtable(filename::String)
+    format = split(filename*".", ".")[2]
+    if format=="dat"
+        data, headstr = readdlm(filename, '\t',header=true)
+        header = Symbol[ Symbol(strip(field)) for field in vec(headstr) ]
 
-    table = DTable(header, data)
-    return table
+        table = DTable(header, data)
+        return table
+    end
+end
+
+function loadbook(filename::String)
+    format = split(filename*".", ".")[2]
+    f      = open(filename, "r")
+    book   = DBook()
+    if format=="dat"
+        while !eof(f)
+            line = readline(f)
+            line=="" && continue
+            items = split(line)
+            if items[1]=="Table"
+                keys = [ Symbol(key) for key in split(readline(f)) ]
+                push!(book.tables, DTable(keys))
+            else
+                length(book.tables) == 0 && error("loadbook: Wrong file format. Use loadtable() to read a table")
+                row = parse.(items)
+                push!(book.tables[end], row)
+            end
+        end
+    end
+
+    close(f)
+    return book
 end

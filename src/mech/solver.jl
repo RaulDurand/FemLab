@@ -231,7 +231,7 @@ function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=
     sdata = MecSolverData(dom, ips, tol, verbose, umap, pmap, ndofs)
 
     while T < 1.0 - μdT
-        if verbose; print_with_color(:blue, "  increment $inc from T=$(round(T,5)) to T=$(round(T+dT,5)) (dT=$(round(dT,10))):\n", bold=true) end  # color 111
+        if verbose; print_with_color(:blue, "  increment $inc from T=$(round(T,10)) to T=$(round(T+dT,10)) (dT=$(round(dT,10))):\n", bold=true) end  # color 111
         ΔU, ΔF = dT*U, dT*F     # increment vectors
         R      = copy(ΔF)       # residual
         local ΔFin              # internal forces vector for current increment
@@ -313,11 +313,16 @@ function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=
 
             inc += 1
             T   += dT
-            if auto; dT = min(1.5*dT, 1.0/nincs, 1.0-T) end
+            if auto
+                dT = min(1.5*dT, 1.0/nincs)
+                dT = round(dT, -ceil(Int, log10(dT))+3)  # round to 3 significant digits
+                dT = min(dT, 1.0-T) 
+            end
         else
             if auto
                 verbose && println("    increment failed.")
                 dT *= 0.5
+                dT = round(dT, -ceil(Int, log10(dT))+3)  # round to 3 significant digits
                 if dT < μdT
                     print_with_color(:red, "solve!: solver did not converge\n",)
                     return false

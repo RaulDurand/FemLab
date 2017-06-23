@@ -123,11 +123,11 @@ mutable struct IpsMonitor <: Monitor
     end
 end
 
-function save(monitor::Monitor, filename::AbstractString; verbose=true, format="dat")
+function save(monitor::Monitor, filename::AbstractString; verbose=true)
     if isdefined(monitor, :(table))
-        save(monitor.table, filename, verbose=verbose, format=format)
+        save(monitor.table, filename, verbose=verbose)
     else
-        save(monitor.book, filename, verbose=verbose, format=format)
+        save(monitor.book, filename, verbose=verbose)
     end
 end
 
