@@ -173,7 +173,7 @@ end
 
 
 # Sort a collection of nodes in a given direction
-function sort(nodes::Array{Node,1}; dir::Symbol=:x, rev::Bool=false)
+function sort(nodes::Array{Node,1}, dir::Symbol=:x; rev::Bool=false)
     idx  = findfirst((:x, :y, :z), dir)
     idxs = sortperm([node.X[idx] for node in nodes], rev=rev)
     return nodes[idxs]

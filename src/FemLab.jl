@@ -85,9 +85,10 @@ export NodeBC, FaceBC, EdgeBC, apply_bc
 include("monitors.jl")
 export NodeMonitor, NodesMonitor, IpMonitor, IpsMonitor, FacesMonitor, EdgesMonitor
 export NodeTracker, NodesTracker, IpTracker, IpsTracker, FacesTracker, EdgesTracker
+export update_monitor!
 
 include("domain.jl")
-export set_bc, set_monitors, update_monitors, set_trackers
+export set_bc, set_monitors, update_monitors!, set_trackers
 
 include("io.jl")
 export show

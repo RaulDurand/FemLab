@@ -110,7 +110,7 @@ function getindex(book::DBook, index::Int64)
 end
 
 
-function save(table::DTable, filename::String; verbose=true)
+function save(table::DTable, filename::String; verbose::Bool=true)
     format = split(filename*".", ".")[2]
     f  = open(filename, "w")
     nc = length(table.dict)     # number of fields (columns)
@@ -209,7 +209,7 @@ end
 function loadtable(filename::String)
     format = split(filename*".", ".")[2]
     if format=="dat"
-        data, headstr = readdlm(filename, '\t',header=true)
+        data, headstr = readdlm(filename, '\t', header=true)
         header = Symbol[ Symbol(strip(field)) for field in vec(headstr) ]
 
         table = DTable(header, data)

@@ -31,6 +31,7 @@ mutable struct MecSolverData
 end
 
 
+# Assemble the global stiffness matrix
 function mount_K(sdata::MecSolverData)
     sdata.verbose && print("    assembling... \r")
 
@@ -86,7 +87,7 @@ function calc_residue(ΔF, ΔFin, Fmax, umap)
     end
 end
 
-
+# Solves for a load/displacement increment
 function solve_inc(sdata::MecSolverData, K::SparseMatrixCSC{Float64, Int}, DU::Vect, DF::Vect)
     #  [  K11   K12 ]  [ U1? ]    [ F1  ]
     #  |            |  |     | =  |     |
@@ -120,7 +121,6 @@ function solve_inc(sdata::MecSolverData, K::SparseMatrixCSC{Float64, Int}, DU::V
         RHS = F1 - K12*U2
         try
             LUfact = lufact(K11)
-            #U1  = K11\RHS
             U1  = LUfact\RHS
             F2 += K21*U1
         catch err
