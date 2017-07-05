@@ -11,7 +11,7 @@ function elem_stiffness(mat::AbsTruss, elem::Element)
     C = elem_coords(elem)
     K = zeros(nnodes*ndim, nnodes*ndim)
     B = zeros(1, nnodes*ndim)
-    J  = Array{Float64}(1, ndim)
+    J = Array{Float64}(1, ndim)
 
     for ip in elem.ips
         dNdR = elem.shape.deriv(ip.R)

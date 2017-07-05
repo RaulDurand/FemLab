@@ -56,7 +56,7 @@ function mount_T(J::Matx)
 end
 
 
-function mountB(mat::AbsJoint1D, elem::Element, R, Ch, Ct, B)
+function mountB(mat::AbsJoint1D, elem::Element, R, Ch, Ct)
     # Calculates the matrix that relates nodal displacements with relative displacements
     # ==================================================================================
 
@@ -74,8 +74,8 @@ function mountB(mat::AbsJoint1D, elem::Element, R, Ch, Ct, B)
     #          [ M_13*I M_23*I ... M_mn*I] ndim*n x ndim*m
 
     # where
-    # M_12 is the first shape function from tresspased element
-    # evaluated at the second node of truss element.
+    # M_12 is the first shape function from the tresspased solid element
+    # evaluated at the second node of the truss element.
     # I is a ndim x ndim identity matrix
 
 
@@ -83,8 +83,8 @@ function mountB(mat::AbsJoint1D, elem::Element, R, Ch, Ct, B)
     hook = elem.linked_elems[1]
     bar  = elem.linked_elems[2]
     nnodes  = length(elem.nodes)
-    ntnodes = length(bar.nodes)
-    nbnodes = length(hook.nodes)
+    nbnodes = length(bar.nodes)
+    nsnodes = length(hook.nodes)
     D = bar.shape.deriv(R)
     J = D*Ct
     T = mount_T(J)
@@ -95,7 +95,7 @@ function mountB(mat::AbsJoint1D, elem::Element, R, Ch, Ct, B)
 
     # Mount MM matrix
     stack = Array{Float64,2}[]
-    for i=1:ntnodes
+    for i=1:nbnodes
         Xj = bar.nodes[i].X
         R  = inverse_map(hook.shape, Ch, Xj)
         M  = hook.shape.func(R)
@@ -103,11 +103,25 @@ function mountB(mat::AbsJoint1D, elem::Element, R, Ch, Ct, B)
             push!(stack, Mi*eye(ndim))
         end
     end
-    MM = hvcat(nbnodes, stack...)
+    MM = hvcat(nsnodes, stack...)
 
-    B[:] = -T*[ NN*MM  -NN ]
+    B = -T*[ NN*MM  -NN ]
     detJ = norm(J)
-    return detJ
+    return B, detJ
+end
+
+function elem_init(mat::AbsJoint1D, elem::Element)::Void
+    B_detJ = []
+    hook = elem.linked_elems[1]
+    bar  = elem.linked_elems[2]
+    Ch = elem_coords(hook)
+    Ct = elem_coords(bar)
+    for ip in elem.ips
+        B, detJ = mountB(elem.mat, elem, ip.R, Ch, Ct)
+        push!(B_detJ, (B, detJ))
+    end
+    elem.cache[:B_detJ] = B_detJ
+    return nothing
 end
 
 function elem_stiffness(mat::AbsJoint1D, elem::Element)
@@ -115,15 +129,15 @@ function elem_stiffness(mat::AbsJoint1D, elem::Element)
     nnodes = length(elem.nodes)
     hook = elem.linked_elems[1]
     bar  = elem.linked_elems[2]
-    Ch = elem_coords(hook)
-    Ct = elem_coords(bar)
+    #Ch = elem_coords(hook)
+    #Ct = elem_coords(bar)
 
     K  = zeros(nnodes*ndim, nnodes*ndim)
-    B  = zeros(ndim, nnodes*ndim)
     DB = zeros(ndim, nnodes*ndim)
 
-    for ip in elem.ips
-        detJ = mountB(elem.mat, elem, ip.R, Ch, Ct, B) #TODO: include B matrix construction here
+    for (i,ip) in enumerate(elem.ips)
+        #B, detJ = mountB(elem.mat, elem, ip.R, Ch, Ct)
+        B, detJ = elem.cache[:B_detJ][i]
         D    = calcD(elem.mat, ip.data)
         D[1,1]*=mat.h
         coef = detJ*ip.w
@@ -139,15 +153,17 @@ function elem_dF!(mat::AbsJoint1D, elem::Element, dU::Array{Float64,1})
     mat    = elem.mat
 
     dF = zeros(nnodes*ndim)
-    B  = zeros(ndim, nnodes*ndim)
+    #B  = zeros(ndim, nnodes*ndim)
     deps = zeros(ndim)
 
     hook = elem.linked_elems[1]
     bar  = elem.linked_elems[2]
-    Ct   = elem_coords(bar)
-    Ch   = elem_coords(hook)
-    for ip in elem.ips
-        detJ = mountB(elem.mat, elem, ip.R, Ch, Ct, B)
+    #Ct   = elem_coords(bar)
+    #Ch   = elem_coords(hook)
+    #for ip in elem.ips
+    for (i,ip) in enumerate(elem.ips)
+        #detJ = mountB(elem.mat, elem, ip.R, Ch, Ct, B)
+        B, detJ = elem.cache[:B_detJ][i]
         D    = calcD(mat, ip.data)
         @gemv deps = B*dU
         dsig = stress_update(mat, ip.data, deps)

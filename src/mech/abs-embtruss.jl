@@ -55,14 +55,21 @@ function mountNN(mat::AbsEmbTruss, elem::Element)
     return NN
 end
 
+
+function elem_init(mat::AbsEmbTruss, elem::Element)::Void
+    elem.cache[:NN] = mountNN(mat, elem)
+    return nothing
+end
+
+
 function elem_stiffness(mat::AbsEmbTruss, elem::Element)
     Kb = elem_stiffness(mat.trussmat, elem)
-    NN = mountNN(mat, elem)
+    NN = elem.cache[:NN]
     return NN*Kb*NN' 
 end
 
 function elem_dF!(mat::AbsEmbTruss, elem::Element, dU::Array{Float64,1})
-    NN   = mountNN(mat, elem)
+    NN = elem.cache[:NN]
     dUtr = NN'*dU
     dFtr = elem_dF!(mat.trussmat, elem, dUtr)
     dF   = NN*dFtr

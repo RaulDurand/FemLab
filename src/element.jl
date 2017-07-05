@@ -46,12 +46,13 @@ mutable struct Element
     shape ::ShapeType
     nodes ::Array{Node,1}
     ndim  ::Int
-    tag   ::AbstractString
+    tag   ::String
     id    ::Int
     active::Bool
     ips   ::Array{Ip,1}
     mat   ::Material
     linked_elems::Array{Element,1}
+    cache::Dict{Symbol,Any}
 
     function Element(shape, nodes, ndim, tag="")
         this        = new(shape, nodes, ndim, tag)
@@ -60,6 +61,7 @@ mutable struct Element
         this.linked_elems = []
         # Set the element class. For embedded elems, the class will be set by the Domain object.
         #this.class = shape.class
+        this.cache = Dict{Symbol,Any}()
         this
     end
 end

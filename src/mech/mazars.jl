@@ -189,8 +189,8 @@ function mazars_Δσ(mat::Mazars, ipd::MazarsIpState, Δε::Vect)::Vect
         # Damage calculation
         φt = 1.0 - (1-mat.At)*mat.ε̅0/ε̅ - mat.At/exp(mat.Bt*(ε̅-mat.ε̅0))
         φc = 1.0 - (1-mat.Ac)*mat.ε̅0/ε̅ - mat.Ac/exp(mat.Bc*(ε̅-mat.ε̅0))
-        φt = max(ipd.φt, φt)
-        φc = max(ipd.φc, φc)
+        #φt = max(ipd.φt, φt)
+        #φc = max(ipd.φc, φc)
 
         # Tensile and compression tensors
         σt = pos.(σp)
@@ -250,8 +250,10 @@ function stress_update(mat::Mazars, ipd::MazarsIpState, Δε::Array{Float64,1})
         φt = 1.0 - (1-mat.At)*mat.ε̅0/ε̅ - mat.At/exp(mat.Bt*(ε̅-mat.ε̅0))
         φc = 1.0 - (1-mat.Ac)*mat.ε̅0/ε̅ - mat.Ac/exp(mat.Bc*(ε̅-mat.ε̅0))
 
-        ipd.φt = max(ipd.φt, φt)
-        ipd.φc = max(ipd.φc, φc)
+        #ipd.φt = max(ipd.φt, φt)
+        #ipd.φc = max(ipd.φc, φc)
+        ipd.φt = φt
+        ipd.φc = φc
 
         # Tensile and compression tensors
         σt = pos.(σp)
@@ -271,6 +273,7 @@ function stress_update(mat::Mazars, ipd::MazarsIpState, Δε::Array{Float64,1})
         # Damage variable
         φ = αt*ipd.φt + αc*ipd.φc
         ipd.φ = max(φ, ipd.φ)
+        #ipd.φ = φ
 
         # Total stress and stress increment
         ipd.σ = (1.0 - ipd.φ)*mat.De*ipd.ε
