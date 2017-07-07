@@ -28,8 +28,8 @@ mutable struct CEBJoint1DIpState<:IpState
     elastic::Bool
     function CEBJoint1DIpState(ndim=3)
         this = new(ndim)
-        this.σ = zeros(3)
-        this.ε = zeros(3)
+        this.σ = zeros(ndim)
+        this.ε = zeros(ndim)
         this.τy = 0.0
         this.sy = 0.0
         this.elastic = false
@@ -130,12 +130,12 @@ function deriv(mat::CEBJoint1D, ipd::CEBJoint1DIpState, sy::Float64)
 end
 
 function set_state(ipd::CEBJoint1DIpState, sig=zeros(0), eps=zeros(0))
-    if length(sig)==3
+    if length(sig)==ipd.ndim
         ipd.σ[:] = sig
     else
         if length(sig)!=0; error("CEBJoint1DIpState: Wrong size for stress array: $sig") end
     end
-    if length(eps)==3
+    if length(eps)==ipd.3
         ipd.ε[:] = eps
     else
         if length(eps)!=0; error("CEBJoint1DIpState: Wrong size for strain array: $eps") end

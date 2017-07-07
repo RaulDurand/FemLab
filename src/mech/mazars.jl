@@ -299,7 +299,11 @@ function ip_state_vals(mat::Mazars, ipd::MazarsIpState)
           :eyy => ε[2],
           :ezz => ε[3],
           :exy => ε[4]/sr2,
-          :p   => sum(σ[1:3])/3.0 )
+          :p   => sum(σ[1:3])/3.0,
+          :dam => ipd.φ,
+          :damt => ipd.φt,
+          :damc => ipd.φc,
+          :eq => ipd.ε̅max )
       else
         return Dict(
           :sxx => σ[1],
