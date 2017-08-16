@@ -8,7 +8,7 @@ Currently this library solves static analysis in two and three-dimensions. It is
 discrete crack approach. There is work on the way to implement a dynamic solver
 
 **Available elements:**
-Truss (@D and 3D), Beam (2D), Solid elements (2D and 3D). Also includes embedded and semi-embedded rod
+Truss (2D and 3D), Beam (2D), Solid elements (2D and 3D). Also includes embedded and semi-embedded rod
 elements used for the simulation of reinforced media.
 
 **Constitutive models:**
