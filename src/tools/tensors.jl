@@ -132,10 +132,10 @@ function principal_dir(T::Tensor2)
     shift = 1 - idx
     L = circshift(L, shift)
     V = circshift(V, (0,shift))
-    #return L, V
+    return L, V
     #@show L
     #exit()
-    return L
+    #return L
 end
 
 

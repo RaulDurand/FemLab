@@ -96,6 +96,46 @@ function apply_facet_bc(mat::AbsSolid, oelem::Element, face::Facet, key::Symbol,
     end
 end
 
+function apply_elem_bc(mat::AbsSolid, elem::Element, key::Symbol, val::Float64)
+    if !(key in (:gx, :gy, :gz))
+        error("Boundary condition $key is not allowed in an elem; consider gx, gy or gz")
+    end
+
+    ndim   = elem.ndim
+    shape  = elem.shape
+    nnodes = length(elem.nodes)
+
+    # Calculate the vector with values to apply
+    V = zeros(ndim)
+    if key == :gx ; V[1] = val end
+    if key == :gy ; V[2] = val end
+    if key == :gz ; V[3] = val end
+
+    # Calculate the nodal values
+    F = zeros(nnodes, ndim)
+
+    ips = get_ip_coords(shape)
+
+    for i=1:size(ips,1)
+        R = vec(ips[i,:])
+        w = R[end]
+        N = shape.func(R)
+        D = shape.deriv(R)
+        J = D*C
+        nJ = norm(J)
+
+        F += N*V'*(nJ*w)
+    end
+
+    # Setting bc into nodes
+    for (i,node) in enumerate(elem.nodes)
+        node.dofdict[:fx].bryF += F[i,1]
+        node.dofdict[:fy].bryF += F[i,2]
+        if ndim==3; node.dofdict[:fz].bryF += F[i,3] end
+    end
+
+end
+
 function setB(ndim::Int, dNdX::Matx, detJ::Float64, B::Matx)
     nnodes = size(dNdX,2)
     sqr2 = √2.0

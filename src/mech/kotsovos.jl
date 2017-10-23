@@ -92,6 +92,7 @@ function calcD(mat::Kotsovos, ipd::KotsovosIpState)
 end
 
 function get_basicD(mat::Kotsovos, ipd::KotsovosIpState)
+    # TODO: check elastic part results with the elastic model
     ncracks = ipd.ncracks
     nu = mat.nu
     β  = mat.β
@@ -141,12 +142,13 @@ function stress_update(mat::Kotsovos, ipd::KotsovosIpState, Δε::Array{Float64,
 
     # trial stress
     ipd.D = calcD(mat, ipd)
-    σtr = ipd.σ + inner(ipd.D, Δε)
+    σtr   = ipd.σ + inner(ipd.D, Δε)
 
     # principal stresses
-    Sig, EV = principal(σtr)
+    Sig, EV = principal_dir(σtr)
 
     # check for cracking in traction
+    #@show Sig
     if Sig[1]>mat.ft
         ipd.ncracks += 1
     end

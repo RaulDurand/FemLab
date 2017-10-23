@@ -168,7 +168,7 @@ end
 
 function setup_monitor!(monitor::FacesMonitor, domain)
     if monitor.expr != :() 
-        edges = domain.edges[monitor.expr]
+        edges = domain.faces[monitor.expr]
         length(edges) == 0 && warn("FacesMonitor: No faces found for expression: $(monitor.expr)")
         monitor.nodes = edges[:nodes]
     end

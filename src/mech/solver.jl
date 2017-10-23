@@ -134,7 +134,6 @@ function solve_inc(sdata::MecSolverData, K::SparseMatrixCSC{Float64, Int}, DU::V
     DF[nu+1:end] = F2
 end
 
-
 function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=true, scheme::String="FE", precision::Number=0.01,
     tol::Number=0.0, reset_bc::Bool=true, verbose::Bool=true, autosave::Bool=false, saveincs::Bool=false, nout::Int=0,
     save_ips::Bool=false)::Bool
@@ -254,6 +253,12 @@ function solve!(dom::Domain; nincs=1, maxits::Int=5, auto::Bool=false, NR::Bool=
             # Try FE step
             K = mount_K(sdata)
             ΔFin, R = solve_update_step(sdata, K, ΔUa, ΔUi, R)
+
+            #@show T
+            #@show ΔFin
+            #@show round.(ΔF-ΔFin,4)
+            #println()
+
             maxF = max(norm(Fin+ΔFin), maxF)
             #residue = calc_residue(ΔF, ΔFin, maxF, umap)
             residue = maximum(abs, (ΔF-ΔFin)[umap] ) #*****

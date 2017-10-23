@@ -45,8 +45,3 @@ end
 function ip_state_vals(mat::EmbTruss, ipd::TrussIpState)
     return ip_state_vals(mat.trussmat, ipd)
 end
-
-function calcD(mat::EmbTruss, ips::TrussIpState)
-    return mat.trussmat.E
-end
-

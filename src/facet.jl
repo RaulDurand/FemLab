@@ -44,7 +44,7 @@ mutable struct Edge<:Facet
     function Edge(shape, nodes, ndim)
         this = new(shape, nodes, ndim)
         this.oelem  = nothing
-        this.isedge = false
+        this.isedge = true
         return this
     end
 end

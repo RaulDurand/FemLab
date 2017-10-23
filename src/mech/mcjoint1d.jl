@@ -128,20 +128,22 @@ function calc_σc(elem, R, Ch, Ct)
 
 end
 
+
 function elem_dF!(mat::MCJoint1D, elem::Element, dU::Array{Float64,1})
     ndim   = elem.ndim
     nnodes = length(elem.nodes)
     mat    = elem.mat
 
     dF = zeros(nnodes*ndim)
-    B  = zeros(ndim, nnodes*ndim)
+    #B  = zeros(ndim, nnodes*ndim)
 
     hook = elem.linked_elems[1]
     bar  = elem.linked_elems[2]
     Ct   = elem_coords(bar)
     Ch   = elem_coords(hook)
-    for ip in elem.ips
-        detJ = mountB(elem.mat, elem, ip.R, Ch, Ct, B)
+    for (i,ip) in enumerate(elem.ips)
+        #detJ = mountB(elem.mat, elem, ip.R, Ch, Ct, B)
+        B, detJ = elem.cache[:B_detJ][i]
         D    = calcD(mat, ip.data)
         deps = B*dU
         ip.data.σc = calc_σc(elem, ip.R, Ch, Ct) # This line is particular to MCJoint1D
