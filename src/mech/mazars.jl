@@ -43,6 +43,8 @@ end
 mutable struct Mazars<:AbsSolid
     E ::Float64
     nu::Float64
+    ro::Float64
+    xi::Float64
     ε̅0::Float64
     At::Float64
     Bt::Float64
@@ -55,20 +57,23 @@ mutable struct Mazars<:AbsSolid
         return Mazars(;prms...)
     end
 
-    function Mazars(;E=NaN, nu=0.0, eps0=NaN, At=NaN, Bt=NaN, Ac=NaN, Bc=NaN)
+    function Mazars(;E=NaN, nu=0.0, ro=0.0, xi=0.0, eps0=NaN, At=NaN, Bt=NaN, Ac=NaN, Bc=NaN)
         @assert E>0.0
         @assert 0.0<=nu<0.5
+        @assert ro>=0.0
+        @assert xi>=0.0
         @assert At>0.0
         @assert Ac>0.0
         @assert Bt>0.0
         @assert Bc>0.0
 
-        this     = new(E, nu, eps0, At, Bt, Ac, Bc)
+        this     = new(E, nu, ro, xi, eps0, At, Bt, Ac, Bc)
         this.De  = calcDe(E, nu)
         this.invDe  = inv(this.De)
         return this 
     end
 end
+
 
 # Create a new instance of Ip data
 new_ip_state(mat::Mazars, ndim::Int) = MazarsIpState(ndim)
