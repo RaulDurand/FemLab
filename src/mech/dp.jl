@@ -37,6 +37,8 @@ end
 mutable struct DruckerPrager<:AbsSolid
     E::Float64
     ν::Float64
+    ro::Float64
+    xi::Float64
     α::Float64
     κ::Float64
     H::Float64
@@ -46,18 +48,21 @@ mutable struct DruckerPrager<:AbsSolid
         return DruckerPrager(;prms...)
     end
 
-    function DruckerPrager(;E=NaN, nu=0.0, alpha=0.0, kappa=0.0, H=0.0)
+    function DruckerPrager(;E=NaN, nu=0.0, ro=0.0, xi=0.0, alpha=0.0, kappa=0.0, H=0.0)
         @assert E>0.0
         @assert 0.0<=nu<0.5
+        @assert ro>=0.0
+        @assert xi>=0.0
         @assert alpha>=0.0
         @assert kappa>0.0
         @assert H>=0.0
 
-        this    = new(E, nu, alpha, kappa, H)
+        this    = new(E, nu, ro, xi, alpha, kappa, H)
         this.De = calcDe(E, nu)
         return this 
     end
 end
+
 
 # Create a new instance of Ip data
 new_ip_state(mat::DruckerPrager, ndim::Int) = DruckerPragerIpState(ndim)
