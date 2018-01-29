@@ -23,7 +23,7 @@ end
 
 # Show basic information of a dof using print
 function show(io::IO, dof::Dof)
-    @printf io "Dof( eq_id=%s  %s=%-8.4f    %s=%-8.4f    bry_%s=%-8.4f   bry_%s=%-8.4f  presc=%s)" dof.eq_id   dof.sU dof.U dof.sF dof.F   dof.sU dof.bryU dof.sF dof.bryF dof.prescU
+    @printf io "Dof( eq_id=%s )" dof.eq_id
 end
 
 @show_array_function Dof
