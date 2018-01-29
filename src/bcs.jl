@@ -44,6 +44,28 @@ mutable struct NodesBC <: BC
 
 end
 
+
+mutable struct ElementBC <: BC
+  
+    expr ::Expr
+    conds::Array
+    elems::Array{Element,1}
+
+    function ElementBC(expr::Expr; conds::Array...)
+        return new(expr, conds, [])
+    end
+
+    function ElementBC(elems::Array{Element,1}; conds::Any...)
+        return new(:(), conds, elems)
+    end
+
+    function ElementBC(elem::Element; conds::Any...)
+        return NodesBC( [elem]; conds... )
+    end
+
+end
+
+
 abstract type FacetsBC<:BC end
 
 mutable struct FacesBC<:FacetsBC
@@ -131,7 +153,8 @@ function apply_bc(bc::NodesBC)
                 dof.prescU = true
                 dof.bryU  = val
             else
-                dof.bryF += val
+                #dof.bryF += val
+                dof.bryF = Expr(:call, :+, dof.bryF, val)
             end
         end
     end
@@ -146,7 +169,16 @@ function apply_bc{T<:FacetsBC}(bc::T)
         oelem==nothing && error("Facet with no owner element")
 
         for (key,val) in bc.conds
-            apply_facet_bc(oelem.mat, oelem, facet, key, float(val))
+            apply_facet_bc(oelem.mat, oelem, facet, key, val)
+        end
+    end
+end
+
+function apply_bc(bc::ElementBC)
+    
+    for elem in bc.elems
+        for (key,val) in bc.conds
+            apply_elem_bc(elem.mat, elem, key, float(val))
         end
     end
 end
