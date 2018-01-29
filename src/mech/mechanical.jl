@@ -68,6 +68,14 @@ function elem_stiffness(mat::Mechanical, elem::Element)::Array{Float64,2}
     error("elem_stiffness function not defined for material type $(typeof(mat))")
 end
 
+function elem_mass(mat::Mechanical, elem::Element)::Array{Float64,2}
+    ndofs = length(elem.nodes) * elem.ndim
+
+    M = zeros(ndofs,ndofs)
+
+    return M    
+end
+
 """
 `elem_dF!(mat, elem)`
 
