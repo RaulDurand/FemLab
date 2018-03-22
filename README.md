@@ -4,7 +4,7 @@ FemLab
 FemLab is a Finite Element library written in Julia language.
 The purpose of this library is to aid the research of new algorithms for the finite element method.
 
-Currently this library solves static analysis in two and three-dimensions. It is also capable to simulate cracking based on the
+Currently this library solves static and dynamic analysis in two and three-dimensions. It is also capable to simulate cracking based on the
 discrete crack approach. There is work on the way to implement a dynamic solver
 
 **Available elements:**
