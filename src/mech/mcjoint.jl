@@ -191,34 +191,9 @@ function σmax_deriv(mat::MCJoint, ipd::MCJointIpState, upa::Float64)
 end
 
 function calc_kn_ks(mat::MCJoint, ipd::MCJointIpState)
-	if mat.softcurve == "linear"
-		if ipd.upa < mat.wc
-            α = mat.α - (mat.α - 0.5)*ipd.upa/mat.wc
-		else
-            α = 0.5
-        end
-    elseif mat.softcurve == "bilinear"
-        if ipd.upa < mat.ws
-            α = mat.α - (0.75*mat.α)*ipd.upa/mat.ws
-        elseif ipd.upa < mat.wc
-            α = 0.5 - (0.5-0.25*mat.α)*(mat.wc - ipd.upa)/(mat.wc - mat.ws)
-        else
-            α = 0.5
-        end
-    elseif mat.softcurve == "hordijk"
-        z = (1 + 27*(ipd.upa/mat.wc)^3)*e^(-6.93*ipd.upa/mat.wc) - 28*(ipd.upa/mat.wc)*e^(-6.93)
-        if ipd.upa < mat.wc
-            α = (mat.α - (mat.α - 0.5)*(1-z))
-        else
-            α = 0.5
-        end 
-    end
-
-    #α = mat.α
-
-    kn = mat.E*α/ipd.h
+    kn = mat.E*mat.α/ipd.h
     G  = mat.E/(2.0*(1.0+mat.ν))
-    ks = G*α/ipd.h
+    ks = G*mat.α/ipd.h
     return kn, ks
 end
 
