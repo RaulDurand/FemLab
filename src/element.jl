@@ -46,7 +46,7 @@ mutable struct Element
     shape ::ShapeType
     nodes ::Array{Node,1}
     ndim  ::Int
-    tag   ::String
+    tag   ::TagType
     id    ::Int
     active::Bool
     ips   ::Array{Ip,1}
@@ -130,7 +130,7 @@ function set_mat(elem::Element, mat::Material; nips::Int64=0)
     # fix for joint elements
     if shape.class==JOINT_SHAPE
         C     = C[1:div(end,2),:]
-        shape = shape.basic_shape
+        shape = shape.facet_shape
     end 
 
     # interpolation
