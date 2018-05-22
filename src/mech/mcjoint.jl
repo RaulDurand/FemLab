@@ -190,36 +190,21 @@ function σmax_deriv(mat::MCJoint, ipd::MCJointIpState, upa::Float64)
     return dσmax
 end
 
-function calc_kn_ks(mat::MCJoint, ipd::MCJointIpState)
+function calc_kn_ks_De(mat::MCJoint, ipd::MCJointIpState)
     kn = mat.E*mat.α/ipd.h
     G  = mat.E/(2.0*(1.0+mat.ν))
     ks = G*mat.α/ipd.h
-    return kn, ks
-end
 
-function find_intersection(mat::MCJoint, ipd::MCJointIpState, F1::Float64, F2::Float64, Δσ::Array{Float64,1})
-    @assert(F1*F2<0.0)
-    α  = 0.0
-    α1 = 0.0
-    α2 = 1.0
-    F  = F1
-    maxits = 40
-    for i = 1:maxits
-        α  = α1 + F1/(F1-F2)*(α2-α1)
-        F  = yield_func(mat, ipd, ipd.σ + α*Δσ)
-
-        if abs(F) < 1e-7 break end
-
-        if F < 0.0
-            α1 = α
-            F1 = F
-        else
-            α2 = α
-            F2 = F
-        end
+    if ipd.ndim == 3
+        De = [  kn  0.0  0.0
+               0.0   ks  0.0
+               0.0  0.0   ks ]
+    else
+        De = [  kn   0.0
+                 0.0  ks  ]
     end
 
-    return α
+    return kn, ks, De
 end
 
 function calc_Δλ(mat::MCJoint, ipd::MCJointIpState, σtr::Array{Float64,1})
@@ -227,73 +212,70 @@ function calc_Δλ(mat::MCJoint, ipd::MCJointIpState, σtr::Array{Float64,1})
     Δλ     = 0.0
     f      = 0.0
     upa    = 0.0
-    tol    = 1e-2      
+    tol    = 1e-4      
 
-    for Δλ in  (0.0, 1e-10)
-        for i=1:maxits
-            μ      = mat.μ
-    		kn, ks = calc_kn_ks(mat, ipd)
+    for i=1:maxits
+        μ      = mat.μ
+    	kn, ks, De = calc_kn_ks_De(mat, ipd)
 
-		    # quantities at n+1
-		    if ipd.ndim == 3
-			    if σtr[1]>0
-			        σ     = [ σtr[1]/(1+2*Δλ*kn*μ^2),  σtr[2]/(1+2*Δλ*ks),  σtr[3]/(1+2*Δλ*ks) ]
-			        dσdΔλ = [ -2*kn*μ^2*σtr[1]/(1+2*Δλ*kn*μ^2)^2,  -2*ks*σtr[2]/(1+2*Δλ*ks)^2,  -2*ks*σtr[3]/(1+2*Δλ*ks)^2 ]
-			        drdΔλ = [ -4*kn*μ^4*σtr[1]/(1+2*Δλ*kn*μ^2)^2,  -4*ks*σtr[2]/(1+2*Δλ*ks)^2,  -4*ks*σtr[3]/(1+2*Δλ*ks)^2 ]
-			    else
-			        σ     = [ σtr[1],  σtr[2]/(1+2*Δλ*ks),  σtr[3]/(1+2*Δλ*ks) ]
-			        dσdΔλ = [ 0,  -2*ks*σtr[2]/(1+2*Δλ*ks)^2,  -2*ks*σtr[3]/(1+2*Δλ*ks)^2 ]
-			        drdΔλ = [ 0,  -4*ks*σtr[2]/(1+2*Δλ*ks)^2,  -4*ks*σtr[3]/(1+2*Δλ*ks+1)^2 ]
-			    end
+		# quantities at n+1
+		if ipd.ndim == 3
+			if σtr[1]>0
+			     σ     = [ σtr[1]/(1+2*Δλ*kn*μ^2),  σtr[2]/(1+2*Δλ*ks),  σtr[3]/(1+2*Δλ*ks) ]
+			     dσdΔλ = [ -2*kn*μ^2*σtr[1]/(1+2*Δλ*kn*μ^2)^2,  -2*ks*σtr[2]/(1+2*Δλ*ks)^2,  -2*ks*σtr[3]/(1+2*Δλ*ks)^2 ]
+			     drdΔλ = [ -4*kn*μ^4*σtr[1]/(1+2*Δλ*kn*μ^2)^2,  -4*ks*σtr[2]/(1+2*Δλ*ks)^2,  -4*ks*σtr[3]/(1+2*Δλ*ks)^2 ]
 			else
-			    if σtr[1]>0
-			        σ     = [ σtr[1]/(1+2*Δλ*kn*μ^2),  σtr[2]/(1+2*Δλ*ks) ]
-			        dσdΔλ = [ -2*kn*μ^2*σtr[1]/(1+2*Δλ*kn*μ^2)^2,  -2*ks*σtr[2]/(1+2*Δλ*ks)^2 ]
-			        drdΔλ = [ -4*kn*μ^4*σtr[1]/(1+2*Δλ*kn*μ^2)^2,  -4*ks*σtr[2]/(1+2*Δλ*ks)^2 ]
-			    else
-			        σ     = [ σtr[1],  σtr[2]/(1+2*Δλ*ks) ]
-			        dσdΔλ = [ 0,  -2*ks*σtr[2]/(1+2*Δλ*ks)^2 ]
-			        drdΔλ = [ 0,  -4*ks*σtr[2]/(1+2*Δλ*ks)^2 ]
-			    end
+			     σ     = [ σtr[1],  σtr[2]/(1+2*Δλ*ks),  σtr[3]/(1+2*Δλ*ks) ]
+			     dσdΔλ = [ 0,  -2*ks*σtr[2]/(1+2*Δλ*ks)^2,  -2*ks*σtr[3]/(1+2*Δλ*ks)^2 ]
+			     drdΔλ = [ 0,  -4*ks*σtr[2]/(1+2*Δλ*ks)^2,  -4*ks*σtr[3]/(1+2*Δλ*ks+1)^2 ]
 			end
+		else
+			if σtr[1]>0
+			     σ     = [ σtr[1]/(1+2*Δλ*kn*μ^2),  σtr[2]/(1+2*Δλ*ks) ]
+			     dσdΔλ = [ -2*kn*μ^2*σtr[1]/(1+2*Δλ*kn*μ^2)^2,  -2*ks*σtr[2]/(1+2*Δλ*ks)^2 ]
+			     drdΔλ = [ -4*kn*μ^4*σtr[1]/(1+2*Δλ*kn*μ^2)^2,  -4*ks*σtr[2]/(1+2*Δλ*ks)^2 ]
+			else
+			     σ     = [ σtr[1],  σtr[2]/(1+2*Δλ*ks) ]
+			     dσdΔλ = [ 0,  -2*ks*σtr[2]/(1+2*Δλ*ks)^2 ]
+			     drdΔλ = [ 0,  -4*ks*σtr[2]/(1+2*Δλ*ks)^2 ]
+			 end
+		end
 			 	
-		 	r      = potential_derivs(mat, ipd, σ)
-		 	norm_r = norm(r)
-		 	upa    = ipd.upa + Δλ*norm_r
-		 	σmax   = calc_σmax(mat, ipd, upa)
-		    m      = σmax_deriv(mat, ipd, upa)
-		    dσmaxdΔλ = m*(norm_r + Δλ*dot(r/norm_r, drdΔλ))
+		 r      = potential_derivs(mat, ipd, σ)
+		 norm_r = norm(r)
+		 upa    = ipd.upa + Δλ*norm_r
+		 σmax   = calc_σmax(mat, ipd, upa)
+		 m      = σmax_deriv(mat, ipd, upa)
+		 dσmaxdΔλ = m*(norm_r + Δλ*dot(r/norm_r, drdΔλ))
 
-		    if ipd.ndim == 3
-		    	f = sqrt(σ[2]^2 + σ[3]^2) + (σ[1]-σmax)*μ
-		    	if (σ[2]==0 && σ[3]==0) 
-		        	dfdΔλ = (dσdΔλ[1] - dσmaxdΔλ)*μ		      
-		    	else
-		        	dfdΔλ = 1/sqrt(σ[2]^2 + σ[3]^2) * (σ[2]*dσdΔλ[2] + σ[3]*dσdΔλ[3]) + (dσdΔλ[1] - dσmaxdΔλ)*μ
-		    	end
+		if ipd.ndim == 3
+		    f = sqrt(σ[2]^2 + σ[3]^2) + (σ[1]-σmax)*μ
+		    if (σ[2]==0 && σ[3]==0) 
+		        dfdΔλ = (dσdΔλ[1] - dσmaxdΔλ)*μ		      
 		    else
-				f = abs(σ[2]) + (σ[1]-σmax)*mat.μ
-				dfdΔλ = sign(σ[2])*dσdΔλ[2] + (dσdΔλ[1] - dσmaxdΔλ)*μ
-		   	end
+		        dfdΔλ = 1/sqrt(σ[2]^2 + σ[3]^2) * (σ[2]*dσdΔλ[2] + σ[3]*dσdΔλ[3]) + (dσdΔλ[1] - dσmaxdΔλ)*μ
+		    end
+		else
+			f = abs(σ[2]) + (σ[1]-σmax)*mat.μ
+			dfdΔλ = sign(σ[2])*dσdΔλ[2] + (dσdΔλ[1] - dσmaxdΔλ)*μ
+		end
 
-            Δλ = Δλ - f/dfdΔλ
+        Δλ = Δλ - f/dfdΔλ
 
-            abs(f) < tol && break
-
-            if i == maxits || isnan(Δλ)
-            	@show i, Δλ
-                Δλ = -1.0
-                break
-            end
-        end
         abs(f) < tol && break
+
+        if i == maxits || isnan(Δλ)
+            error("calculation error $i, $Δλ")
+            break
+        end
     end
     return Δλ
 end
 
 function calc_σ_upa(mat::MCJoint, ipd::MCJointIpState, σtr::Array{Float64,1})
     μ = mat.μ
-    kn, ks = calc_kn_ks(mat, ipd) 
+    kn, ks, De = calc_kn_ks_De(mat, ipd)
+    ipd.Δλ = calc_Δλ(mat, ipd, σtr) 
 
     if ipd.ndim == 3
         if σtr[1] > 0
@@ -314,39 +296,9 @@ function calc_σ_upa(mat::MCJoint, ipd::MCJointIpState, σtr::Array{Float64,1})
     return ipd.σ, ipd.upa
 end
 
-function subincrement(mat::MCJoint, ipd::MCJointIpState, Δwep::Array{Float64,1}, De::Array{Float64,2})
-    n = 200
-    Δwinc = Δwep/n
-
-    for i = 1:n
-        σtr = ipd.σ + De*Δwinc
-        ipd.Δλ = calc_Δλ(mat, ipd, σtr)
-        if ipd.Δλ < 0 
-            if ipd.upa/mat.wc > 0.99
-                ipd.upa = mat.wc
-                ipd.σ = zeros(ipd.ndim)
-                break
-            else 
-                break 
-            end
-        end
-        if ipd.Δλ > 0; ipd.σ, ipd.upa = calc_σ_upa(mat, ipd, σtr) end
-    end
-    return ipd.σ, ipd.upa 
-end
-
 function mountD(mat::MCJoint, ipd::MCJointIpState)
-    kn, ks = calc_kn_ks(mat, ipd)
+    kn, ks, De = calc_kn_ks_De(mat, ipd)
     σmax = calc_σmax(mat, ipd, ipd.upa)
-
-    if ipd.ndim == 3
-        De = [  kn  0.0  0.0
-               0.0   ks  0.0
-               0.0  0.0   ks ]
-    else
-        De = [  kn   0.0
-                 0.0  ks  ]
-    end
 
     if ipd.Δλ == 0.0  # Elastic 
         return De
@@ -382,17 +334,8 @@ function stress_update(mat::MCJoint, ipd::MCJointIpState, Δw::Array{Float64,1})
     σini = copy(ipd.σ)
 
     μ = mat.μ
-    kn, ks = calc_kn_ks(mat, ipd)
+    kn, ks, De = calc_kn_ks_De(mat, ipd)
     σmax = calc_σmax(mat, ipd, ipd.upa)  
-
-    if ipd.ndim == 3
-        De = [  kn  0.0  0.0
-               0.0   ks  0.0
-               0.0  0.0   ks ]
-    else
-        De = [  kn  0.0
-               0.0  ks ]
-    end
 
     # σ trial and F trial
     σtr  = ipd.σ + De*Δw
@@ -411,81 +354,25 @@ function stress_update(mat::MCJoint, ipd::MCJointIpState, Δw::Array{Float64,1})
         end
 
         ipd.upa += ipd.Δλ
-        ipd.σ = σtr - ipd.Δλ*De*r
-        
-        # Plastic update of w and Δσ
-        ipd.w += Δw
-        Δσ = ipd.σ - σini
+        ipd.σ = σtr - ipd.Δλ*De*r     
 
     elseif Ftr <= 0.0
         # Pure elastic increment
         ipd.Δλ = 0.0
         ipd.σ  = copy(σtr) 
+
+    else    
+        ipd.σ, ipd.upa = calc_σ_upa(mat, ipd, σtr)
+                   
+        # Return to surface:
+        F  = yield_func(mat, ipd, ipd.σ)   
+        if F > 1e-3
+            warn("the value of the yield function is $F")
+        end
+
+    end
         ipd.w += Δw
         Δσ = ipd.σ - σini
-
-    else
-        # Find intersection with the yield surface
-        α  = 0.0
-        Fini = yield_func(mat, ipd, ipd.σ)
-
-        # Elastic increment
-        if Ftr > 1e-6 && Fini < 0.0
-            α = find_intersection(mat, ipd, Fini, Ftr, De*Δw)
-            ipd.w += α*Δw
-            ipd.σ += α*De*Δw
-        end
-  
-        σi = copy(ipd.σ)
-        upai = copy(ipd.upa)
-
-        # Elastic-plastic increment
-        Δwep = (1.0-α)*Δw
-        σtr = ipd.σ + De*Δwep
-        ipd.Δλ = calc_Δλ(mat, ipd, σtr)
-               
-        if ipd.Δλ < 0 && ipd.upa/mat.wc > 0.99
-        	@show ipd.Δλ, ipd.upa/mat.wc
-            ipd.upa = mat.wc
-            ipd.σ = zeros(ipd.ndim)
-        elseif ipd.Δλ < 0
-        	warn("subincrement")
-            ipd.σ, ipd.upa = subincrement(mat, ipd, Δwep, De)
-        else
-            ipd.σ, ipd.upa = calc_σ_upa(mat, ipd, σtr)
-                   
-           if mat.softcurve == "bilinear"
-                if mat.ws > upai  && ipd.upa > mat.ws
-                    ipd.σ = σi
-                    ipd.upa = upai
-                    ipd.σ, ipd.upa = subincrement(mat, ipd, Δwep, De)
-                end
-            end
-        end
-
-        # Return to surface:
-        F  = yield_func(mat, ipd, ipd.σ)
-
-     
-        #@show ipd.Δλ
-        #if false 
-        #if F > 1e-1
-        #    ipd.σ = σi
-        #    ipd.upa = upai
-        #    ipd.σ, ipd.upa = subincrement(mat, ipd, Δwep, De)
-        #end
-  
-
-        #  Plastic update of w and Δσ
-        ipd.w += Δwep
-        Δσ = ipd.σ - σini
-    end
-    F  = yield_func(mat, ipd, ipd.σ)
-
-    if F > 1e-1
-    	@show F
-   	end
-
     return Δσ
 end
 
