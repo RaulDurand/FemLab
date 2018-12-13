@@ -37,13 +37,24 @@ mutable struct Dof
     sU    ::Symbol  # essential bc name
     sF    ::Symbol  # natural bc name
     U     ::Float64 # essential value
+    V     ::Float64 # Velocity value
+    A     ::Float64 # Aceleration value
     F     ::Float64 # natural value
     bryU  ::Float64
     bryF  ::Float64
     eq_id ::Int64   # number of equation in global system
     prescU::Bool    # flag for prescribed dof
     function Dof(sU::Symbol, sF::Symbol) 
-        new(sU, sF, 0.0, 0.0, 0.0, 0.0, 0, false)
+         this=new(sU, sF)
+        this.U = 0.0
+        this.V = 0.0
+        this.A = 0.0
+        this.F = 0.0
+        this.bryU = 0.0
+        this.bryF = 0.0
+        this.eq_id = 0
+        this.prescU = false
+        return this              
     end
 end
 
@@ -112,11 +123,22 @@ end
 
 # Get node values in a dictionary
 function node_vals(node::Node)
+    
+    a_dict = Dict( :ux=>:ax, :uy=>:ay, :uz=>:az)
+    v_dict = Dict( :ux=>:vx, :uy=>:vy, :uz=>:vz)
+    
     coords = Dict( :x => node.X[1], :y => node.X[2], :z => node.X[3] )
     uvals  = Dict( dof.sU => dof.U for dof in node.dofs )
     fvals  = Dict( dof.sF => dof.F for dof in node.dofs )
-    return merge(coords, uvals, fvals)
+    
+    avals = Dict( a_dict[dof.sU] => dof.A for dof in node.dofs )
+    vvals = Dict( v_dict[dof.sU] => dof.V for dof in node.dofs )
+
+
+    return merge(coords, uvals, fvals, vvals, avals)
 end
+
+
 
 
 # Node collection

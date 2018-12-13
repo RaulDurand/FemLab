@@ -1,6 +1,6 @@
 
 include("mechanical.jl")
-export elem_config_dofs, elem_init, elem_stiffness, elem_map, elem_RHS, elem_dF!, elem_and_node_vals
+export elem_config_dofs, elem_init, elem_stiffness, elem_mass, elem_map, elem_RHS, elem_dF!, elem_and_node_vals
 export set_state
 
 # Models for solid elements (2D and 3D)

@@ -36,21 +36,27 @@ end
 mutable struct ElasticSolid<:AbsSolid
     E ::Float64
     nu::Float64
+    ro::Float64
+    xi::Float64
     De::Tensor4
 
     function ElasticSolid(prms::Dict{Symbol,Float64})
         return  ElasticSolid(;prms...)
     end
 
-    function ElasticSolid(;E=1.0, nu=0.0)
+    function ElasticSolid(;E=1.0, nu=0.0, ro=1.0, xi=0.01)
         if E<=0.0      ; error("Invalid value for E: $E") end
         if !(0<=nu<0.5); error("Invalid value for nu: $nu") end
-        this    = new(E, nu)
+        if ro<=0.0; error("Invalid value for ro: $ro") end
+        if !(0<=xi<1.0); error("Invalid value for xi: $xi") end
+        this    = new(E, nu, ro, xi)
         this.De = calcDe(E,nu)
 
         return this
+
     end
 end
+
 
 # Create a new instance of Ip data
 new_ip_state(mat::ElasticSolid, ndim::Int) = ElasticSolidIpState(ndim)

@@ -24,7 +24,7 @@ abstract type AbsSolid<:Mechanical end
 client_shape_class(mat::AbsSolid) = SOLID_SHAPE
 
 
-function apply_facet_bc(mat::AbsSolid, oelem::Element, face::Facet, key::Symbol, val::Float64)
+function apply_facet_bc(mat::AbsSolid, oelem::Element, face::Facet, key::Symbol, val::Any)
     fnodes = face.nodes
     fshape = face.shape
     ndim   = oelem.ndim
@@ -58,13 +58,22 @@ function apply_facet_bc(mat::AbsSolid, oelem::Element, face::Facet, key::Symbol,
     C = nodes_coords(fnodes, ndim)
 
     # Calculate the vector with values to apply
-    V = zeros(ndim)
-    if key == :tx ; V[1] = val end
-    if key == :ty ; V[2] = val end
-    if key == :tz ; V[3] = val end
+    if ndim==2
+
+        if key == :tx ; V=[val,0] end
+        if key == :ty ; V=[0,val] end
+
+    else
+
+        if key == :tx ; V=[val,0,0] end
+        if key == :ty ; V=[0,val,0] end
+        if key == :tz ; V=[0,0,val] end
+
+    end
+
 
     # Calculate the nodal values
-    F = zeros(nfnodes, ndim)
+    Fp = zeros(nfnodes)
 
     f_ips = get_ip_coords(fshape)
 
@@ -85,25 +94,33 @@ function apply_facet_bc(mat::AbsSolid, oelem::Element, face::Facet, key::Symbol,
             V = val*n/norm(n)
         end
 
-        F += N*V'*(nJ*w)
+        Fp += N*(nJ*w)
     end
 
     # Setting bc into nodes
-    for (i,node) in enumerate(fnodes)
-        node.dofdict[:fx].bryF += F[i,1]
-        node.dofdict[:fy].bryF += F[i,2]
-        if ndim==3; node.dofdict[:fz].bryF += F[i,3] end
-    end
+     for (i,node) in enumerate(fnodes)
+        node.dofdict[:fx].bryF =  Expr(:call, :+, node.dofdict[:fx].bryF, Expr(:call,:*,Fp[i],V[1]))
+        node.dofdict[:fy].bryF =  Expr(:call, :+, node.dofdict[:fy].bryF, Expr(:call,:*,Fp[i],V[2]))
+        if ndim==3; node.dofdict[:fz].bryF = Expr(:call, :+, node.dofdict[:fz].bryF, Expr(:call,:*,Fp[i],V[3])) end
+    end 
 end
 
 function apply_elem_bc(mat::AbsSolid, elem::Element, key::Symbol, val::Float64)
+    
+    ndim   = elem.ndim
+    shape  = elem.shape
+    nodes = elem.nodes
+    
+
     if !(key in (:gx, :gy, :gz))
         error("Boundary condition $key is not allowed in an elem; consider gx, gy or gz")
     end
 
-    ndim   = elem.ndim
-    shape  = elem.shape
-    nnodes = length(elem.nodes)
+   
+    nnodes = length(nodes)
+
+    # Calculate the face coordinates matrix
+    C = nodes_coords(nodes, ndim)
 
     # Calculate the vector with values to apply
     V = zeros(ndim)
@@ -122,19 +139,20 @@ function apply_elem_bc(mat::AbsSolid, elem::Element, key::Symbol, val::Float64)
         N = shape.func(R)
         D = shape.deriv(R)
         J = D*C
-        nJ = norm(J)
+        nJ = det(J)
 
         F += N*V'*(nJ*w)
     end
 
     # Setting bc into nodes
     for (i,node) in enumerate(elem.nodes)
-        node.dofdict[:fx].bryF += F[i,1]
-        node.dofdict[:fy].bryF += F[i,2]
-        if ndim==3; node.dofdict[:fz].bryF += F[i,3] end
+        node.dofdict[:fx].bryF =  Expr(:call, :+, node.dofdict[:fx].bryF, F[i,1])
+        node.dofdict[:fy].bryF =  Expr(:call, :+, node.dofdict[:fy].bryF, F[i,2])
+        if ndim==3; node.dofdict[:fz].bryF = Expr(:call, :+, node.dofdict[:fz].bryF, F[i,3]) end
     end
 
 end
+
 
 function setB(ndim::Int, dNdX::Matx, detJ::Float64, B::Matx)
     nnodes = size(dNdX,2)
@@ -208,6 +226,61 @@ function elem_stiffness(::AbsSolid, elem::Element)
     return K
 end
 
+function setNs(ndim::Int,Ni::Vect, N::Matx)
+    nnodes = length(Ni) 
+    N[:] = 0.0
+
+    if ndim==2
+        for i in 1:nnodes
+            j = i-1
+            N[1,1+j*ndim] = Ni[i]
+            N[2,2+j*ndim] = Ni[i]
+        end
+    else
+        for i in 1:nnodes
+            j    = i-1
+            N[1,1+j*ndim] = Ni[i]
+            N[2,2+j*ndim] = Ni[i]
+            N[3,3+j*ndim] = Ni[i]
+        end
+    end
+
+end
+
+function elem_mass(::AbsSolid, elem::Element) #perguntar como o 2d inclui a espesura no calculo de K. para M seria igual
+    ndim   = elem.ndim
+    nnodes = length(elem.nodes)
+    mat    = elem.mat
+    ro = elem.mat.ro
+    C = elem_coords(elem)
+    M = zeros(nnodes*ndim, nnodes*ndim)
+
+    J  = Array{Float64}(ndim, ndim)
+    N = Array{Float64}(ndim, ndim*nnodes)
+    
+
+    for ip in elem.ips
+
+        dNdR = elem.shape.deriv(ip.R)
+        Ni = elem.shape.func(ip.R) #encontrei em shape.jl FemMesh
+        #Ni só é um vetor com as funções de forma. N tem que ficar matriz 2x8
+        #N = [Ni[1] 0 Ni[2] 0 Ni[3] 0 Ni[4] 0;
+        #       0 Ni[1] 0 Ni[2] 0 Ni[3] 0 Ni[4]] 
+        setNs(ndim,Ni,N)    
+
+        @gemm J = dNdR*C
+        detJ = det(J)
+        detJ > 0.0 || error("Negative jacobian determinant in cell $(elem.id)")
+
+        # compute M
+        coef = ro*detJ*ip.w
+        @gemm M += coef*N'*N #falta multiplicar pela espessura.. perguntar onde esta.. acho que ja esta inlcuida pois precisa K
+
+    end
+    return M
+end
+
+
 function elem_dF!(::AbsSolid, elem::Element, dU::Array{Float64,1})
     ndim   = elem.ndim
     nnodes = length(elem.nodes)
@@ -250,6 +323,14 @@ function elem_and_node_vals(mat::AbsSolid, elem::Element)
         node_vals[key] = [node.dofdict[key].U for node in elem.nodes]
     end
 
+    for key in (:vx, :vy, :vz)[1:ndim]
+        node_vals[key] = [node.dofdict[Symbol("u"string(key)[2:2])].V for node in elem.nodes]
+    end
+
+    for key in (:ax, :ay, :az)[1:ndim]
+        node_vals[key] = [node.dofdict[Symbol("u"string(key)[2:2])].A for node in elem.nodes]
+    end
+
     # values from integration points
     all_ip_vals = [ ip_state_vals(mat, ip.data) for ip in elem.ips ]
     labels      = keys(all_ip_vals[1])
@@ -262,13 +343,10 @@ function elem_and_node_vals(mat::AbsSolid, elem::Element)
     E = extrapolator(elem.shape, nips)
     N = E*IP # (nnodes x nvals)
 
-
     # Filling nodal and elem vals
     for (i,key) in enumerate(labels)
         node_vals[key] = N[:,i]
     end
-
-    #e_vals = elem_vals(mat, elem)
 
     return node_vals, e_vals
 

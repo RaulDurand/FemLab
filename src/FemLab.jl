@@ -80,7 +80,7 @@ include("facet.jl")
 export Facet, Face, Edge
 
 include("bcs.jl")
-export NodeBC, FaceBC, EdgeBC, apply_bc
+export NodeBC, FaceBC, EdgeBC, apply_bc, ElementBC
 
 include("monitors.jl")
 export NodeMonitor, NodesMonitor, IpMonitor, IpsMonitor, FacesMonitor, EdgesMonitor

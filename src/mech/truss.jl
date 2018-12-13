@@ -16,15 +16,19 @@ end
 mutable struct Truss<:AbsTruss
     E::Float64
     A::Float64
+   xi::Float64
+   ro::Float64
 
     function Truss(prms::Dict{Symbol,Float64})
         return  Truss(;prms...)
     end
 
-    function Truss(;E::Number=1.0, A::Number=1.0)
+    function Truss(;E::Number=1.0, A::Number=1.0, xi::Number=1.0, ro::Number=1.0)
         if E<=0.0; error("Invalid value for E: $E") end
         if A<=0.0; error("Invalid value for A: $A") end
-        this = new(E,A)
+        if xi<0.0; error("Invalid value for xi: $xi") end
+        if ro<0.0; error("Invalid value for ro: $ro") end
+        this = new(E,A,xi,ro)
         return this
     end
 end
